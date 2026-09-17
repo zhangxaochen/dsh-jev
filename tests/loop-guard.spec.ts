@@ -69,6 +69,17 @@ test('TypeSafeLoopGuard injects advisory notice when stagnation detected', async
     d2.additionalContexts[0]?.content[0]?.text ?? '',
     /Potential loop or stagnation detected/
   )
+  // DSH invariant: cannot have both 'content' and 'value' as own properties
+  assert.equal(Object.hasOwn(d2, 'content') && Object.hasOwn(d2, 'value'), false)
+
+  // Third execution with plain { kind: 'accept' }
+  const d3 = await postExecuteHandler(
+    { kind: 'accept', action: 'accept' },
+    toolExec,
+    (d: PostToolDecision) => d
+  )
+  assert.equal(Object.hasOwn(d3, 'content'), false)
+  assert.equal(Object.hasOwn(d3, 'value'), false)
 })
 
 test('TypeSafeLoopGuard does not intervene when progress is healthy', async () => {

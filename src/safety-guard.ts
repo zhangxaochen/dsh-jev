@@ -19,6 +19,7 @@ export const name = 'typesafe-safety-guard'
 export const DEFAULT_GUARDED_TOOLS = [
   'bash',
   'terminal',
+  'pwsh',
   'run_command',
   'execute_command',
   'run_code',
@@ -50,18 +51,24 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
 
   const unsubscribe = ctx.on(
     'tools/pre-execute',
-    async (
-      decision: PreToolDecision,
-      exec: ToolExecution,
-      next: (d: PreToolDecision) => Promise<PreToolDecision> | PreToolDecision
-    ) => {
-      // If tool is already denied by an earlier guard, do not re-evaluate
-      if (decision.action === 'deny') {
-        return next(decision)
+    async (...hookArgs: any[]): Promise<PreToolDecision> => {
+      let exec: ToolExecution
+      let next: () => Promise<PreToolDecision>
+
+      if (hookArgs.length >= 3 && typeof hookArgs[2] === 'function') {
+        // Compatibility mode for 3-argument legacy test harnesses: (decision, exec, next)
+        exec = hookArgs[1]
+        next = () => Promise.resolve(hookArgs[2](hookArgs[0]))
+      } else {
+        // Standard DSH waterfall signature: (exec, next)
+        exec = hookArgs[0]
+        next = typeof hookArgs[1] === 'function'
+          ? hookArgs[1]
+          : async () => ({ kind: 'allow', action: 'allow' })
       }
 
-      if (!isGuarded(exec.name)) {
-        return next(decision)
+      if (!isGuarded(exec?.name)) {
+        return next()
       }
 
       const state = {
@@ -107,6 +114,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
             `[TypeSafe SafetyGuard] Execution blocked: Tool action deemed high risk ` +
             `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
           return {
+            kind: 'deny',
             action: 'deny',
             reason,
           }
@@ -118,7 +126,9 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
             `[TypeSafe SafetyGuard] Approval required: Tool action requires confirmation ` +
             `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
           return {
+            kind: 'ask',
             action: 'ask',
+            prompt: reason,
             reason,
           }
         }
@@ -126,7 +136,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         console.warn('[TypeSafe SafetyGuard] Inspection failed, defaulting to configured policy:', err)
       }
 
-      return next(decision)
+      return next()
     }
   )
 

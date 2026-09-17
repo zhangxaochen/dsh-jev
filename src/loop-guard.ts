@@ -1,6 +1,6 @@
 /**
- * Semantic loop and stall detection guard plugin using TypeSafe AI.
- * Intercepts tools/post-execute to detect stagnation and inject advisory context.
+ * Loop guard plugin for semantic loop and stagnation interception.
+ * Observes tools/post-execute to detect cyclical agent behavior and prompt plan adaptation.
  * @module dsh-plugin-typesafe/loop-guard
  */
 
@@ -30,7 +30,6 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
   const include = config.include ?? []
   const exclude = config.exclude ?? []
 
-  // Track execution history per agent or session
   const historyByAgent = new Map<string, StepRecord[]>()
 
   function getClient(): TypeSafeClient {
@@ -54,13 +53,30 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
 
   const unsubscribe = ctx.on(
     'tools/post-execute',
-    async (
-      decision: PostToolDecision,
-      exec: ToolExecution,
-      next: (d: PostToolDecision) => Promise<PostToolDecision> | PostToolDecision
-    ) => {
-      if (!shouldTrack(exec.name)) {
-        return next(decision)
+    async (...hookArgs: any[]): Promise<PostToolDecision> => {
+      let exec: ToolExecution
+      let result: any
+      let next: () => Promise<PostToolDecision>
+
+      if (hookArgs.length >= 3 && typeof hookArgs[2] === 'function') {
+        // Distinguish between legacy test harness (decision, exec, next) vs standard DSH (exec, result, next)
+        if (hookArgs[0] && (hookArgs[0].action || hookArgs[0].kind) && hookArgs[1]?.name) {
+          exec = hookArgs[1]
+          result = hookArgs[0]
+          next = () => Promise.resolve(hookArgs[2](hookArgs[0]))
+        } else {
+          exec = hookArgs[0]
+          result = hookArgs[1]
+          next = hookArgs[2]
+        }
+      } else {
+        exec = hookArgs[0]
+        result = hookArgs[1]
+        next = typeof hookArgs[2] === 'function' ? hookArgs[2] : async () => ({ kind: 'accept', action: 'accept' })
+      }
+
+      if (!shouldTrack(exec?.name)) {
+        return next()
       }
 
       const agentKey = exec.agent?.id || 'default'
@@ -70,9 +86,9 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         historyByAgent.set(agentKey, history)
       }
 
-      const contentStr = typeof decision.content === 'string'
-        ? decision.content
-        : JSON.stringify(decision.content ?? '')
+      const contentStr = typeof result?.content === 'string'
+        ? result.content
+        : JSON.stringify(result?.content ?? result?.error ?? '')
 
       const currentRecord: StepRecord = {
         tool: exec.name,
@@ -85,7 +101,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
 
       // Only check when history length meets triggerThreshold
       if (history.length < triggerThreshold) {
-        return next(decision)
+        return next()
       }
 
       // Prepare state context describing recent tool history
@@ -137,32 +153,46 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
             `and stall severity is rated ${stuckResult?.score}/3${confidenceInfo}. ` +
             `Please review your recent results and adjust your plan rather than repeating similar queries or unguided retries.`
 
-          const updatedContexts = [
-            ...(decision.additionalContexts ?? []),
-            {
-              role: 'user' as const,
-              source: {
-                kind: 'plugin' as const,
-                plugin: 'typesafe-loop-guard',
-                form: 'notice',
-                tool: exec.name,
-                severity: stuckResult?.score,
-              },
-              content: [{ type: 'text' as const, text: reminderText }],
+          const baseDecision = await next()
+          if (baseDecision && 'kind' in baseDecision && baseDecision.kind === 'block') {
+            return baseDecision
+          }
+          const existingContexts = (baseDecision as any)?.contexts || (baseDecision as any)?.additionalContexts || []
+          const newContext = {
+            role: 'user' as const,
+            source: {
+              kind: 'plugin' as const,
+              plugin: 'typesafe-loop-guard',
+              form: 'notice',
+              tool: exec.name,
+              severity: stuckResult?.score,
             },
-          ]
+            content: [{ type: 'text' as const, text: reminderText }],
+          }
 
-          return next({
-            ...decision,
-            additionalContexts: updatedContexts,
-          })
+          const decisionResult: any = {
+            kind: 'accept',
+            action: 'accept',
+            contexts: [...existingContexts, newContext],
+            additionalContexts: [...existingContexts, newContext],
+          }
+
+          if (baseDecision && typeof baseDecision === 'object') {
+            if (Object.hasOwn(baseDecision, 'value') && (baseDecision as any).value !== undefined) {
+              decisionResult.value = (baseDecision as any).value
+            } else if (Object.hasOwn(baseDecision, 'content') && (baseDecision as any).content !== undefined) {
+              decisionResult.content = (baseDecision as any).content
+            }
+          }
+
+          return decisionResult
         }
       } catch (err) {
         // Loop guard fails open (safe against guard crashes)
         console.warn('[TypeSafe LoopGuard] Evaluation failed, continuing without intervention:', err)
       }
 
-      return next(decision)
+      return next()
     }
   )
 

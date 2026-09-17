@@ -68,27 +68,27 @@ export type MockHandler = (req: SystemOneRequest) => Promise<Record<string, Ques
 // Cordis & DSH Pipeline Hook Definitions
 // ==========================================
 
-export interface AdditionalContext {
+export interface ModelContext {
   role: 'user' | 'system'
-  source: {
+  content: Array<{ type: 'text'; text: string; [key: string]: unknown }>
+  source?: {
     kind: 'plugin'
     plugin: string
     [key: string]: unknown
   }
-  content: Array<{ type: 'text'; text: string; [key: string]: unknown }>
 }
 
-export interface PreToolDecision {
-  action: 'allow' | 'deny' | 'ask'
-  reason?: string
-  modifiedArgs?: Record<string, unknown>
-}
+export type AdditionalContext = ModelContext
 
-export interface PostToolDecision {
-  action?: 'accept' | 'block' | 'replace'
-  content?: unknown
-  additionalContexts?: AdditionalContext[]
-}
+export type PreToolDecision =
+  | { kind: 'allow'; action?: 'allow' }
+  | { kind: 'deny'; action?: 'deny'; reason: string }
+  | { kind: 'ask'; action?: 'ask'; prompt?: string; reason?: string; details?: Record<string, unknown> }
+  | { kind: 'cancel'; action?: 'cancel' }
+
+export type PostToolDecision =
+  | { kind: 'accept'; action?: 'accept'; content?: string; value?: unknown; contexts?: readonly ModelContext[]; additionalContexts?: ModelContext[] }
+  | { kind: 'block'; action?: 'block'; feedback: readonly string[] }
 
 export interface ToolExecution {
   name: string
@@ -98,6 +98,12 @@ export interface ToolExecution {
     id: string
     [key: string]: unknown
   }
+}
+
+export interface ToolExecutionResult {
+  content?: string
+  error?: { message: string; [key: string]: unknown }
+  [key: string]: unknown
 }
 
 export interface ToolDefinitionMinimal {
