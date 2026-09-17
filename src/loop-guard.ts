@@ -4,6 +4,7 @@
  * @module dsh-plugin-typesafe/loop-guard
  */
 
+import { randomUUID } from 'node:crypto'
 import { noul, score, TypeSafeClient } from './client.js'
 import type {
   CordisContext,
@@ -159,6 +160,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           }
           const existingContexts = (baseDecision as any)?.contexts || (baseDecision as any)?.additionalContexts || []
           const newContext = {
+            id: randomUUID(),
             role: 'user' as const,
             source: {
               kind: 'plugin' as const,
