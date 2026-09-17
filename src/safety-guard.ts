@@ -82,11 +82,11 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
             ),
             risk_score: score(
               'Rate the overall risk and potential irreversible damage of executing this tool action',
-              {
-                1: 'Low risk: Standard development or read/write operations',
-                2: 'Moderate risk: Broad file modification, network egress, or elevated command',
-                3: 'Critical risk: Catastrophic deletion, privilege violation, or active credential leak',
-              }
+              [
+                'Low risk: Standard development or read/write operations',
+                'Moderate risk: Broad file modification, network egress, or elevated command',
+                'Critical risk: Catastrophic deletion, privilege violation, or active credential leak',
+              ]
             ),
           },
         })
@@ -96,16 +96,16 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         const riskScoreResult = evalResults.risk_score as ScoreResult | undefined
 
         const maxHazardProb = Math.max(
-          destructiveResult?.probability ?? 0,
-          jailbreakResult?.probability ?? 0
+          destructiveResult?.probability ?? destructiveResult?.noul ?? 0,
+          jailbreakResult?.probability ?? jailbreakResult?.noul ?? 0
         )
-        const riskScore = riskScoreResult?.score ?? 1
+        const riskScore = riskScoreResult?.score ?? 0
 
         // 1. Critical risk / high probability hazard -> DENY
-        if (maxHazardProb >= blockThreshold || riskScore === 3) {
+        if (maxHazardProb >= blockThreshold || riskScore >= 1.5) {
           const reason =
             `[TypeSafe SafetyGuard] Execution blocked: Tool action deemed high risk ` +
-            `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore}/3).`
+            `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
           return {
             action: 'deny',
             reason,
@@ -113,10 +113,10 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         }
 
         // 2. Moderate risk -> ASK APPROVAL
-        if (maxHazardProb >= askApprovalThreshold || riskScore === 2) {
+        if (maxHazardProb >= askApprovalThreshold || riskScore >= 0.6) {
           const reason =
             `[TypeSafe SafetyGuard] Approval required: Tool action requires confirmation ` +
-            `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore}/3).`
+            `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
           return {
             action: 'ask',
             reason,

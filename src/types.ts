@@ -23,13 +23,14 @@ export interface ChoiceQuestion {
 export interface ScoreQuestion {
   type: 'score'
   instructions: string
-  rubric?: Record<number | string, string>
+  criteria: string[]
 }
 
 export type QuestionDefinition = NoulQuestion | ChoiceQuestion | ScoreQuestion
 
 export interface NoulResult {
   type: 'noul'
+  noul: number
   probability: number
 }
 
@@ -43,8 +44,9 @@ export interface ChoiceResult {
 export interface ScoreResult {
   type: 'score'
   score: number
-  probabilities: Record<number | string, number>
+  probabilities: Record<string, number>
   confidence: number
+  legend?: Record<string, string>
 }
 
 export type QuestionResult = NoulResult | ChoiceResult | ScoreResult

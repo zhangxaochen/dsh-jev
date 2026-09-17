@@ -54,11 +54,11 @@ export class ToolPrunerService {
     for (const tool of evaluateCandidates) {
       questions[`score_${tool.name}`] = score(
         `How relevant is the tool "${tool.name}" (${tool.description || 'no description'}) to fulfilling the user goal: "${userIntent.slice(0, 300)}"?`,
-        {
-          1: 'Irrelevant: Not needed for this task',
-          2: 'Potentially useful: Might be needed as a secondary step',
-          3: 'Highly relevant: Directly required or primary tool for this task',
-        }
+        [
+          'Irrelevant: Not needed for this task',
+          'Potentially useful: Might be needed as a secondary step',
+          'Highly relevant: Directly required or primary tool for this task',
+        ]
       )
     }
 

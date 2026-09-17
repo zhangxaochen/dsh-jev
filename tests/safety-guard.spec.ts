@@ -61,12 +61,12 @@ test('TypeSafeSafetyGuard requires approval for moderate risk command', async ()
     },
     typesafe: new TypeSafeClient({
       mockHandler: async () => ({
-        is_destructive: { type: 'noul', probability: 0.45 },
-        is_jailbreak: { type: 'noul', probability: 0.1 },
+        is_destructive: { type: 'noul', noul: 0.45, probability: 0.45 },
+        is_jailbreak: { type: 'noul', noul: 0.1, probability: 0.1 },
         risk_score: {
           type: 'score',
-          score: 2,
-          probabilities: { 1: 0.2, 2: 0.7, 3: 0.1 },
+          score: 1.0,
+          probabilities: { '0': 0.2, '1': 0.7, '2': 0.1 },
           confidence: 0.85,
         },
       }),
@@ -102,12 +102,12 @@ test('TypeSafeSafetyGuard allows safe command through', async () => {
     },
     typesafe: new TypeSafeClient({
       mockHandler: async () => ({
-        is_destructive: { type: 'noul', probability: 0.01 },
-        is_jailbreak: { type: 'noul', probability: 0.01 },
+        is_destructive: { type: 'noul', noul: 0.01, probability: 0.01 },
+        is_jailbreak: { type: 'noul', noul: 0.01, probability: 0.01 },
         risk_score: {
           type: 'score',
-          score: 1,
-          probabilities: { 1: 0.99, 2: 0.01, 3: 0 },
+          score: 0.05,
+          probabilities: { '0': 0.99, '1': 0.01, '2': 0 },
           confidence: 0.99,
         },
       }),

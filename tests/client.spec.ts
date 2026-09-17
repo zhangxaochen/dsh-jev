@@ -18,9 +18,9 @@ test('Question definition helpers', () => {
   assert.equal(c.type, 'choice')
   assert.equal(c.criteria.a, 'Option A')
 
-  const s = score('Rate performance', { 1: 'Bad', 2: 'Good' })
+  const s = score('Rate performance', ['Bad', 'Good'])
   assert.equal(s.type, 'score')
-  assert.equal(s.rubric?.[1], 'Bad')
+  assert.equal(s.criteria[0], 'Bad')
 })
 
 test('TypeSafeClient throws when API key is missing and no mock handler', async () => {

@@ -112,11 +112,11 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
             ),
             stuck_severity: score(
               'Rate how severely this execution sequence is stuck in a repetitive loop or stagnation without progress',
-              {
-                1: 'Normal progress or healthy exploration',
-                2: 'Marginal repeat or stagnant exploration',
-                3: 'Definite dead loop, circular failures, or unrecoverable repetition',
-              }
+              [
+                'Normal progress or healthy exploration',
+                'Marginal repeat or stagnant exploration',
+                'Definite dead loop, circular failures, or unrecoverable repetition',
+              ]
             ),
           },
         })
@@ -124,8 +124,10 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         const progressResult = evalResults.has_progress as NoulResult | undefined
         const stuckResult = evalResults.stuck_severity as ScoreResult | undefined
 
-        const hasProgress = progressResult ? progressResult.probability >= noProgressThreshold : true
-        const isSeverelyStuck = stuckResult ? stuckResult.score >= stuckSeverityThreshold : false
+        const progressProb = progressResult ? (progressResult.probability ?? progressResult.noul) : 1
+        const hasProgress = progressProb >= noProgressThreshold
+        const scoreVal = stuckResult?.score ?? 0
+        const isSeverelyStuck = scoreVal >= (stuckSeverityThreshold > 1.5 ? 1.4 : stuckSeverityThreshold)
 
         if (!hasProgress && isSeverelyStuck) {
           const confidenceInfo = stuckResult?.confidence ? ` (confidence: ${(stuckResult.confidence * 100).toFixed(0)}%)` : ''

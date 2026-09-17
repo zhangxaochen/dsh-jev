@@ -34,8 +34,12 @@ export function choice(instructions: string, criteria: Record<string, string | n
 /**
  * Question helper for rubric scoring.
  */
-export function score(instructions: string, rubric?: Record<number | string, string>): ScoreQuestion {
-  return { type: 'score', instructions, rubric }
+export function score(
+  instructions: string,
+  criteria: string[] | Record<number | string, string> = ['Low', 'Medium', 'High']
+): ScoreQuestion {
+  const criteriaList = Array.isArray(criteria) ? criteria : Object.values(criteria)
+  return { type: 'score', instructions, criteria: criteriaList }
 }
 
 /**
@@ -62,7 +66,8 @@ export class TypeSafeClient {
   async systemOne(req: SystemOneRequest): Promise<Record<string, QuestionResult>> {
     // 1. If mock handler is provided, execute mock
     if (this.mockHandler) {
-      return this.mockHandler(req)
+      const raw = await this.mockHandler(req)
+      return this.normalizeAnswers(raw)
     }
 
     // 2. Validate API key
@@ -98,13 +103,24 @@ export class TypeSafeClient {
       }
 
       const data = (await res.json()) as any
-
-      // If wrapped in results field or top level
-      const results: Record<string, QuestionResult> = data.results || data
-      return results
+      const answers: Record<string, QuestionResult> = data.answers || data.results || data
+      return this.normalizeAnswers(answers)
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  private normalizeAnswers(answers: Record<string, any>): Record<string, QuestionResult> {
+    const normalized: Record<string, QuestionResult> = {}
+    for (const [k, v] of Object.entries(answers)) {
+      if (v && typeof v === 'object' && v.type === 'noul') {
+        const val = typeof v.noul === 'number' ? v.noul : (typeof v.probability === 'number' ? v.probability : 0)
+        normalized[k] = { type: 'noul', noul: val, probability: val }
+      } else {
+        normalized[k] = v
+      }
+    }
+    return normalized
   }
 }
 
