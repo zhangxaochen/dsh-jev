@@ -1,0 +1,76 @@
+{
+  "name": "dsh-plugin-typesafe",
+  "version": "0.1.0",
+  "description": "TypeSafe AI (Jev System One model) decision layer plugins for DeepSeek Harness (dsh)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./loop-guard": {
+      "types": "./lib/loop-guard.d.ts",
+      "default": "./lib/loop-guard.js"
+    },
+    "./safety-guard": {
+      "types": "./lib/safety-guard.d.ts",
+      "default": "./lib/safety-guard.js"
+    },
+    "./tool-pruner": {
+      "types": "./lib/tool-pruner.d.ts",
+      "default": "./lib/tool-pruner.js"
+    },
+    "./types": {
+      "types": "./lib/types.d.ts",
+      "default": "./lib/types.js"
+    }
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "pretest": "tsc",
+    "test": "node --test tests/*.spec.ts"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "typesafe",
+    "typesafe-ai",
+    "jev",
+    "system-one",
+    "guardrails"
+  ],
+  "author": "zhangxaochen",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  }
+}
