@@ -104,12 +104,22 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
     if (ctx.typesafe instanceof TypeSafeClient) {
       return ctx.typesafe
     }
+    if (typeof ctx.get === 'function') {
+      const client = ctx.get('typesafe')
+      if (client instanceof TypeSafeClient) {
+        return client
+      }
+    }
     return new TypeSafeClient()
   }
 
   const pruner = new ToolPrunerService(getClient, config)
-  ctx.toolPruner = pruner
 
+  if (typeof ctx.provide === 'function') {
+    return ctx.provide('toolPruner', pruner)
+  }
+
+  ctx.toolPruner = pruner
   return () => {
     if (ctx.toolPruner === pruner) {
       delete ctx.toolPruner

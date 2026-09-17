@@ -37,6 +37,12 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
     if (ctx.typesafe instanceof TypeSafeClient) {
       return ctx.typesafe
     }
+    if (typeof ctx.get === 'function') {
+      const client = ctx.get('typesafe')
+      if (client instanceof TypeSafeClient) {
+        return client
+      }
+    }
     return new TypeSafeClient()
   }
 

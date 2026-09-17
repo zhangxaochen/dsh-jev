@@ -115,8 +115,12 @@ export const name = 'typesafe-client'
 
 export function apply(ctx: CordisContext, config: TypeSafeClientConfig = {}) {
   const client = new TypeSafeClient(config)
-  ctx.typesafe = client
 
+  if (typeof ctx.provide === 'function') {
+    return ctx.provide('typesafe', client)
+  }
+
+  ctx.typesafe = client
   return () => {
     if (ctx.typesafe === client) {
       delete ctx.typesafe
