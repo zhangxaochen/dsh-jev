@@ -243,3 +243,27 @@ test('SafetyGuard asks on a user rule, and fails closed when it cannot prompt', 
   const untouched = await quiet.invoke({ name: 'bash', args: { command: 'terraform plan' } })
   assert.equal(untouched.action, 'allow', 'a rule below its threshold must not fire')
 })
+
+test('SafetyGuard reads its first argument as the execution, whatever else it carries', async () => {
+  // The removed argument-shape tolerance decided "execution or decision?" from the
+  // first argument carrying `kind` or `action`. An execution object may carry such
+  // fields, and the tolerance would then have swapped exec and result silently.
+  // The listener must not infer its arguments from their contents.
+  const { fakeContext, invoke } = harness(async () => BENIGN_ANSWER)
+  apply(fakeContext)
+
+  const decorated = {
+    name: 'bash',
+    args: { command: 'echo hi' },
+    kind: 'accept',
+    action: 'allow',
+  } as any
+  const decision = await invoke(decorated)
+  assert.equal(decision.action, 'allow', 'a decorated execution must still be recognised as the execution')
+
+  // The guard registers itself on the tool surface, so the decorated call above
+  // must have gone through the guarded path rather than being mistaken for a
+  // decision object and skipped.
+  const severity = await invoke({ ...decorated, args: { command: 'rm -rf / --no-preserve-root' } })
+  assert.equal(severity.action, 'deny', 'and it must still be inspected')
+})

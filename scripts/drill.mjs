@@ -130,7 +130,7 @@ const drills = [
     name: 'pre-execute listener accepts an unreachable argument shape',
     file: 'src/safety-guard.ts',
     from: '    async (exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision> => {',
-    to: '    async (...hookArgs: any[]): Promise<PreToolDecision> => {\n      const exec = hookArgs.length >= 3 ? hookArgs[1] : hookArgs[0]\n      const next = () =>\n        hookArgs.length >= 3 ? Promise.resolve(hookArgs[2](hookArgs[0])) : (hookArgs[1] as any)()',
+    to: '    async (...hookArgs: any[]): Promise<PreToolDecision> => {\n      let exec: ToolExecution\n      let next: () => Promise<PreToolDecision>\n      if (hookArgs.length >= 3 && typeof hookArgs[2] === \'function\') {\n        exec = hookArgs[1]\n        next = () => Promise.resolve(hookArgs[2](hookArgs[0]))\n      } else {\n        exec = hookArgs[0]\n        next = hookArgs[1]\n      }',
     test: 'tests/safety-guard.spec.ts',
   },
   {
