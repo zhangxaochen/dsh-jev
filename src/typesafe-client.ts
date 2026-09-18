@@ -14,9 +14,33 @@ import type {
 } from './types.js'
 import { defaultMetrics } from './metrics.js'
 
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
 export const DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1/systemone'
 export const DEFAULT_MODEL = 'jev-latest'
 export const DEFAULT_TIMEOUT_MS = 10000
+
+function resolveApiKey(explicit?: string): string | undefined {
+  if (explicit && typeof explicit === 'string' && !explicit.startsWith('__jsExpr')) {
+    return explicit
+  }
+  if (typeof process !== 'undefined' && process.env?.TYPESAFE_API_KEY) {
+    return process.env.TYPESAFE_API_KEY
+  }
+  if (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || process.env?.VITEST)) {
+    return undefined
+  }
+  try {
+    const envFile = join(homedir(), '.dsh', '.env')
+    if (existsSync(envFile)) {
+      const match = readFileSync(envFile, 'utf8').match(/TYPESAFE_API_KEY=([^\r\n]+)/)
+      if (match?.[1]) return match[1].trim()
+    }
+  } catch {}
+  return undefined
+}
 
 /**
  * Question helper for boolean verification.
@@ -54,7 +78,7 @@ export class TypeSafeClient {
   private readonly mockHandler?: TypeSafeClientConfig['mockHandler']
 
   constructor(config: TypeSafeClientConfig = {}) {
-    this.apiKey = config.apiKey || (typeof process !== 'undefined' ? process.env.TYPESAFE_API_KEY : undefined)
+    this.apiKey = resolveApiKey(config.apiKey)
     this.baseUrl = config.baseUrl || DEFAULT_BASE_URL
     this.model = config.model || DEFAULT_MODEL
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS

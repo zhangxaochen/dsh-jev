@@ -19,6 +19,10 @@ export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } f
 
 export const name = 'dsh-jev'
 
+export const inject = {
+  optional: ['tools', 'webServer', 'typesafe', 'systemPrompt'],
+}
+
 /**
  * Mount the full TypeSafe plugin suite onto a Cordis context.
  */
@@ -51,9 +55,10 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
   }
 
   // 5. Mount Jev Metrics tool if tools service is available
-  if (ctx.tools && typeof ctx.tools.register === 'function') {
+  const toolsService = typeof ctx.get === 'function' ? ctx.get('tools') : (ctx as any).tools
+  if (toolsService && typeof toolsService.register === 'function') {
     try {
-      const toolDisposer = ctx.tools.register({
+      const toolDisposer = toolsService.register({
         name: 'jev_stats',
         description:
           'Display TypeSafe Jev metrics and statistics (pruned tools, saved tokens, dead loop interruptions, safety screens, System One latency).',
@@ -108,9 +113,10 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
   }
 
   // 6. Mount web route for HTTP / RPC inspection if webServer is available
-  if (ctx.webServer && typeof ctx.webServer.register === 'function') {
+  const webServer = typeof ctx.get === 'function' ? ctx.get('webServer') : (ctx as any).webServer
+  if (webServer && typeof webServer.register === 'function') {
     try {
-      const routeDisposer = ctx.webServer.register({
+      const routeDisposer = webServer.register({
         kind: 'exact',
         path: '/dsh-jev/stats',
         handler: (req: any, res: any) => {

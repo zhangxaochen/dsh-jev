@@ -92,7 +92,8 @@ export type PostToolDecision =
 
 export interface ToolExecution {
   name: string
-  args: Record<string, unknown>
+  args?: Record<string, unknown>
+  arguments?: unknown
   toolCallId?: string
   agent?: {
     id: string

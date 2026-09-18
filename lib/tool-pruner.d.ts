@@ -16,5 +16,5 @@ export declare class ToolPrunerService {
      */
     pruneTools(userIntent: string, candidates: ToolDefinitionMinimal[]): Promise<ToolDefinitionMinimal[]>;
 }
-export declare function apply(ctx: CordisContext, config?: ToolPrunerConfig): any;
+export declare function apply(ctx: CordisContext, config?: ToolPrunerConfig): () => void;
 //# sourceMappingURL=tool-pruner.d.ts.map

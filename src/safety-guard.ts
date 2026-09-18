@@ -41,14 +41,9 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
       Boolean(process.env.DEEPSEEK_HARNESS_HEADLESS))
 
   function getClient(): TypeSafeClient {
-    if (ctx.typesafe instanceof TypeSafeClient) {
-      return ctx.typesafe
-    }
-    if (typeof ctx.get === 'function') {
-      const client = ctx.get('typesafe')
-      if (client instanceof TypeSafeClient) {
-        return client
-      }
+    const client = typeof ctx.get === 'function' ? ctx.get('typesafe') : undefined
+    if (client instanceof TypeSafeClient) {
+      return client
     }
     return new TypeSafeClient()
   }
@@ -81,7 +76,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
 
       const state = {
         tool: exec.name,
-        arguments: exec.args,
+        arguments: exec.arguments ?? exec.args,
       }
 
       try {

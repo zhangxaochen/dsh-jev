@@ -35,14 +35,9 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
   const historyByAgent = new Map<string, StepRecord[]>()
 
   function getClient(): TypeSafeClient {
-    if (ctx.typesafe instanceof TypeSafeClient) {
-      return ctx.typesafe
-    }
-    if (typeof ctx.get === 'function') {
-      const client = ctx.get('typesafe')
-      if (client instanceof TypeSafeClient) {
-        return client
-      }
+    const client = typeof ctx.get === 'function' ? ctx.get('typesafe') : undefined
+    if (client instanceof TypeSafeClient) {
+      return client
     }
     return new TypeSafeClient()
   }
@@ -94,7 +89,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
 
       const currentRecord: StepRecord = {
         tool: exec.name,
-        args: JSON.stringify(exec.args ?? {}),
+        args: JSON.stringify(exec.arguments ?? exec.args ?? {}),
         contentPreview: contentStr.slice(0, 1500),
         timestamp: Date.now(),
       }
@@ -110,7 +105,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
       const recentSteps = history.slice(-triggerThreshold)
       const state = {
         currentTool: exec.name,
-        currentArgs: exec.args,
+        currentArgs: exec.arguments ?? exec.args,
         currentOutputSample: currentRecord.contentPreview,
         recentTrajectory: recentSteps.map((s, idx) => ({
           step: idx + 1,
