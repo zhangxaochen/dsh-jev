@@ -219,6 +219,20 @@ export interface SkillRouterConfig {
     /** Minimum answer confidence to advise a skill (default 0.5). */
     minConfidence?: number;
 }
+export interface ResultShaperConfig {
+    /** Tools whose textual output may be shaped (default: the output-heavy shell tools). */
+    shapeTools?: string[];
+    /** Only consider content at or above this many characters (default 8000). */
+    thresholdChars?: number;
+    /** At most this many shaped results per user turn (default 2). */
+    maxPerTurn?: number;
+    /** Lines grouped into one asked-about block (default 40). */
+    linesPerSegment?: number;
+    /** Upper bound on blocks per request (default 24). */
+    maxSegments?: number;
+    /** Keep-probability at or above which a block survives (default 0.5). */
+    keepThreshold?: number;
+}
 export interface ToolPrunerConfig {
     /** Max tools to keep in active context (default: 5) */
     maxTools?: number;
@@ -235,5 +249,10 @@ export interface TypeSafeSuiteConfig {
     /** Agent-facing decision primitives (`jev_ask`, `jev_rank`, `jev_check`), default true. */
     askTools?: boolean;
     skillRouter?: SkillRouterConfig | boolean;
+    /**
+     * Semantic shaping of oversized tool output. Off by default: it changes what
+     * the model sees, so it must be an explicit opt-in per deployment.
+     */
+    resultShaper?: ResultShaperConfig | boolean;
 }
 //# sourceMappingURL=types.d.ts.map

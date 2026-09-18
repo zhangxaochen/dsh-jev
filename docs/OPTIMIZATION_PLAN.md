@@ -69,8 +69,8 @@
 
 ## Phase 4 — 语义结果整形（opt-in）
 
-- [ ] `src/result-shaper.ts`：超阈值内容由 Jev 语义选段，默认关闭，失败原样返回
-- [ ] `docs/calibration.md`：记录 `toolResultPruner` 组合方式 spike 结论
+- [x] `src/result-shaper.ts`：超阈值内容由 Jev 语义选段，默认关闭，失败原样返回
+- [x] `docs/calibration.md`：记录 `toolResultPruner` 组合方式 spike 结论
 
 ## Phase 5 — 文档与发布
 

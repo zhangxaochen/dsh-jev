@@ -125,3 +125,32 @@ node --experimental-strip-types bench/run.ts --offline  # 回放录制答案，�
 ### 5.1 skill 路由
 
 `SkillRouterService` 复用同一套 score 评分：目录小于 `minCandidates`（默认 8）、请求过短、或与上一轮请求相同（FNV-1a 指纹）时**不发起调用**；命中后把建议写进 `assembly.contexts` 的 `typesafe-skill-router` 条目（同名条目替换而非堆叠），低于 `minScore`/`minConfidence` 时保持沉默。全部路径 fail-open：`skills.list()` 抛错时 prompt 原样返回（单测覆盖）。
+
+## 6. Phase 4 语义结果整形
+
+### 6.1 `toolResultPruner` 组合方式 spike 结论
+
+问题：能否注册同名 `toolResultPruner` 服务，替换或包装 DSH 内置的 `@deepseek-ai/dsh-compaction-tool-result-pruner`？
+
+证据：
+
+1. 源码：内置包 `super(ctx, "toolResultPruner")` 注册服务；`dsh-compaction-basic` 用 `ctx.get("toolResultPruner")` **可选**读取并调用 `pruneSession(session)`，其 `static inject` 里**没有** `toolResultPruner` —— 即没有链式注入点。
+2. 实测（同一 Context 依次注册两个同名 provider）：`ctx.get('toolResultPruner')` 解析到**先注册的内置实例**，后注册的实例不可见。
+
+结论：**放弃替换内置 pruner**。理由是（a）同名提供者不会稳定接管，（b）它承载的 `sourceEventSeqs` + `compaction/prune` shadow-price 复现安全协议由 DSH 拥有，复制它等于把上游不变量抄一份。因此语义选段的落点是 `tools/post-execute`：只改模型可见的内容，不动 session、不造新事件类型。
+
+### 6.2 整形规则与边界
+
+| 项 | 取值/行为 |
+|---|---|
+| 默认开关 | **关闭**（`resultShaper` 需显式开启：改变模型所见必须由部署方决定） |
+| 触发门槛 | 内容 ≥ `thresholdChars`（默认 8000）**且** 便宜前置检查判定重复（重复行率 ≥ 25%，或存在 > 4000 字符的单行） |
+| 适用范围 | 仅输出密集型工具（`bash`/`pwsh`/`terminal`/`run_command`/`execute_command`） |
+| 每轮预算 | 默认 2 次，`agent/pre-step` 重置 |
+| 判定方式 | 每块一个 `noul`（保留是否有用），**一次请求**批量评估，块数上限 24，超出则均匀合并（保证尾部不丢） |
+| 不可用/全保留 | 原样返回，绝不删内容 |
+| 失败结果 | 不整形（错误结果是诊断证据） |
+| 下游已改写 | 若 post-execute 下游决策已带 `content`/`value`，不覆盖 |
+| 任何异常 | 返回原始内容 |
+
+单测覆盖：分块上限与尾部保留、重复性前置检查、保留信息块并丢噪声、unknown/全保留返回 undefined、非适用工具零调用、失败结果与下游改写不覆盖、API 失败静默（`tests/result-shaper.spec.ts`）。

@@ -8,6 +8,7 @@ import * as LoopGuardPlugin from './loop-guard.js'
 import * as SafetyGuardPlugin from './safety-guard.js'
 import * as ToolPrunerPlugin from './tool-pruner.js'
 import * as SkillRouterPlugin from './skill-router.js'
+import * as ResultShaperPlugin from './result-shaper.js'
 import { registerJevTools } from './ask-tools.js'
 import { resolveClientFrom } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
@@ -20,6 +21,7 @@ export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js'
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js'
 export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } from './tool-pruner.js'
 export { apply as applySkillRouter, name as skillRouterName, SkillRouterService } from './skill-router.js'
+export { apply as applyResultShaper, name as resultShaperName, ResultShaperService } from './result-shaper.js'
 export { registerJevTools } from './ask-tools.js'
 
 export const name = 'dsh-jev'
@@ -74,7 +76,14 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
     disposers.push(SkillRouterPlugin.apply(ctx, routerConfig))
   }
 
-  // 7. Mount Jev Metrics tool if tools service is available
+  // 7. Mount the semantic result shaper. Off unless a deployment opts in: it
+  //    changes what the model sees, so silence is the safe default.
+  if (config.resultShaper === true || typeof config.resultShaper === 'object') {
+    const shaperConfig = typeof config.resultShaper === 'object' ? config.resultShaper : {}
+    disposers.push(ResultShaperPlugin.apply(ctx, shaperConfig))
+  }
+
+  // 8. Mount Jev Metrics tool if tools service is available
   let toolsRegistered = false
   const registerTools = (targetCtx: CordisContext) => {
     if (toolsRegistered) return

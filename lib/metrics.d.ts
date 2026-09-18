@@ -36,6 +36,10 @@ export interface JevMetricsData {
         /** Denials produced because the verdict was unknown and the policy fails closed. */
         uncertainDenied: number;
     };
+    resultShaper: {
+        shaped: number;
+        charsRemoved: number;
+    };
     systemOne: {
         totalCalls: number;
         totalLatencyMs: number;
@@ -100,6 +104,11 @@ export declare class MetricsCollector {
      * Record a System One API call latency.
      */
     recordCall(latencyMs: number, success?: boolean, accounting?: CallAccounting): void;
+    /**
+     * Record a semantically shaped tool result.
+     * @param charsRemoved Exact characters dropped from the model-facing content.
+     */
+    recordShape(charsRemoved: number): void;
     /** Record a decision whose answer was unusable (missing or malformed). */
     recordDecisionError(): void;
     /**

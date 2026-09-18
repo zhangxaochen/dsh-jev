@@ -41,6 +41,10 @@ export interface JevMetricsData {
     /** Denials produced because the verdict was unknown and the policy fails closed. */
     uncertainDenied: number
   }
+  resultShaper: {
+    shaped: number
+    charsRemoved: number
+  }
   systemOne: {
     totalCalls: number
     totalLatencyMs: number
@@ -102,6 +106,10 @@ function createEmptyMetrics(): JevMetricsData {
       approvals: 0,
       hardDenied: 0,
       uncertainDenied: 0,
+    },
+    resultShaper: {
+      shaped: 0,
+      charsRemoved: 0,
     },
     systemOne: {
       totalCalls: 0,
@@ -243,6 +251,16 @@ export class MetricsCollector {
     } else {
       this.data.systemOne.errors += 1
     }
+    this.persist()
+  }
+
+  /**
+   * Record a semantically shaped tool result.
+   * @param charsRemoved Exact characters dropped from the model-facing content.
+   */
+  recordShape(charsRemoved: number): void {
+    this.data.resultShaper.shaped += 1
+    this.data.resultShaper.charsRemoved += Math.max(0, charsRemoved)
     this.persist()
   }
 
