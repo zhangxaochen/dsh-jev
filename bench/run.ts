@@ -214,9 +214,12 @@ async function main(): Promise<void> {
     console.log('Recorded ' + Object.keys(captured).length + ' answer sets to bench/recorded.json')
   }
 
-  // Mirror the summary where the running plugin can read it.
+  // Mirror the summary where the running plugin can read it, but only for a
+  // live run: an offline replay has no latency or cost to report, and the
+  // dashboard should keep showing the last measured numbers instead.
   const homeSummary = join(homedir(), '.dsh', 'jev-bench.json')
   try {
+    if (OFFLINE) throw new Error('offline runs do not overwrite the live summary')
     mkdirSync(join(homedir(), '.dsh'), { recursive: true })
     writeFileSync(homeSummary, JSON.stringify(summary, null, 2), 'utf8')
     console.log('Mirrored summary to ' + homeSummary)

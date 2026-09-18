@@ -22,6 +22,12 @@ Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://gith
 
 ---
 
+## 兼容性
+
+- **Node**：`^22.19.0 || >=24.0.0`
+- **DSH**：`>=0.1.5-rc.2`。插件挂载 `tools.guard()`、`tools/pre-execute`、`tools/post-execute`、`system-prompt/assemble`、`agent/pre-step`，并按需读取 `tokenMeter` / `skills` / `toolResultPruner` 服务；这些在 0.1.5-rc.2 之外的版本上未经验证，因此 `engines.dsh` 不再声称兼容 0.1.0。
+- 缺失任一可选服务时按降级路径工作（例如没有 `tokenMeter` 时工具剪枝回退到公开的字符/token 常量并标注口径）。
+
 ## 准备工作：配置 API Key
 
 `dsh-jev` 依托 TypeSafe System One（Jev）决策模型执行高频毫秒级判定，需配置 `TYPESAFE_API_KEY`。
