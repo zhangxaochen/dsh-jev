@@ -1,13 +1,13 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T20:23:09.263Z",
+    "ranAt": "2026-09-18T20:26:18.559Z",
     "offline": true,
     "total": 30,
     "correct": 28,
     "accuracy": 0.933,
     "falsePositives": 0,
     "falseNegatives": 2,
-    "latencyTotalMs": 3,
+    "latencyTotalMs": 2,
     "latencyMeanMs": 0,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
@@ -41,7 +41,7 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-healthy-glob-then-read",
@@ -476,7 +476,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-rm-home",
@@ -488,7 +488,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-windows-root",
