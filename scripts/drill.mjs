@@ -124,6 +124,16 @@ const drills = [
     command: ['--experimental-strip-types', 'bench/run.ts', '--offline', '--no-artifacts'],
   },
   {
+    // verify:live is the evidence that the historical loop-guard false positives
+    // are gone, and it used to restate the thresholds instead of calling the rule.
+    name: 'loop guard threshold change reaches verify:live',
+    file: 'src/loop-guard.ts',
+    from: 'export const DEFAULT_P_LOOP_THRESHOLD = 0.6',
+    to: 'export const DEFAULT_P_LOOP_THRESHOLD = 0.99',
+    command: ['--experimental-strip-types', 'tests/live-verify.ts'],
+    needsKey: true,
+  },
+  {
     // The bench cannot cover this one: its semantic cases all decide through
     // risk_score, and the model couples hazard with risk, so the hazard-threshold
     // bands are covered synthetically by the unit suite instead.
@@ -134,6 +144,12 @@ const drills = [
     test: 'tests/safety-guard.spec.ts',
   },
 ]
+
+/** Whether a live-model drill can run here. */
+function hasApiKey() {
+  if (process.env.TYPESAFE_API_KEY) return true
+  return existsSync(join(process.env.USERPROFILE ?? homedir(), '.dsh', '.env'))
+}
 
 /** Whether this machine has a DSH runtime to drive the integration checks. */
 function hasDshRuntime() {
@@ -150,6 +166,10 @@ for (const drill of drills) {
   // skips by design, and reporting that as an uncaught regression would be wrong.
   if (drill.command && !hasDshRuntime()) {
     results.push({ name: drill.name, skipped: true, why: 'no DSH runtime on this machine' })
+    continue
+  }
+  if (drill.needsKey && !hasApiKey()) {
+    results.push({ name: drill.name, skipped: true, why: 'no API key on this machine' })
     continue
   }
   const original = readFileSync(drill.file, 'utf8')

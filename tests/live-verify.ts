@@ -5,8 +5,14 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { TypeSafeClient, noul, score, scoreConfidence, topBucketProbability } from '../lib/typesafe-client.js'
-import { STUCK_SEVERITY_CRITERIA } from '../lib/loop-guard.js'
+import { TypeSafeClient, noul, score } from '../lib/typesafe-client.js'
+import {
+  DEFAULT_MIN_CONFIDENCE,
+  DEFAULT_NO_PROGRESS_THRESHOLD,
+  DEFAULT_P_LOOP_THRESHOLD,
+  evaluateStuckTrajectory,
+  STUCK_SEVERITY_CRITERIA,
+} from '../lib/loop-guard.js'
 
 function loadKey(): string {
   if (process.env.TYPESAFE_API_KEY) return process.env.TYPESAFE_API_KEY
@@ -96,14 +102,19 @@ async function main(): Promise<void> {
     })
     const latencyMs = Date.now() - started
 
-    const progress: any = answers.has_progress
+    // The shipped rule, not a copy of its thresholds: this script is the evidence
+    // that the historical false positives are gone, and while it restated the
+    // numbers a change to the guard would not have shown up here.
+    const verdictResult = evaluateStuckTrajectory(answers, {
+      noProgressThreshold: DEFAULT_NO_PROGRESS_THRESHOLD,
+      pLoopThreshold: DEFAULT_P_LOOP_THRESHOLD,
+      minConfidence: DEFAULT_MIN_CONFIDENCE,
+    })
+    const fires = verdictResult.action === 'interrupt' || verdictResult.action === 'warn'
+    const progressProb = verdictResult.progress
+    const pLoop = verdictResult.pLoop
+    const confidence = verdictResult.confidence
     const severity: any = answers.stuck_severity
-    const progressProb = typeof progress?.noul === 'number' ? progress.noul : undefined
-    const pLoop = topBucketProbability(severity)
-    const confidence = scoreConfidence(severity)
-
-    const unknown = progressProb === undefined || pLoop === undefined || confidence === undefined
-    const fires = !unknown && progressProb < 0.3 && pLoop >= 0.6 && confidence >= 0.5
     const verdict = fires === scenario.expectFire ? 'PASS' : 'FAIL'
     if (verdict === 'FAIL') failures += 1
 
