@@ -310,3 +310,10 @@
 - [x] 补齐最后一处跨文件契约：设置面板抓取的端点（`src/client.ts` 的 `/api/dsh-jev/stats`）必须与 `src/index.ts` 注册的 connection 路由、webServer 路由**完全一致**——不一致时面板只会静默空白，没有任何报错
 - [x] 新测试同时断言构建产物 `lib/client.js` 里也带同一端点（防止改源码忘了重新构建面板）
 - [x] 测试数 99 → 100
+
+## Phase 5 补充记录（验证报告，Round 31）
+
+- [x] 新增 `docs/verification-report.md`：把散落在 calibration / plan / CHANGELOG 的验证结论收成**证据索引**——承诺 → 验证手段 → 结果，并单列 **15 个真实缺陷及其「由哪种验证手段抓到」**
+- [x] 报告同时写明 4 项**主动保留的限制**（2 条漏报为设计取舍、基准不报费用、resultShaper 默认关闭、实机端到端待重启）与自行复现命令
+- [x] README 文档索引加入该报告；重启后的确认步骤（`doctor` 期望输出 + `version` 1→2）写在其中
+- [x] 该文件同时回答了一个方法论问题：本轮 15 个缺陷中，**跨层集成校验（真实 cordis / 真实 dsh-tools）抓到 3 个单测结构上无法发现的**（agent loop 崩溃、整形模块失效、服务规范化）
