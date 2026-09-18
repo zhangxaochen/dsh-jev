@@ -10,9 +10,7 @@ export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js'
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js';
 export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } from './tool-pruner.js';
 export declare const name = "dsh-jev";
-export declare const inject: {
-    optional: string[];
-};
+export declare const inject: string[];
 /**
  * Mount the full TypeSafe plugin suite onto a Cordis context.
  */

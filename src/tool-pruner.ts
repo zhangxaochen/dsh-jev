@@ -160,11 +160,8 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
             userIntent || 'General software engineering and tool execution task',
             assembly.tools
           )
-          const modified = {
-            ...assembly,
-            tools: pruned,
-          }
-          return typeof next === 'function' ? next(modified) : modified
+          assembly.tools = pruned
+          return typeof next === 'function' ? next() : assembly
         } catch (err) {
           console.warn('[TypeSafe ToolPruner] Waterfall pruning error, falling back:', err)
           return typeof next === 'function' ? next() : assembly
