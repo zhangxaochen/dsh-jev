@@ -123,16 +123,10 @@ const drills = [
     to: 'export const DEFAULT_P_LOOP_THRESHOLD = 0.99',
     command: ['--experimental-strip-types', 'bench/run.ts', '--offline', '--no-artifacts'],
   },
-  {
-    // The pre-execute listener is called as (exec, next). Reinstating the removed
-    // three-argument tolerance must fail the spec whose harness now uses the real
-    // shape.
-    name: 'pre-execute listener accepts an unreachable argument shape',
-    file: 'src/safety-guard.ts',
-    from: '    async (exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision> => {',
-    to: '    async (...hookArgs: any[]): Promise<PreToolDecision> => {\n      let exec: ToolExecution\n      let next: () => Promise<PreToolDecision>\n      if (hookArgs.length >= 3 && typeof hookArgs[2] === \'function\') {\n        exec = hookArgs[1]\n        next = () => Promise.resolve(hookArgs[2](hookArgs[0]))\n      } else {\n        exec = hookArgs[0]\n        next = hookArgs[1]\n      }',
-    test: 'tests/safety-guard.spec.ts',
-  },
+  // No drill for the removed argument-shape tolerance: with the real two-argument
+  // pre-execute call its `hookArgs.length >= 3` guard never fired, so the code was
+  // unreachable rather than wrong and there is no regression to inject. The
+  // contract it obscured is pinned by the safety-guard case instead.
   {
     // verify:live is the evidence that the historical loop-guard false positives
     // are gone, and it used to restate the thresholds instead of calling the rule.
