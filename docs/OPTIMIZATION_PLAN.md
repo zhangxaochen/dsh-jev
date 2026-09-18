@@ -304,3 +304,9 @@
 - [x] 实测 `dsh plugin --profile headless`（无子命令）→ `error: plugin needs pnpm arguments to forward (e.g. add <package>)`，确认 `dsh plugin` 本身不含子命令，而是把参数**转发给该 profile 目录下的 pnpm**（`add`/`remove`/`list` 均为 pnpm 语义）
 - [x] README 补两条须知：desktop profile 由 Electron 应用独占、桌面端应走应用内入口或 `pnpm run sync` 同步路径；`dsh plugin` 的转发语义
 - [x] 结论：`dsh plugin --profile headless add <pkg>` 的写法本身正确，缺的是对 desktop 的警告
+
+## Phase 5 补充记录（UI 与宿主路由契约，Round 30）
+
+- [x] 补齐最后一处跨文件契约：设置面板抓取的端点（`src/client.ts` 的 `/api/dsh-jev/stats`）必须与 `src/index.ts` 注册的 connection 路由、webServer 路由**完全一致**——不一致时面板只会静默空白，没有任何报错
+- [x] 新测试同时断言构建产物 `lib/client.js` 里也带同一端点（防止改源码忘了重新构建面板）
+- [x] 测试数 99 → 100

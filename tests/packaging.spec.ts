@@ -176,3 +176,23 @@ test('the manifest points at files that exist and ships every exported module', 
   assert.ok(existsSync(join(ROOT, 'lib', 'client.js')), 'the settings panel bundle must ship')
   assert.ok(pkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings'), 'settings slot dependency')
 })
+
+test('the settings panel polls the route the host actually registers', () => {
+  const clientSource = readFileSync(join(ROOT, 'src', 'client.ts'), 'utf8')
+  const indexSource = readFileSync(join(ROOT, 'src', 'index.ts'), 'utf8')
+
+  const requested = clientSource.match(/return '(\/api\/[^']+)'/)
+  assert.ok(requested, 'the panel must fetch a concrete stats route')
+
+  // Both the connection route and the web server route must serve that path;
+  // a mismatch leaves the panel silently empty.
+  const served = [...indexSource.matchAll(/path: '(\/api\/[^']+)'/g)].map((match) => match[1])
+  assert.ok(served.length >= 2, 'expected the connection and web server routes')
+
+  for (const path of served) {
+    assert.equal(path, requested[1], 'a registered route differs from the panel endpoint')
+  }
+
+  const bundle = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8')
+  assert.ok(bundle.includes(requested[1]), 'the built panel must carry the same endpoint')
+})
