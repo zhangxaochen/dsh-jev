@@ -159,3 +159,12 @@
 - [x] 新增 `tests/metrics-surface.spec.ts`（3 个用例）：从 `MetricsCollector` 快照与 `BenchSummary` 接口反解数据结构，与看板源码里读取的字段双向比对——既禁止读取不存在的字段（会静默显示 0），也禁止有指标无展示
 - [x] 验证测试有效：把 resultShaper 卡片从副本中去掉后，该用例确实报 `missing: resultShaper`
 - [x] README 看板示例同步补上该行；测试数 76 → 79
+
+## Phase 5 补充记录（真实 runtime 集成校验，Round 16）
+
+此前所有守卫验证都用**手写假 context**，无法发现事件名错误、参数顺序错误或决策结构被真实分发器拒绝。新增在真实 DSH runtime 上的集成校验。
+
+- [x] 新增 `tests/integration-dsh.mjs`：从 `$DSH_HOME`（默认 `~/.dsh`）定位真实 `@deepseek-ai/cordis`，在其中挂载 client/loop-guard/safety-guard/tool-pruner，然后驱动**真实 waterfall**
+- [x] 校验项（7 条）：`ctx.get('typesafe')` 与 `ctx.typesafe` 两条解析路径；`tools/post-execute` 真实 waterfall 产出 loop-guard 提示且 `source.plugin` 正确；`tools/pre-execute` 真实 waterfall 拒绝 `rm -rf /`；良性调用仍能到达下游监听者；`system-prompt/assemble` 真实 waterfall 把工具面 4 → 2；返回对象保留 harness 不变量要求的字段
+- [x] 写这个校验时立刻纠正了我自己的两个错误假设：Cordis 的 plugin fiber **异步**启动（需让出一拍再解析服务）；tool-pruner 是**原地修改** `assembly.tools`，因此原始长度必须在 waterfall 之前取
+- [x] 无 DSH 时打印 `SKIP` 并退出 0（CI 无 DSH 也安全）；新增 `pnpm run verify:dsh`

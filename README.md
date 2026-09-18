@@ -275,6 +275,10 @@ pnpm run verify:live
 # 线上验证：jev_ask / jev_rank / jev_check 三个决策原语
 pnpm run verify:tools
 
+# 集成校验：在真实 DSH runtime（真实 Cordis + 真实 waterfall）上挂载插件
+# 未安装 DSH 时自动跳过并退出 0，因此可在无 DSH 的 CI 中安全运行
+pnpm run verify:dsh
+
 # A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
 pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
 pnpm run bench:offline    # 回放录制答案，零成本复现
