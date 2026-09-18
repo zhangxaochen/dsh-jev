@@ -318,3 +318,19 @@ test('the published tarball carries everything the host loads and nothing else',
   const noise = packed.filter((file) => /^(tests|tmp|bench|scripts|src|\.github)\//.test(file))
   assert.deepEqual(noise, [], 'the tarball ships development files')
 })
+
+test('the client half declares the platform and slot this deployment loads', () => {
+  // The settings panel only loads if the manifest's client block matches the host's
+  // platform id and injects a slot the host provides. Both were checked against the
+  // plugins that already work in this deployment - dshmarket and
+  // dsh-commandcode-usage declare `platform: "web"` and inject
+  // @deepseek-ai/dsh-client-ui-settings, the same pair this manifest uses.
+  assert.equal(pkg.dsh?.client?.platform, 'web', 'the panel is registered for a platform the host does not use')
+  assert.ok(
+    Array.isArray(pkg.dsh?.client?.inject) && pkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings'),
+    'the panel must inject the settings slot'
+  )
+  // Shipping the client half is what makes DSH load it at all.
+  assert.ok(existsSync(join(ROOT, 'lib', 'client.js')), 'the built panel bundle is missing')
+  assert.ok(Array.isArray(pkg.files) && pkg.files.includes('lib'), 'lib must be shipped for the panel to load')
+})

@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **163** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **164** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -819,3 +819,11 @@
 - [x] 查证（有证据）：desktop 的 bundles 含 **`@deepseek-ai/dsh-web-app`**，其补丁挂载 `- id: webserver`（`dsh-host-webserver`）与 `- id: connection`（`dsh-client-connection`），并注明「webserver under /api; browser half is the fetch/SSE client」——正是本插件注册路由的方式 ✓ **无缺口**
 - [x] 新增宿主论断闸门（`dsh-contract` 第 8 项）：断言源码同时在 `connection.fetch` 与 `webServer` 上注册，且宿主 web-app bundle 仍挂载 `webserver`/`connection` 两行——若宿主改结构，闸门失败而非面板静默失效
 - [x] 测试数 162 → 163（`dsh-contract` 8 项，无 DSH 时跳过）
+
+## 部署补充（面板加载条件，Round 88）
+
+- [x] 追问部署面最后一项：面板的 `dsh.client.platform` 是否为该宿主实际使用的平台标识——若不符，面板在桌面端**永不会加载**
+- [x] 对照证据：同一 profile 里**已在工作**的两个插件 `dshmarket` 与 `dsh-commandcode-usage` 均声明 `platform: "web"` 且注入 `@deepseek-ai/dsh-client-ui-settings`，与本插件**完全一致** ✓ 无缺口
+- [x] 新增清单契约断言：`dsh.client.platform === 'web'`、`inject` 含设置槽、`lib/client.js` 存在且 `lib` 在 `files` 中（面板能否加载取决于此）
+- [x] 测试数 163 → 164
+- [x] **部署面审计到此收束**：挂载 → 版本声明 → 清单目标 → 面板依赖 → 补丁语法 → 密钥解析 → 路由目标 → 客户端平台，八项均有实测或闸门；不再提议新的部署面探测
