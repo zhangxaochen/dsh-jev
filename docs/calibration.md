@@ -677,4 +677,4 @@ ok   the live numbers postdate the build they claim to measure
 | `git rm -r --cached dist` | 不是文件系统删除 |
 | `echo "erase /s /q" > notes.md` | 动词出现在**文本里**而非作为命令执行 |
 
-语料库现为 **94 条**（62 硬拒 / 32 放行）。单测 148、基准 36 条（误报 0）不变。
+语料库现为 **92 条**（58 硬拒 / 34 放行）。单测 148、基准 36 条（误报 0）不变。
