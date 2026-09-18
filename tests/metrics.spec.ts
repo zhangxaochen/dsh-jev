@@ -1,9 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { rmSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { FALLBACK_CHARS_PER_TOKEN, MetricsCollector, defaultMetrics } from '../lib/metrics.js'
+import {
+  FALLBACK_CHARS_PER_TOKEN,
+  METRICS_PATH_ENV,
+  MetricsCollector,
+  defaultMetrics,
+  resolveMetricsPath,
+} from '../lib/metrics.js'
 import { apply as applySuite } from '../lib/index.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 
@@ -160,4 +166,52 @@ test('MetricsCollector accepts a legacy v1 file by starting a fresh v2 record', 
   try {
     rmSync(testFile, { force: true })
   } catch {}
+})
+
+test('the metrics path is overridable and resolved lazily', () => {
+  assert.equal(resolveMetricsPath('/explicit/path.json'), '/explicit/path.json')
+
+  const previous = process.env[METRICS_PATH_ENV]
+  process.env[METRICS_PATH_ENV] = '/from/env.json'
+  try {
+    assert.equal(resolveMetricsPath(), '/from/env.json')
+    // An explicit argument still wins over the environment.
+    assert.equal(resolveMetricsPath('/explicit.json'), '/explicit.json')
+  } finally {
+    if (previous === undefined) delete process.env[METRICS_PATH_ENV]
+    else process.env[METRICS_PATH_ENV] = previous
+  }
+
+  assert.match(resolveMetricsPath(), /jev-stats\.json$/)
+})
+
+test('constructing a collector touches nothing until it records', () => {
+  const target = join(tmpdir(), 'jev-lazy-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.json')
+  const collector = new MetricsCollector(target)
+
+  assert.equal(existsSync(target), false, 'construction must not create a metrics file')
+  collector.getSnapshot()
+  assert.equal(existsSync(target), false, 'reading a snapshot must not create the file either')
+
+  collector.recordSafetyCheck('pass')
+  assert.equal(existsSync(target), true)
+  assert.equal(JSON.parse(readFileSync(target, 'utf8')).version, 2)
+
+  rmSync(target, { force: true })
+})
+
+test('the environment override routes a collector to a scratch file', () => {
+  const target = join(tmpdir(), 'jev-env-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.json')
+  const previous = process.env[METRICS_PATH_ENV]
+  process.env[METRICS_PATH_ENV] = target
+  try {
+    const collector = new MetricsCollector()
+    collector.recordLoopCheck('warn')
+    assert.equal(existsSync(target), true)
+    assert.equal(JSON.parse(readFileSync(target, 'utf8')).loopGuard.checks, 1)
+  } finally {
+    if (previous === undefined) delete process.env[METRICS_PATH_ENV]
+    else process.env[METRICS_PATH_ENV] = previous
+    rmSync(target, { force: true })
+  }
 })

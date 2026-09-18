@@ -71,10 +71,25 @@ export interface CallAccounting {
  * 15000 tokens saved per interrupted loop; neither was measured, so both are gone.
  */
 export declare const FALLBACK_CHARS_PER_TOKEN = 3.5;
+/** Environment override for the metrics file, used by verification scripts. */
+export declare const METRICS_PATH_ENV = "DSH_JEV_METRICS_PATH";
+/**
+ * Where the collector persists, resolved on first use rather than at import.
+ *
+ * A script that merely imports the plugins would otherwise construct the
+ * collector against the live file and overwrite the very metrics an operator
+ * reads to judge a deployment. Resolving late lets a tool point the collector at
+ * a scratch file after imports and before its first decision.
+ */
+export declare function resolveMetricsPath(explicit?: string): string;
 export declare class MetricsCollector {
-    private data;
-    private readonly storagePath;
+    private data?;
+    private readonly explicitPath?;
     constructor(customPath?: string);
+    /** Resolved storage path; first call pins it for this instance. */
+    private storagePath;
+    /** Current data, loading the persisted file on first access. */
+    private state;
     private loadInitial;
     private persist;
     /**

@@ -12,9 +12,13 @@
  * Run: node tests/integration-dsh.mjs
  */
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+// Verification runs must not touch the operator's live metrics file: the path is
+// resolved on first use, so setting it here is enough.
+process.env.DSH_JEV_METRICS_PATH ??= joinPath(tmpdir(), 'jev-integration-metrics.json')
 
 import * as ClientPlugin from '../lib/typesafe-client.js'
 import * as LoopGuard from '../lib/loop-guard.js'

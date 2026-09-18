@@ -1,13 +1,13 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T19:57:44.434Z",
+    "ranAt": "2026-09-18T20:22:24.977Z",
     "offline": true,
     "total": 30,
     "correct": 28,
     "accuracy": 0.933,
     "falsePositives": 0,
     "falseNegatives": 2,
-    "latencyTotalMs": 1,
+    "latencyTotalMs": 2,
     "latencyMeanMs": 0,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
@@ -524,7 +524,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-fork-bomb",

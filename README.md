@@ -299,6 +299,10 @@ pnpm run sync:desktop      # 只同步 desktop
 node scripts/sync-profiles.js --dry-run   # 只列出目标，不写文件
 ```
 
+> ℹ️ **验证脚本不会污染实机指标**：`verify:dsh` / `verify:live` / `verify:tools` / `bench` 都把指标写到
+> `%TEMP%` 下的临时文件（通过 `DSH_JEV_METRICS_PATH`）；否则它们会以自身 schema 覆写
+> `~/.dsh/jev-stats.json`，而那正是 `doctor` 判断部署状态的依据。
+
 判定「本机是否真的在跑新构建」用一条命令：
 
 ```bash

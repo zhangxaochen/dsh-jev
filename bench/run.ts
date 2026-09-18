@@ -9,7 +9,7 @@
  *   --offline replays the recorded answers in the case file (no API, no cost).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TypeSafeClient, noul, score, scoreConfidence, topBucketProbability } from '../lib/typesafe-client.js'
 import { STUCK_SEVERITY_CRITERIA } from '../lib/loop-guard.js'
@@ -17,6 +17,10 @@ import { CREDENTIAL_CRITERIA, deterministicVerdict } from '../lib/safety-guard.j
 import type { QuestionDefinition } from '../lib/types.js'
 
 const OFFLINE = process.argv.includes('--offline')
+
+// A bench run prices real decisions; they belong in a scratch file, not in the
+// metrics an operator reads to judge the running host.
+process.env.DSH_JEV_METRICS_PATH ??= join(tmpdir(), 'jev-bench-metrics.json')
 
 interface BenchCase {
   id: string

@@ -3,7 +3,7 @@
  * Run: node --experimental-strip-types tests/live-verify.ts
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TypeSafeClient, noul, score, scoreConfidence, topBucketProbability } from '../lib/typesafe-client.js'
 import { STUCK_SEVERITY_CRITERIA } from '../lib/loop-guard.js'
@@ -17,6 +17,9 @@ function loadKey(): string {
   }
   throw new Error('TYPESAFE_API_KEY not found')
 }
+
+// Keep this run out of the operator's live metrics file.
+process.env.DSH_JEV_METRICS_PATH ??= join(tmpdir(), 'jev-live-verify-metrics.json')
 
 const client = new TypeSafeClient({ apiKey: loadKey() })
 

@@ -3,7 +3,7 @@
  * Run: node --experimental-strip-types tests/live-tools.ts
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerJevTools } from '../lib/ask-tools.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
@@ -18,6 +18,9 @@ function loadKey(): string {
   }
   throw new Error('TYPESAFE_API_KEY not found')
 }
+
+// Keep this run out of the operator's live metrics file.
+process.env.DSH_JEV_METRICS_PATH ??= join(tmpdir(), 'jev-live-tools-metrics.json')
 
 const client = new TypeSafeClient({ apiKey: loadKey() })
 const registered = new Map<string, any>()

@@ -241,3 +241,14 @@
 - [x] **loop-guard 提示经真实服务送达**：`createExecution` 接受普通对象作为 agent，`postExecute` 返回的 `additionalContexts` 长度 1 且 `source.plugin === 'typesafe-loop-guard'`——此前该项只在裸 waterfall 上验证
 - [x] 至此四个插件**全部**具备服务级（真实 `dsh-tools` + `dsh-system-prompt`）覆盖：safety-guard 的拒止与单调性、tool-pruner 的真实装配、result-shaper 的块内容整形、loop-guard 的提示送达
 - [x] 集成校验 15 → **16/16**；无 DSH 时整体跳过并退出 0
+
+## Phase 5 补充记录（验证工具污染实机信号，Round 24）
+
+`pnpm run doctor` 用 `~/.dsh/jev-stats.json` 的 schema 版本判断宿主是否已重载。实测发现该信号会被**我自己的验证脚本**改写——一次 doctor 误报 `OK` 由此而来。
+
+- [x] 复现：集成脚本运行前 `version 1 / mtime 04:20:45`，运行后 `version 2 / mtime 04:20:46`（脚本导入插件即构造 `defaultMetrics`，判决时以 v2 schema 覆写实机文件；随后仍在运行的旧宿主又写回 v1，导致结论来回翻转）
+- [x] `metrics.ts`：新增 `METRICS_PATH_ENV`（`DSH_JEV_METRICS_PATH`）与 `resolveMetricsPath()`；采集器改为**懒解析路径 + 懒加载数据**，构造与读快照都不落盘
+- [x] 四个验证脚本（`verify:dsh` / `verify:live` / `verify:tools` / `bench`）设指向 `%TEMP%` 的临时指标文件
+- [x] 实测确认：运行集成 + 离线基准后，实机文件仍为 `version 1 / mtime 04:22:23`（分毫未动）
+- [x] 单测 +3：路径覆盖优先级（显式 > 环境 > 默认）、构造与读快照不创建文件、环境变量重定向落盘
+- [x] 测试数 91 → 94
