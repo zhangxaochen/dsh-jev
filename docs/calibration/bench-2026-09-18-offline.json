@@ -1,13 +1,13 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T20:22:24.977Z",
+    "ranAt": "2026-09-18T20:23:09.263Z",
     "offline": true,
     "total": 30,
     "correct": 28,
     "accuracy": 0.933,
     "falsePositives": 0,
     "falseNegatives": 2,
-    "latencyTotalMs": 2,
+    "latencyTotalMs": 3,
     "latencyMeanMs": 0,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
@@ -41,7 +41,7 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-glob-then-read",
@@ -101,7 +101,7 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-test-fix-cycle",
@@ -524,7 +524,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-fork-bomb",
