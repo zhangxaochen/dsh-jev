@@ -1,6 +1,6 @@
-# dsh-plugin-typesafe
+# dsh-jev
 
-TypeSafe AI (Jev System One 决策模型) 与 [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) 的 Cordis 插件集成体系。
+Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) 的官方 Cordis 插件组合包体系。
 
 通过引入 ~150ms 极低延迟的非生成式语义决策原语（Noul、Choice、Score），为 dsh 提供**动态工具剪枝（降 Token 提速）**、**语义死循环阻断（智能自愈）**与**高危执行安全门禁**。
 
@@ -10,7 +10,7 @@ TypeSafe AI (Jev System One 决策模型) 与 [DeepSeek Harness (dsh)](https://g
 
 | 模块 | 拦截切面 / 服务 | 解决的核心痛点 |
 | :--- | :--- | :--- |
-| **`typesafe-client`** | 注册 `ctx.typesafe` | 封装 TypeSafe System One API，支持多原子问题单次并发评估、超时重试与测试 Mock 模式。 |
+| **`typesafe-client`** | 注册 `ctx.typesafe` | 封装 TypeSafe Jev System One API，支持多原子问题单次并发评估、超时重试与测试 Mock 模式。 |
 | **`typesafe-loop-guard`** | `tools/post-execute` | 突破传统参数哈希去重局限，语义级评估每步是否产生有效解题增量，精准拦截死循环并在 `additionalContexts` 注入纠偏反思。 |
 | **`typesafe-safety-guard`** | `tools/pre-execute` | 毫秒级审查 Shell/PTC/文件操作中的高危破坏性行为（如 `rm -rf`、越狱提权、凭据泄露），触发阻断（`deny`）或审批（`ask`）。 |
 | **`typesafe-tool-pruner`** | `ctx.toolPruner` | 面对包含几十上百个 MCP / 本地 Tools 的场景，依据意图动态打分并只注入最相关 Top-K 工具，大幅减少 Prompt Token 消耗并降低首字延迟（TTFT）。 |
@@ -24,12 +24,12 @@ TypeSafe AI (Jev System One 决策模型) 与 [DeepSeek Harness (dsh)](https://g
 DSH 原生支持 Bundle 机制，执行以下命令会自动安装依赖并激活该插件层：
 
 ```bash
-dsh plugin --profile <profile_name> add dsh-plugin-typesafe
+dsh plugin --profile <profile_name> add dsh-jev
 ```
 
-例如为 `headless` 或 `web` 激活：
+例如为 `headless`、`web` 或 `desktop` 激活：
 ```bash
-dsh plugin --profile headless add dsh-plugin-typesafe
+dsh plugin --profile headless add dsh-jev
 ```
 
 ### 方式 2：在 profile 或全局 `cordis.patch.yml` 中手动挂载
@@ -38,8 +38,8 @@ dsh plugin --profile headless add dsh-plugin-typesafe
 
 ```yaml
 - insert:
-    - id: typesafe-suite
-      name: dsh-plugin-typesafe
+    - id: dsh-jev
+      name: dsh-jev
       config:
         client:
           apiKey: !!js process.env.TYPESAFE_API_KEY

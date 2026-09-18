@@ -1,7 +1,7 @@
 {
-  "name": "dsh-plugin-typesafe",
+  "name": "dsh-jev",
   "version": "0.1.0",
-  "description": "TypeSafe AI (Jev System One model) decision layer plugins for DeepSeek Harness (dsh)",
+  "description": "Jev (System One decision model) plugin suite for DeepSeek Harness (dsh)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -49,7 +49,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zhangxaochen/dsh-plugin-typesafe.git"
+    "url": "git+https://github.com/zhangxaochen/dsh-jev.git"
   },
   "scripts": {
     "build": "tsc",

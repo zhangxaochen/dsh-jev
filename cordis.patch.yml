@@ -1,7 +1,7 @@
-# DeepSeek Harness official bundle layer for dsh-plugin-typesafe
+# DeepSeek Harness official bundle layer for dsh-jev
 - insert:
-    - id: typesafe-suite
-      name: dsh-plugin-typesafe
+    - id: dsh-jev
+      name: dsh-jev
       config:
         client:
           apiKey: !!js process.env.TYPESAFE_API_KEY

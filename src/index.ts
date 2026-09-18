@@ -15,7 +15,7 @@ export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js'
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js'
 export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } from './tool-pruner.js'
 
-export const name = 'typesafe-suite'
+export const name = 'dsh-jev'
 
 /**
  * Mount the full TypeSafe plugin suite onto a Cordis context.
