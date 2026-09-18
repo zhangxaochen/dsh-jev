@@ -163,11 +163,13 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
-    // The index reports the drill's size; a stale number there is a stale claim.
+    // The index reports the drill's size; a stale number there is a stale claim. The
+    // pattern matches whatever the current numbers are, so syncing the document does
+    // not invalidate the drill.
     name: 'the index reports a stale drill size',
     file: 'docs/verification-report.md',
-    from: '`pnpm run drill` **23/23**',
-    to: '`pnpm run drill` **21/21**',
+    fromPattern: '`pnpm run drill` \\*\\*\\d+/\\d+\\*\\*',
+    to: '`pnpm run drill` **1/1**',
     test: 'tests/docs-consistency.spec.ts',
   },
   {
@@ -256,11 +258,17 @@ for (const drill of drills) {
   }
   const original = readFileSync(drill.file, 'utf8')
   try {
-    if (!original.includes(drill.from)) {
+    // An entry may name a literal `from`, or a `fromPattern` regex when the text it
+    // edits carries a number that legitimately changes (a synced count, say) - a
+    // literal anchor would go stale the moment the document was updated.
+    const mutated = drill.fromPattern
+      ? original.replace(new RegExp(drill.fromPattern), drill.to)
+      : original.replace(drill.from, drill.to)
+    if (mutated === original) {
       results.push({ name: drill.name, caught: false, why: 'anchor not found in ' + drill.file })
       continue
     }
-    writeFileSync(drill.file, original.replace(drill.from, drill.to), 'utf8')
+    writeFileSync(drill.file, mutated, 'utf8')
 
     // The specs import the built output, so a src mutation is only visible after a
     // build — exactly what `pnpm test`'s pretest does in CI.
