@@ -94,3 +94,28 @@ test('the test runner preloads the isolation module', () => {
   )
   assert.match(pkg.scripts.test, /--test/, 'the test script still runs the node test runner')
 })
+
+test('no verification script registers a check after it reports its results', () => {
+  // A check added after the loop that prints the results never runs, never prints and
+  // can never fail - which happened in tests/live-turn.ts: the turn-budget assertion
+  // sat below the loop, so a breach went unreported. The scripts are read here rather
+  // than trusted, because the failure mode is invisible at runtime.
+  const scripts = [
+    ...['tests/live-verify.ts', 'tests/live-tools.ts', 'tests/live-shaper.ts', 'tests/live-pruner.ts', 'tests/live-router.ts', 'tests/live-turn.ts', 'tests/integration-dsh.mjs'],
+    'scripts/verify-host.mjs',
+  ]
+
+  const offenders = []
+  for (const script of scripts) {
+    const lines = source(script).split('\n')
+    const reportLoop = lines.findIndex((line) => /for \(const \w+ of (checks|results)\)/.test(line))
+    if (reportLoop < 0) continue
+    lines.forEach((line, index) => {
+      if (index > reportLoop && /^\s{2,4}check\(/.test(line)) {
+        offenders.push(script + ':' + (index + 1) + ' ' + line.trim().slice(0, 60))
+      }
+    })
+  }
+
+  assert.deepEqual(offenders, [], 'these checks are registered after the results are reported')
+})
