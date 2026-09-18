@@ -356,3 +356,26 @@ test('the reported drill and corpus sizes match the files', () => {
     }
   }
 })
+
+test('the documented host-acceptance size matches the script', () => {
+  // The acceptance grew from six checks to seven when the key-resolution probe was
+  // added; the count lives in three places, so it is read from the script instead.
+  const script = readFileSync(join(cwd(), 'scripts', 'verify-host.mjs'), 'utf8')
+  const body = script.slice(script.indexOf('export function buildAcceptance'), script.indexOf('const isDirectRun'))
+  // The helper is declared as `check = (...)`, which this pattern does not match.
+  const checks = (body.match(/\bcheck\(/g) ?? []).length
+  assert.ok(checks >= 5, 'the acceptance should carry its checks in one builder')
+
+  const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
+  const plan = readFileSync(join(cwd(), 'docs', 'OPTIMIZATION_PLAN.md'), 'utf8')
+
+  const claimed = []
+  for (const match of report.matchAll(/重启后期望 (\d+)\/(\d+)/g)) claimed.push(Number(match[1]))
+  for (const match of plan.matchAll(/期望 exit 0、(\d+) 项全/g)) claimed.push(Number(match[1]))
+  for (const match of plan.matchAll(/期望 (\d+)\/(\d+)、exit 0/g)) claimed.push(Number(match[1]))
+
+  assert.ok(claimed.length >= 2, 'the pending action should state the acceptance size')
+  for (const value of claimed) {
+    assert.equal(value, checks, 'a documented acceptance size disagrees with the script')
+  }
+})

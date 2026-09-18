@@ -163,6 +163,15 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
+    // The plugin must obtain a key without the host exporting one; removing the
+    // env-file fallback must fail the host acceptance.
+    name: 'the client stops reading the key file',
+    file: 'src/typesafe-client.ts',
+    from: "    const envFile = join(homedir(), '.dsh', '.env')",
+    to: '    const envFile = join(homedir(), \'.dsh\', \'.env-disabled\')',
+    command: ['scripts/verify-host.mjs'],
+  },
+  {
     // The manifest is what the host resolves; pointing `main` at a file that is not
     // in the package must fail the published-artifact smoke test.
     name: 'the manifest points at a file the package does not ship',

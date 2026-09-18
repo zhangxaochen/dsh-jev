@@ -13,8 +13,9 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { isTestEnvironment, TypeSafeClient } from '../lib/typesafe-client.js'
 import { METRICS_SCHEMA_VERSION, runDoctor } from './doctor.js'
 
 /**
@@ -66,6 +67,37 @@ export function buildAcceptance(report, payload, statsFile) {
     present.length === requiredSections.length,
     present.join(',') || 'no payload',
     'restart; if the sections are still missing, the running build predates this schema'
+  )
+
+  // The plugin must be able to obtain its key without the host exporting it: the
+  // shipped patch says `!!js process.env.TYPESAFE_API_KEY`, which yields undefined in
+  // a host that never loads ~/.dsh/.env, and a plugin without a key fails every
+  // decision silently.
+  // Under a test runner the client deliberately refuses an ambient key, so probing
+  // there would measure the isolation rather than the deployment.
+  const keyProbeApplies = !isTestEnvironment()
+  let keyResolved = !keyProbeApplies // inapplicable is not a failure
+  let keyDetail = keyProbeApplies ? 'not checked' : 'not applicable under a test runner'
+  // The stats file lives in the DSH home, so its directory is that home.
+  const envFile = join(dirname(report.running.file), '.env')
+  try {
+    if (!keyProbeApplies) throw new Error('skipped')
+    const fileHasKey = existsSync(envFile) && /TYPESAFE_API_KEY=\S/.test(readFileSync(envFile, 'utf8'))
+    keyDetail = fileHasKey ? 'resolved from ' + envFile : 'no key in ' + envFile
+    if (fileHasKey) {
+      // A placeholder is what a host passes when it cannot evaluate the tag.
+      const probe = new TypeSafeClient({ apiKey: '__jsExpr:process.env.TYPESAFE_API_KEY' })
+      keyResolved = typeof probe.apiKey === 'string' && probe.apiKey.length > 0
+      keyDetail = keyResolved ? 'resolved from ' + envFile : 'present in ' + envFile + ' but not picked up'
+    }
+  } catch (err) {
+    if (keyProbeApplies) keyDetail = err instanceof Error ? err.message : String(err)
+  }
+  check(
+    'the plugin can obtain an API key in a host that does not export it',
+    keyResolved,
+    keyDetail,
+    'put TYPESAFE_API_KEY=... in ' + envFile + ', or export it in the host environment'
   )
 
   const installedBuild = report.profiles[0] ? join(report.profiles[0].dir, 'lib', 'index.js') : undefined
