@@ -147,3 +147,32 @@ test('TypeSafeClient fetches for real, caches identical payloads and reports fai
     globalThis.fetch = realFetch
   }
 })
+
+test('the identical-payload cache stays bounded', async () => {
+  // The cache cap (oldest entry evicted past 200) had no gate: the eviction path
+  // only runs when a session asks more than 200 distinct questions.
+  const realFetch = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => {
+    calls += 1
+    return { ok: true, status: 200, json: async () => ({ answers: { q: { type: 'noul', noul: 1 } } }) }
+  }) as any
+
+  try {
+    const client = new TypeSafeClient({ apiKey: 'test-key' })
+    for (let i = 0; i < 205; i += 1) {
+      await client.systemOne({ state: { i }, questions: { q: noul('question ' + i + '?') } })
+    }
+    assert.equal(calls, 205, 'every distinct payload still round trips once')
+
+    // The first payload was evicted, so asking it again goes back to the model...
+    await client.systemOne({ state: { i: 0 }, questions: { q: noul('question 0?') } })
+    assert.equal(calls, 206, 'the oldest entry is evicted rather than kept forever')
+
+    // ...while a recent one is still served from the cache.
+    await client.systemOne({ state: { i: 204 }, questions: { q: noul('question 204?') } })
+    assert.equal(calls, 206, 'recent entries stay cached')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})

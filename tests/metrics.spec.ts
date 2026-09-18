@@ -11,6 +11,7 @@ import {
   resolveMetricsPath,
 } from '../lib/metrics.js'
 import { apply as applySuite } from '../lib/index.js'
+import { registerJevTools } from '../lib/ask-tools.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 
 test('MetricsCollector records measured pruning, loop, safety and call facts', () => {
@@ -283,4 +284,79 @@ test('applySuite registers the DSH fetch route and serves the same payload there
 
   dispose()
   assert.equal(registeredFetch, undefined)
+})
+
+test('applySuite also mounts through ctx.inject so late-loading services are picked up', () => {
+  // DSH loads services dynamically; the immediate registration above covers the
+  // services already present, and this path covers the ones that appear later. It
+  // had no gate at all (index.js lines 238-256).
+  const injected: string[][] = []
+  const disposed: string[] = []
+  const routes: any[] = []
+
+  const childCtx: any = {
+    get: (name: string) =>
+      name === 'tools'
+        ? { register: (tool: any) => { routes.push(tool); return () => {} } }
+        : name === 'connection'
+          ? { fetch: { register: (route: any) => { routes.push(route); return () => {} } } }
+          : name === 'webServer'
+            ? { register: (route: any) => { routes.push(route); return () => {} } }
+            : undefined,
+  }
+
+  const fakeCtx: any = {
+    on: () => () => {},
+    provide: () => () => {},
+    get: () => undefined,
+    inject: (services: string[], callback: (child: any) => unknown) => {
+      injected.push(services)
+      callback(childCtx)
+      return { dispose: () => disposed.push(services.join('+')) }
+    },
+  }
+
+  const dispose = applySuite(fakeCtx, { client: { mockHandler: () => ({}) } })
+
+  const awaited = new Set(injected.map((names) => names.join('+')))
+  for (const service of ['tools', 'connection', 'webServer']) {
+    assert.ok(awaited.has(service), service + ' must be awaited through ctx.inject')
+  }
+  assert.deepEqual([...awaited].sort(), ['connection', 'tools', 'webServer'], 'no other service is awaited')
+  assert.ok(routes.length >= 3, 'the callbacks register what the child context provides')
+
+  // Fibers are disposed with the plugin, so a reload cannot stack registrations.
+  // (`tools` is awaited twice: the entry point mounts the primitive tool there and
+  // the safety guard mounts its deterministic gate.)
+  dispose()
+  assert.equal(disposed.length, injected.length, 'every fiber is disposed with the plugin')
+  for (const names of injected) {
+    assert.ok(disposed.includes(names.join('+')), names.join('+') + ' fiber was not disposed')
+  }
+})
+
+test('a host whose tools service refuses registration still gets the other mounts', async () => {
+  // Each primitive is registered in its own try; one hostile service must not cost
+  // the others (ask-tools.js lines 136, 206 and 262).
+  const registered: string[] = []
+  const fakeCtx: any = {
+    on: () => () => {},
+    get: (name: string) =>
+      name === 'tools'
+        ? {
+            register: (tool: any) => {
+              if (tool.name === 'jev_rank') throw new Error('host refuses this primitive')
+              registered.push(tool.name)
+              return () => {}
+            },
+          }
+        : undefined,
+    typesafe: new TypeSafeClient({ mockHandler: () => ({}) }),
+  }
+
+  const disposers = registerJevTools(fakeCtx, () => new TypeSafeClient({ mockHandler: () => ({}) }))
+
+  assert.ok(registered.includes('jev_ask'), 'the other primitives still register')
+  assert.ok(registered.includes('jev_check'))
+  assert.ok(Array.isArray(disposers))
 })
