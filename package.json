@@ -52,6 +52,7 @@
     "url": "git+https://github.com/zhangxaochen/dsh-jev.git"
   },
   "scripts": {
+    "prepare": "tsc",
     "build": "tsc",
     "pretest": "tsc",
     "test": "node --test tests/*.spec.ts"
