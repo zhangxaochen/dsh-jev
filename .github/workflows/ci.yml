@@ -40,8 +40,10 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      # The offline bench replays recorded answers, so it needs no API key and
-      # fails the job on any false positive or an accuracy drop below 0.9.
+      # The offline bench replays recorded answers (with a fingerprint check that
+      # the case input still matches the recording), so it needs no API key. It
+      # fails the job on any case that does not behave as labelled, except the
+      # documented known misses.
       - name: Calibration bench (offline)
         run: pnpm run bench:offline
 

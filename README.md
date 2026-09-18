@@ -316,7 +316,7 @@ pnpm run bench:offline    # 回放录制答案，零成本复现
 
 验证证据索引见 [`docs/verification-report.md`](docs/verification-report.md)（每条承诺对应哪种验证手段、抓到过哪些缺陷）；标定结果与阈值来源见 [`docs/calibration.md`](docs/calibration.md)；分阶段执行清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)；行为变更史见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-CI（`.github/workflows/ci.yml`）在 Node 22 与 24 上跑 `build → test → bench:offline → 打包校验`：基准是离线回放的，因此不需要 API Key，任何误报或准确率低于 0.9 都会让 CI 失败。
+CI（`.github/workflows/ci.yml`）在 Node 22 与 24 上跑 `build → typecheck:scripts → test → bench:offline → verify:dsh（跳过）→ 打包校验`：基准是离线回放的且带**输入指纹校验**，因此不需要 API Key；**任何未标记为已知漏报的用例行为不符都会让 CI 失败**（不再只看总体准确率）。
 
 ### 让改动在本机生效
 

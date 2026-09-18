@@ -14,7 +14,7 @@
 | 离线单测 | **116/116**（`pnpm test`） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** |
-| A/B 基准 | 30 条样本、准确率 **93.3%**、**误报 0**、均值延迟 ~300ms（`pnpm run bench:offline` 零成本复现） |
+| A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
 | 干净 clone 复现 | `install --frozen-lockfile` → `build` → `test` → `bench`，且重建后 `lib/` 零漂移 |
 | 布局状态 | `doctor` 报告 `ACTION: restart DSH`（文件已同步，宿主进程未重载） |
 
