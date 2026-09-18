@@ -214,7 +214,7 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: 判定无法获得（API 报错/超时）时的策略，默认 `deny-guarded`（受保护工具 fail-closed，其余工具放行）。需要旧的「出错即放行」行为时显式设为 `allow`。
 - `onUncertain?: 'deny-guarded' | 'deny-all' | 'allow'`: 拿到了答案但没有可用概率时的策略，默认 `deny-guarded`。
 - `rules?: Array<{ id, question, threshold?, action? }>`: 用户自定义语义规则，与内置问题同一次请求评估；`action` 可取 `deny` / `ask` / `warn`。
-- `guardedTools?: string[]`: 受到审查保护的高危工具列表（默认包含 `bash`, `run_command`, `run_code`, `write_to_file`, `replace_file_content`）。
+- `guardedTools?: string[]`: 受到审查保护的高危工具列表。库默认 = `bash` / `terminal` / `pwsh` / `run_command` / `execute_command` / `run_code` / `write_to_file` / `replace_file_content`；随包 `cordis.patch.yml` 与之一致（含文件写入，因为凭据常被写进仓库文件）。`tests/packaging.spec.ts` 会阻止发布配置把这份清单改小。
 
 ### `SkillRouterConfig`
 - `minCandidates?: number`: 目录小于该规模不做路由（默认 `8`）。

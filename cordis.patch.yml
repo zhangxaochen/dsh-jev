@@ -23,7 +23,10 @@
             - pwsh
             - terminal
             - run_command
+            - execute_command
             - run_code
+            - write_to_file
+            - replace_file_content
         toolPruner:
           maxTools: 8
           minScoreThreshold: 2

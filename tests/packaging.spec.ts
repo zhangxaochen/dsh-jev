@@ -12,6 +12,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import vm from 'node:vm'
+import { DEFAULT_GUARDED_TOOLS } from '../lib/safety-guard.js'
+import { DEFAULT_ALWAYS_RETAIN } from '../lib/tool-pruner.js'
 
 const ROOT = process.cwd()
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
@@ -119,6 +121,44 @@ test('every key in the shipped bundle config is declared in the types', () => {
   assert.ok(keys.length >= 4, 'expected the shipped config to name its sections, saw ' + keys.join(', '))
   const unknown = keys.filter((key) => !declared.has(key))
   assert.deepEqual(unknown, [], 'cordis.patch.yml names keys the schema rejects: ' + unknown.join(', '))
+})
+
+/** The YAML list items nested under one `key:` inside the shipped config. */
+function patchList(key) {
+  const lines = PATCH.split('\n')
+  const start = lines.findIndex((line) => line.trim() === key + ':')
+  assert.ok(start >= 0, 'cordis.patch.yml does not configure ' + key)
+  const keyIndent = lines[start].length - lines[start].trimStart().length
+  const items = []
+  for (const line of lines.slice(start + 1)) {
+    const trimmed = line.trim()
+    if (trimmed.length === 0 || trimmed.startsWith('#')) continue
+    const indent = line.length - line.trimStart().length
+    if (indent <= keyIndent) break
+    if (trimmed.startsWith('- ')) items.push(trimmed.slice(2))
+  }
+  return items
+}
+
+test('the shipped bundle protects at least the tools the library guards by default', () => {
+  const shipped = new Set(patchList('guardedTools'))
+  const missing = DEFAULT_GUARDED_TOOLS.filter((tool) => !shipped.has(tool))
+  assert.deepEqual(
+    missing,
+    [],
+    'the bundle config silently narrows the guarded set: ' + missing.join(', ')
+  )
+  // File writes carry credential material into repositories, so their absence
+  // would be a security regression rather than a preference.
+  for (const tool of ['write_to_file', 'replace_file_content']) {
+    assert.ok(shipped.has(tool), tool + ' must be inspected by the shipped bundle')
+  }
+})
+
+test('the shipped bundle never drops a default always-retain tool', () => {
+  const shipped = new Set(patchList('alwaysRetain'))
+  const missing = DEFAULT_ALWAYS_RETAIN.filter((tool) => !shipped.has(tool))
+  assert.deepEqual(missing, [], 'the bundle config stops retaining: ' + missing.join(', '))
 })
 
 test('the manifest points at files that exist and ships every exported module', () => {

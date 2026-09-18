@@ -188,3 +188,13 @@
 - [x] 新增 3 个用例：入选集合不变但顺序必须等于输入序（分数最高者在最后）；`alwaysRetain` 工具不得被提到最前；候选数已满足 `maxTools` 时返回**同一个数组**且不调用模型
 - [x] README 配置参考补充「顺序稳定性」说明；CHANGELOG 记录该行为变更
 - [x] 测试数 83 → 86
+
+## Phase 5 补充记录（发布物默认配置，Round 19）
+
+审计「随包发布的默认配置 vs 库默认值」，发现一处安全回归：
+
+- [x] `cordis.patch.yml` 的 `guardedTools` 只列了 `bash`/`pwsh`/`terminal`/`run_command`/`run_code` 五个 shell 工具，而库默认（8 个）与 README 都包含 `write_to_file`/`replace_file_content` —— 默认安装下**文件写入完全不做语义门禁**，凭据被写进仓库文件时无人拦截
+- [x] 已把随包清单补齐为与库默认一致（+`execute_command`、`write_to_file`、`replace_file_content`）
+- [x] 新增 2 个回归用例：随包 `guardedTools` 必须 ⊇ 库默认（且必须含两个文件写入工具）；随包 `alwaysRetain` 必须 ⊇ 库默认，防止后续编辑悄悄缩小保护面
+- [x] 已验证有牙齿：对修复前的 5 项清单，检查会报出 `execute_command, write_to_file, replace_file_content`
+- [x] README 明确列出该清单；CHANGELOG 记录；测试数 86 → 88
