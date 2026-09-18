@@ -271,3 +271,10 @@
 - [x] 实测：运行 97 个测试前后，实机指标 `version 1 / mtime 04:25:42` 不变；决策日志 1931 行不变
 - [x] 新增守卫单测：断言预载确实生效（`METRICS_PATH_ENV` 与 `DSH_JEV_DECISIONS_PATH` 已设且不指向 `.dsh/`），若将来 `test` 脚本丢掉预载会立刻失败
 - [x] 测试数 97 → 98
+
+## Phase 5 补充记录（文档数字与 CI 复核，Round 26）
+
+- [x] 清理文档中的**过期数字**：README 写「57 个用例」、calibration 写「70/70」，实际已 98；改为不再写死的表述（「用例数随版本增长，以输出为准」），避免每次发版都要改文档
+- [x] 复核改动后的 `test` 脚本（新增 `node --import ./tests/isolate.mjs`）在**全新 clone** 中成立：install → build → 98/98 → bench（93.3%、误报 0、退出码 0）
+- [x] 干净 clone 的整轮运行后，实机状态仍未被动过（指标 `version 1` + mtime 不变、决策日志行数不变），确认预载隔离在 CI 式环境下同样生效
+- [x] 说明：此前用 bash 逐条复演 CI `run:` 块的做法本轮被拒（命令未执行），改以干净 clone 直接跑等价步骤验证
