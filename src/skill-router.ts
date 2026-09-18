@@ -83,6 +83,10 @@ export class SkillRouterService {
     const questions: Record<string, unknown> = {}
     for (const candidate of candidates) {
       const detail = candidate.whenToUse ? candidate.description + ' When to use: ' + candidate.whenToUse : candidate.description
+      // Each item travels inside its own question. Referring to it by index in the
+      // state instead produced identical or confidently wrong answers for every
+      // question (docs/calibration.md §9.3); tests/question-binding.spec.ts
+      // guards the property.
       questions['skill_' + candidate.name] = score(
         'How applicable is the skill "' + candidate.name + '" (' + detail.slice(0, 400) + ') to this request: "' +
           intent.slice(0, 400) + '"?',

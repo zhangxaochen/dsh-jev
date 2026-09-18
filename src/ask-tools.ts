@@ -207,6 +207,8 @@ export function registerJevTools(ctx: CordisContext, getClient: () => TypeSafeCl
 
         const questions: Record<string, QuestionDefinition> = {}
         for (const candidate of candidates) {
+          // Each candidate travels inside its own question; see the note in
+          // result-shaper.ts and docs/calibration.md §9.3.
           questions['rank_' + candidate.id] = score(
             'How well does "' + candidate.label + '" (' + (candidate.description ?? 'no description') +
               ') satisfy: ' + args.criterion + '?',

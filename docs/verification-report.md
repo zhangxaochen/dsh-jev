@@ -30,6 +30,7 @@
 | skill 路由消费真实目录 | 集成（真实注册表） | 112 个 skill；恰好一条建议；再次装配不堆叠 |
 | 提示经真实链路送达会话 | 集成 | `additionalContexts` 一条，`source.plugin` 正确 |
 | 面板端点与宿主路由一致 | 单测（跨文件解析 + 构建产物） | 三处路径一致 |
+| 逐项提问把项内容嵌在问题里 | 行为断言（`tests/question-binding.spec.ts`） | 四处提问两两不同且各含自身项文本 |
 | 发布配置不弱化保护 | 单测（解析 `cordis.patch.yml`） | `guardedTools` ⊇ 库默认且含文件写入；`alwaysRetain` ⊇ 库默认 |
 | 文档默认值不说谎 | 单测（从 README/calibration 反解数字比对代码常量） | 全部一致（曾抓到 1 处不符） |
 | 验证脚本不写实机状态 | 实测前后对比 | 集成 + 基准 + 单测连跑后，实机指标 `version`/mtime 与决策日志行数均不变 |
