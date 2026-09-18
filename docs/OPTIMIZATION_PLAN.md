@@ -295,3 +295,12 @@
 - [x] 集成校验新增 3 项（现 **18/18**）：真实目录满足路由消费的形状；装配后恰好一条 `typesafe-skill-router` 建议且文案含「looks directly applicable」；再次装配不会堆叠第二条
 - [x] README 补充该模块语义：同一意图只建议一次（指纹相同即跳过，既不重复调用模型也不重复注入）；每轮装配最多一条同名条目；`skills.list()` 抛错时 prompt 原样返回
 - [x] 至此**五个模块全部具备服务级（真实 DSH 服务）覆盖**
+
+## Phase 5 补充记录（安装指令实测，Round 29）
+
+验证 README 里**最主要的安装指令**是否与已安装 CLI 的真实语法一致（此前只验证了 manifest 结构，未实测命令）。
+
+- [x] 实测 `dsh plugin --profile desktop --help` → **被拒**：`error: profile "desktop" is managed exclusively by the Electron application`。而 desktop 正是本部署使用的 profile——照抄文档只会拿到报错且无任何指引
+- [x] 实测 `dsh plugin --profile headless`（无子命令）→ `error: plugin needs pnpm arguments to forward (e.g. add <package>)`，确认 `dsh plugin` 本身不含子命令，而是把参数**转发给该 profile 目录下的 pnpm**（`add`/`remove`/`list` 均为 pnpm 语义）
+- [x] README 补两条须知：desktop profile 由 Electron 应用独占、桌面端应走应用内入口或 `pnpm run sync` 同步路径；`dsh plugin` 的转发语义
+- [x] 结论：`dsh plugin --profile headless add <pkg>` 的写法本身正确，缺的是对 desktop 的警告

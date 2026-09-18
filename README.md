@@ -72,6 +72,15 @@ dsh plugin --profile <profile_name> add dsh-jev
 dsh plugin --profile headless add github:zhangxaochen/dsh-jev
 ```
 
+> ⚠️ **`desktop` profile 不能这样装**。CLI 会直接拒绝：
+> `error: profile "desktop" is managed exclusively by the Electron application`。
+> 桌面端请通过应用内的插件入口安装，或按「让改动在本机生效」一节把包同步到
+> `~/.dsh/profiles/desktop/node_modules/dsh-jev`（`pnpm run sync` 就是这么做的）。
+>
+> `dsh plugin` 本身不含子命令，它把**参数转发给该 profile 目录下的 pnpm**（实测报错信息：
+> `plugin needs pnpm arguments to forward (e.g. add <package>)`），因此 `add` / `remove` / `list`
+> 都是 pnpm 的语义。
+
 ### 方式 2：在 profile 或全局 `cordis.patch.yml` 中手动挂载
 
 若需深度定制各项阈值，可在 `$DSH_HOME/cordis.patch.yml` 或 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中添加配置：
