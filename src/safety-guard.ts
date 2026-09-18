@@ -136,6 +136,17 @@ export function inspectableText(exec: ToolExecution): string[] {
 const SYSTEM_ROOT_DIRS =
   /^(?:\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev|home|Users|Applications)\/?|\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev|Applications)\/\*|\/home\/[^/\s]+\/?|\/home\/[^/\s]+\/\*|\/Users\/[^/\s]+\/?|\/Users\/[^/\s]+\/\*|[a-zA-Z]:\\Users\\?|[a-zA-Z]:\\Users\\[^\\\s]+\\?)$/i
 
+/** Syntactic brace expansion, enough for `/a{b,c}` style targets. */
+function expandBraces(token: string, depth = 0): string[] {
+  if (depth > 4) return [token]
+  const match = token.match(/^(.*?)\{([^{}]*)\}(.*)$/)
+  if (!match) return [token]
+  const [, prefix, body, suffix] = match
+  return body
+    .split(',')
+    .flatMap((part) => expandBraces(prefix + part.trim() + suffix, depth + 1))
+}
+
 function looksLikeRootDelete(text: string): boolean {
   for (const segment of text.split(/[\n\r;&|]+/)) {
     // A shell wrapper quotes the payload (`bash -c "rm -rf /"`), which would leave
@@ -146,18 +157,26 @@ function looksLikeRootDelete(text: string): boolean {
       .filter(Boolean)
       .map((token) => token.replace(/^['"]+|['"]+$/g, ''))
     if (tokens.length < 2) continue
-    const verbIndex = tokens.findIndex((token) => /(^|\/)(rm|del|rd|rmdir|remove-item)$/i.test(token))
+    // `erase` and `ri` are the cmd and PowerShell aliases of `del` and
+    // Remove-Item: same semantics, different spelling. Leaving them out let
+    // `erase /s /q C:\` and `ri -Recurse -Force C:\` through.
+    const verbIndex = tokens.findIndex((token) =>
+      /(^|\/)(rm|del|erase|rd|rmdir|remove-item|ri)$/i.test(token)
+    )
     if (verbIndex === -1) continue
     const rest = tokens.slice(verbIndex + 1)
     const flags = rest.filter((token) => token.startsWith('-') || /^\/[a-z]$/i.test(token))
     const targets = rest.filter((token) => !flags.includes(token) && !/^\/[a-z]$/i.test(token))
     const recursive = flags.some((flag) => /^(?:-{1,2}(?:recursive|r[a-z]*|f[a-z]*)|-[a-z]*r[a-z]*|\/s|\/e)$/i.test(flag))
     const force = flags.some((flag) => /^(?:-{1,2}(?:force|f[a-z]*)|-[a-z]*f[a-z]*|\/f|\/q|\/y)$/i.test(flag))
-    const rootish = targets.some(
-      (token) =>
-        /^(?:\/|\/\*|~|~\/|\$HOME|\$HOME\/|\$\{HOME\}\/?|[a-zA-Z]:\\?|[a-zA-Z]:\\?\*)$/.test(token) ||
-        SYSTEM_ROOT_DIRS.test(token)
-    )
+    const rootish = targets
+      // `rm -rf /{etc,usr}` reaches the same directories as `rm -rf /etc /usr`.
+      .flatMap(expandBraces)
+      .some(
+        (token) =>
+          /^(?:\/|\/\*|~|~\/|\$HOME|\$HOME\/|\$\{HOME\}\/?|[a-zA-Z]:\\?|[a-zA-Z]:\\?\*)$/.test(token) ||
+          SYSTEM_ROOT_DIRS.test(token)
+      )
     if (recursive && force && rootish) return true
   }
   return false
@@ -178,7 +197,7 @@ export const HARD_DENY_RULES: HardDenyRule[] = [
     reason: 'writing to a raw block device or formatting a filesystem',
     // `mkfs`/`mke2fs` against a *device*; creating a filesystem inside an image file
     // is ordinary embedded work and must not be denied here.
-    test: /\bdd\b[^\n]*\bof=\/dev\/|\b(?:mkfs(?:\.\w+)?|mke2fs|mkdosfs|mkntfs)\b[^\n]*\/(?:dev|dev\/mapper)\/|\bFormat-Volume\b/i,
+    test: /\bfind\s+(?:\/|~|\$HOME)(?:\s|$)[^\n]*-delete\b|\bfind\s+(?:\/|~|\$HOME)(?:\s|$)[^\n]*-exec\s+(?:rm|del|erase|shred)\b|\bdd\b[^\n]*\bof=\/dev\/|\b(?:mkfs(?:\.\w+)?|mke2fs|mkdosfs|mkntfs)\b[^\n]*\/(?:dev|dev\/mapper)\/|\bFormat-Volume\b/i,
   },
   {
     id: 'credential-exfiltration',

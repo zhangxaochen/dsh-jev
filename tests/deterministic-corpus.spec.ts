@@ -114,6 +114,28 @@ const CASES: Case[] = [
   { command: 'while true; do ./worker.sh; sleep 1; done', expect: 'pass', note: 'a bounded polling loop' },
   { command: 'dd if=image.iso of=usb.img', expect: 'pass', note: 'file to file' },
 
+  // --- verb and flag synonyms, and root-targeted find -----------------------
+  // `erase` and `ri` are the cmd and PowerShell aliases of `del` and Remove-Item;
+  // brace expansion reaches the same directories as listing them.
+  { command: 'erase /s /q C:\\', expect: 'deny', note: 'cmd erase alias' },
+  { command: 'erase /f /s /q C:\\', expect: 'deny', note: 'erase with the force flag' },
+  { command: 'ri -Recurse -Force C:\\', expect: 'deny', note: 'PowerShell ri alias' },
+  { command: 'rm -rf /{etc,usr}', expect: 'deny', note: 'brace expansion over system dirs' },
+  { command: 'find / -delete', expect: 'deny', note: 'find deleting everything below the root' },
+  { command: 'find ~ -delete', expect: 'deny', note: 'find deleting the home tree' },
+  { command: 'find / -exec rm -rf {} +', expect: 'deny', note: 'find handing the root to rm' },
+  { command: 'sudo find / -name "*.log" -delete', expect: 'deny', note: 'a prefixed find over the root' },
+  { command: 'find . -name "*.log" -delete', expect: 'pass', note: 'find deleting in the workspace' },
+  { command: 'find ./build -type f -delete', expect: 'pass', note: 'find deleting inside a build dir' },
+  { command: 'find /tmp/scratch -delete', expect: 'pass', note: 'find deleting inside a scratch dir' },
+  // Destructive verbs that are not mass deletion are the semantic layer's call;
+  // recording them here stops a later pass from widening the envelope by accident.
+  { command: 'shred -u secret.txt', expect: 'pass', note: 'shredding one workspace file' },
+  { command: 'truncate -s 0 ./app.log', expect: 'pass', note: 'truncating a log' },
+  { command: 'chmod -R 000 ./build', expect: 'pass', note: 'locking a workspace directory' },
+  { command: 'git rm -r --cached dist', expect: 'pass', note: 'git rm is not a filesystem wipe' },
+  { command: 'echo "erase /s /q" > notes.md', expect: 'pass', note: 'the verb appears as text, not as a command' },
+
   // --- where in the arguments the envelope looks ----------------------------
   // Command-shaped keys are followed at any depth, because some tool schemas nest
   // them; data keys are not, because a file body may contain the same text without

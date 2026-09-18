@@ -654,3 +654,27 @@ ok   the live numbers postdate the build they claim to measure
 2. **误报（本次最重要的发现）**：外壳把 `content` 也当命令匹配，因此 `write_to_file {path, content}` 只要正文里出现 `rm -rf /` 就被硬拒——**编写「危险命令文档」这一常见正当工作会被阻断**。而 `content` 对受保护的文件工具而言是**数据**，不是被执行的东西。移除数据键的检视（`content`/`body`/`text`/`input`/`url`/`path`），命令只认命令键。
 
 边界写进语料库：`{content:'rm -rf /'}` 与 `{edits:[{newText:'rm -rf /'}]}` 必须**放行**；非命令键下的裸字符串数组同样放行（交由语义层）。语料库现为 **76 条**（50 硬拒 / 26 放行）；基准 36 条与 22 项集成校验均不变，误报仍为 0。
+
+### 18.7 第四遍探测：动词与开关的同义写法（同日）
+
+前几遍换的是命令文本与参数形状，这一遍固定语义、换**拼写**——同一操作在 cmd/PowerShell/Unix 下的别名。抓到 4 类漏判：
+
+| 漏判 | 说明 | 修复 |
+|---|---|---|
+| `erase /s /q C:\` | `erase` 是 cmd 里 `del` 的**官方别名**，动词表里没有 | 动词表加入 `erase` |
+| `ri -Recurse -Force C:\` | `ri` 是 PowerShell 里 `Remove-Item` 的**官方别名** | 动词表加入 `ri` |
+| `rm -rf /{etc,usr}` | 花括号展开后与逐个列出等价，但 `rootish` 只做整串匹配 | 匹配前做**语法级花括号展开**（深度上限 4） |
+| `find / -delete`、`find ~ -delete` | 从根/家目录递归删除，与 `rm -rf` 等价 | 新增规则：`find <根|~|$HOME> … -delete` 或 `-exec (rm\|del\|erase\|shred)` |
+
+（`find / -delete` 首次修复后仍漏，原因是正则里 `(?:\s|$)` 已消费空格、后面又要求一个空格；属实现疏漏，已修。）
+
+**同时明确划出不属于硬拒的形态**，并写进语料库，避免后续「顺手扩大」：
+
+| 形态 | 为何交给语义层 |
+|---|---|
+| `shred -u secret.txt`、`truncate -s 0 ./app.log`、`chmod -R 000 ./build` | 对**工作区内**单个文件/目录的破坏性操作有正当用法；外壳只负责「无正当用途的系统级形态」 |
+| `rm -rf .` | 目标非系统路径，可能是临时目录内的清理 |
+| `git rm -r --cached dist` | 不是文件系统删除 |
+| `echo "erase /s /q" > notes.md` | 动词出现在**文本里**而非作为命令执行 |
+
+语料库现为 **94 条**（62 硬拒 / 32 放行）。单测 148、基准 36 条（误报 0）不变。
