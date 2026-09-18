@@ -225,6 +225,101 @@ try {
   check('service-level pass runs', false, err instanceof Error ? err.message : String(err))
 }
 
+// 6. A denial must stop the call, not merely return a decision: through the real
+//    service the tool must never execute, and the failure must reach the caller.
+try {
+  const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+  const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)
+  const SystemPrompt = await loadPkg('@deepseek-ai/dsh-system-prompt')
+  const Tools = await loadPkg('@deepseek-ai/dsh-tools')
+
+  const denyCtx = new Context()
+  denyCtx.plugin(SystemPrompt.default ?? SystemPrompt)
+  denyCtx.plugin(Tools.default ?? Tools, { mode: 'native' })
+  ClientPlugin.apply(denyCtx, {
+    mockHandler: async () => ({
+      is_destructive: { type: 'noul', noul: 0.2 },
+      is_exfiltration: { type: 'noul', noul: 0.05 },
+      credential_kind: { type: 'choice', choice: 'none', confidence: 0.9, probabilities: { none: 0.98 } },
+      is_jailbreak: { type: 'noul', noul: 0.05 },
+      risk_score: { type: 'score', score: 0.2, confidence: 0.9, probabilities: { '0': 0.85, '1': 0.1, '2': 0.05 } },
+    }),
+  })
+  SafetyGuard.apply(denyCtx, { guardedTools: ['danger_tool'] })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  const denyTools = denyCtx.get('tools')
+  let executed = 0
+  denyTools.register({
+    name: 'danger_tool',
+    description: 'destructive probe',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+    async execute() {
+      executed += 1
+      return { ok: true }
+    },
+  })
+
+  const denied = await denyTools.prepareExecution(
+    denyTools.createExecution({
+      name: 'danger_tool',
+      arguments: { command: 'rm -rf / --no-preserve-root' },
+      signal: new AbortController().signal,
+    }).exec,
+    (p) => p
+  )
+  // The security property is not "a deny decision was produced" but "the tool
+  // body never ran": executed must stay zero.
+  check(
+    'a denied call never reaches the tool, and the caller sees the policy reason',
+    denied.kind === 'post-result' &&
+      denied.result?.isError === true &&
+      /filesystem-root-delete/.test(denied.result?.error?.message ?? '') &&
+      executed === 0,
+    'kind=' + denied.kind + ' executed=' + executed
+  )
+} catch (err) {
+  check('service-level denial pass runs', false, err instanceof Error ? err.message : String(err))
+}
+
+// 7. The real system prompt service must accept the pruned assembly.
+try {
+  const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+  const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)
+  const SystemPrompt = await loadPkg('@deepseek-ai/dsh-system-prompt')
+  const Tools = await loadPkg('@deepseek-ai/dsh-tools')
+
+  const promptCtx = new Context()
+  promptCtx.plugin(SystemPrompt.default ?? SystemPrompt)
+  promptCtx.plugin(Tools.default ?? Tools, { mode: 'native' })
+  ClientPlugin.apply(promptCtx, { mockHandler: answersFor })
+  ToolPruner.apply(promptCtx, { maxTools: 2 })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  const promptTools = promptCtx.get('tools')
+  for (const name of ['search_web', 'send_slack', 'read_file', 'write_file']) {
+    promptTools.register({
+      name,
+      description: 'tool ' + name,
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+      async execute() {
+        return { ok: true }
+      },
+    })
+  }
+
+  const assembly = await promptCtx.systemPrompt.assemble({})
+  check(
+    'the real prompt service accepts the pruned assembly without an invariant failure',
+    Array.isArray(assembly.tools) && assembly.tools.length > 0 && assembly.tools.length < 4,
+    'tools=' + assembly.tools.map((tool) => tool.name).join(',')
+  )
+} catch (err) {
+  check('service-level assembly pass runs', false, err instanceof Error ? err.message : String(err))
+}
+
 const failed = results.filter((entry) => !entry.ok)
 console.log('\n' + (failed.length === 0 ? 'all integration checks passed' : failed.length + ' integration check(s) failed'))
 process.exit(failed.length === 0 ? 0 : 1)

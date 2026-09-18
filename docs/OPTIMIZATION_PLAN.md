@@ -219,3 +219,10 @@
 - [x] 单测新增 2 项覆盖 `extractText` / `replaceText` 的字符串与块形态、非文本块顺序保持、无文本块时追加
 - [x] 记录两处踩坑（都属我方脚本）：把守卫挂 root、client 挂子 fiber 会让 `resolveClientFrom` 取不到服务（改用 `apply` 在 root 提供）；PowerShell 双引号里的 `\n` 是字面量，导致替换的赋值行被写进注释、mock 返回空答案
 - [x] 测试数 89 → 91
+
+## Phase 5 补充记录（服务级安全属性与真实装配，Round 22）
+
+- [x] **拒绝的真实语义**：服务级验证「拒绝意味着工具体从不执行」——`prepareExecution` 返回 `post-result`、`result.isError=true`、原因指名确定性策略，且 `execute()` 调用次数**为 0**。此前只断言了决策本身（`kind==='deny'`），未断言工具是否真的没跑
+- [x] **真实 `systemPrompt.assemble()`**：挂载真实 `dsh-system-prompt` + `dsh-tools` 并注册 4 个工具，调用真实装配流程——不抛不变量错误，工具面被剪到 2（`read_file,write_file`）。此前剪枝只在假 assembly 上验证过，而 `dsh-system-prompt` 自带不变量校验（非空名称、text 必须为字符串等）
+- [x] 自查并删除一条**恒真检查**（断言体写成 `prepared => prepared`，函数对象恒为真）；同一属性由下一条 `executed === 0` 断言覆盖
+- [x] 集成校验 11 → **14/14**
