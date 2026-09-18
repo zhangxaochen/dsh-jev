@@ -518,6 +518,40 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
             )
           ),
 
+          // Card 5: Result shaper (opt-in; shown so an enabled module is visible)
+          h(
+            'div',
+            { className: 'jev-card' },
+            h(
+              'div',
+              { className: 'jev-card-head' },
+              h('span', null, '🧩 语义结果整形'),
+              h(
+                'span',
+                { className: 'jev-metric-highlight' },
+                `${(((data?.resultShaper?.charsRemoved ?? 0) / 1000)).toFixed(1)}K 字符`
+              )
+            ),
+            h(
+              'div',
+              { className: 'jev-card-metric' },
+              h('span', { className: 'jev-metric-label' }, '整形次数'),
+              h('span', { className: 'jev-metric-val' }, `${data?.resultShaper?.shaped ?? 0} 次`)
+            ),
+            h(
+              'div',
+              { className: 'jev-card-metric' },
+              h('span', { className: 'jev-metric-label' }, '精确移除字符'),
+              h('span', { className: 'jev-metric-val' }, `${data?.resultShaper?.charsRemoved ?? 0}`)
+            ),
+            h(
+              'div',
+              { className: 'jev-card-metric' },
+              h('span', { className: 'jev-metric-label' }, '启用状态'),
+              h('span', { className: 'jev-metric-val' }, (data?.resultShaper?.shaped ?? 0) > 0 ? '已启用' : '默认关闭')
+            )
+          ),
+
           // Bench summary line
           data?.bench
             ? h(
