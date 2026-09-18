@@ -168,3 +168,13 @@
 - [x] 校验项（7 条）：`ctx.get('typesafe')` 与 `ctx.typesafe` 两条解析路径；`tools/post-execute` 真实 waterfall 产出 loop-guard 提示且 `source.plugin` 正确；`tools/pre-execute` 真实 waterfall 拒绝 `rm -rf /`；良性调用仍能到达下游监听者；`system-prompt/assemble` 真实 waterfall 把工具面 4 → 2；返回对象保留 harness 不变量要求的字段
 - [x] 写这个校验时立刻纠正了我自己的两个错误假设：Cordis 的 plugin fiber **异步**启动（需让出一拍再解析服务）；tool-pruner 是**原地修改** `assembly.tools`，因此原始长度必须在 waterfall 之前取
 - [x] 无 DSH 时打印 `SKIP` 并退出 0（CI 无 DSH 也安全）；新增 `pnpm run verify:dsh`
+
+## Phase 5 补充记录（宿主加载契约，Round 17）
+
+验证「宿主在加载期会强制的两件事」，此前完全没有测试覆盖：
+
+- [x] **UI bundle 必须能被当作经典脚本加载**：新增校验用 `vm.Script` 解析 `lib/client.js`（ESM 语法会直接抛错，等价宿主的拒绝行为），并断言不含 `import`/`export`；`scripts/bundle-client.js` 剥离 ESM 导出这一步此前无人验证
+- [x] **UI 模块协议与面板注册契约**：在 `vm` 沙箱中提供 `window.__ModuleLoader__`，执行 bundle 拿到注册项，断言 `id === 'dsh-jev'`；用最小 react stub 调用 `factory(require)`，断言导出 `apply` 函数与 `inject === ['slots']`；再以假 host ctx 调用 `apply`，断言通过 `effect` 安装样式、并且注册的 slot 为 `settings.section` / `id: 'jev'` / `order: 25` / 组件为函数
+- [x] **`cordis.patch.yml` 的键必须存在于 TS 类型**：DSH 遇到未声明的配置键会**拒绝加载插件**，一个拼写错误就会让所有用户挂掉；校验从 `src/types.ts` 反解 42 个已声明字段，与 patch 文件里 `config:` 的直接子键比对（已验证有牙齿：把 `loopGuard` 写成 `loopGard` 会报出 `loopGard`）
+- [x] **manifest 指向的文件必须存在**：`main`/`types`/`dsh.bundle.patch`、`exports` 的每个 `default` 与 `types` 目标、`lib/client.js` 必须随包发布、`dsh.client.inject` 必须含 settings slot
+- [x] 新增 `tests/packaging.spec.ts`（4 个用例），测试数 79 → 83
