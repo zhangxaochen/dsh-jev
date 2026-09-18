@@ -69,6 +69,13 @@ export declare class ResultShaperService {
     private readonly getClient;
     private readonly config;
     private shapedThisTurn;
+    /**
+     * Set when the model failed to separate the blocks. Every measured question
+     * shape behaves this way on bulk output (docs/calibration.md §9), so once it
+     * happens the rest of the turn skips further shaping attempts instead of
+     * spending another bounded request on the same non-answer.
+     */
+    private declinedThisTurn;
     constructor(getClient: () => TypeSafeClient, config?: ResultShaperConfig);
     /** Reset the per-turn budget; called on each new user instruction. */
     resetTurnBudget(): void;

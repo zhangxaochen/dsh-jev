@@ -150,6 +150,13 @@ function uniqueRatio(lines: string[]): number {
 
 export class ResultShaperService {
   private shapedThisTurn = 0
+  /**
+   * Set when the model failed to separate the blocks. Every measured question
+   * shape behaves this way on bulk output (docs/calibration.md §9), so once it
+   * happens the rest of the turn skips further shaping attempts instead of
+   * spending another bounded request on the same non-answer.
+   */
+  private declinedThisTurn = false
 
   constructor(
     private readonly getClient: () => TypeSafeClient,
@@ -159,9 +166,11 @@ export class ResultShaperService {
   /** Reset the per-turn budget; called on each new user instruction. */
   resetTurnBudget(): void {
     this.shapedThisTurn = 0
+    this.declinedThisTurn = false
   }
 
   shouldConsider(exec: ToolExecution, content: string): boolean {
+    if (this.declinedThisTurn) return false
     const tools = this.config.shapeTools ?? DEFAULT_SHAPE_TOOLS
     if (!tools.includes(exec?.name)) return false
     if (content.length < (this.config.thresholdChars ?? DEFAULT_THRESHOLD_CHARS)) return false
@@ -224,7 +233,10 @@ export class ResultShaperService {
       .filter((value): value is number => value !== undefined)
     if (scored.length < segments.length) return undefined
     const spread = Math.max(...scored) - Math.min(...scored)
-    if (spread < (this.config.spreadThreshold ?? DEFAULT_SPREAD_THRESHOLD)) return undefined
+    if (spread < (this.config.spreadThreshold ?? DEFAULT_SPREAD_THRESHOLD)) {
+      this.declinedThisTurn = true
+      return undefined
+    }
 
     const keptSegments = keep.filter(Boolean).length
     const droppedSegments = keep.length - keptSegments

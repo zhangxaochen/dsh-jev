@@ -237,3 +237,33 @@ test('replaceText collapses text blocks in place and preserves every other block
   const appended = replaceText([{ type: 'image', url: 'only' }], 'shaped') as Array<Record<string, unknown>>
   assert.deepEqual(appended.map((block) => block.type), ['image', 'text'])
 })
+
+test('a flat decline stops further shaping attempts for the turn', async () => {
+  let calls = 0
+  const h = harness(
+    async () => {
+      calls += 1
+      return {
+        keep_0: { type: 'noul', noul: 0.35 },
+        keep_1: { type: 'noul', noul: 0.36 },
+        keep_2: { type: 'noul', noul: 0.34 },
+      }
+    },
+    { thresholdChars: 1000 }
+  )
+
+  const first = await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3))
+  assert.equal(first.content, undefined, 'a flat distribution must leave the content alone')
+  assert.equal(calls, 1)
+
+  // Every measured question shape behaves this way on bulk output, so a second
+  // attempt in the same turn would spend a request on the same non-answer.
+  const second = await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3).replace(/ok/g, 'ok2'))
+  assert.equal(second.content, undefined)
+  assert.equal(calls, 1, 'no further request may be made after a flat decline')
+
+  // A new instruction clears the decision.
+  h.preStep()
+  await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3).replace(/ok/g, 'ok3'))
+  assert.equal(calls, 2, 'a new turn may try again')
+})
