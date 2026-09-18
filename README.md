@@ -17,6 +17,29 @@ Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://gith
 
 ---
 
+## 准备工作：配置 API Key
+
+`dsh-jev` 依托 TypeSafe System One（Jev）决策模型执行高频毫秒级判定，需配置 `TYPESAFE_API_KEY`。
+
+### 推荐方式：写入 DSH 全局配置文件（最简）
+
+DeepSeek Harness 桌面端（Desktop）及所有 CLI profiles（Headless / Web / TUI）在启动时均会自动载入 `$DSH_HOME/.env`（默认位于 `~/.dsh/.env`）。
+
+在 `~/.dsh/.env` 中添加一行即可全局生效：
+```bash
+TYPESAFE_API_KEY=your_typesafe_api_key_here
+```
+
+### 其它方式：
+- **系统环境变量**：
+  - Linux / macOS: `export TYPESAFE_API_KEY="your_api_key"`
+  - Windows (PowerShell): `[Environment]::SetEnvironmentVariable("TYPESAFE_API_KEY", "your_api_key", "User")`
+- **代码 / YAML 显式指定**：在 `cordis.patch.yml` 的 `client.apiKey` 中指定。
+
+> ℹ️ **说明**：未配置 Key 时，DSH 不会崩溃，插件会记录 Warn 警告日志，此时可作为 Mock 模式运行；但在真实执行中将无法向云端发起 System One 语义仲裁。
+
+---
+
 ## 安装与挂载
 
 ### 方式 1：DSH 官方命令行一键安装（推荐，自动激活为 Bundle）
@@ -24,12 +47,16 @@ Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://gith
 DSH 原生支持 Bundle 机制，执行以下命令会自动安装依赖并激活该插件层：
 
 ```bash
+# 从 GitHub 仓库直接安装（免 npm 发包，即装即用）
+dsh plugin --profile <profile_name> add github:zhangxaochen/dsh-jev
+
+# 或发布至 npm 后
 dsh plugin --profile <profile_name> add dsh-jev
 ```
 
-例如为 `headless`、`web` 或 `desktop` 激活：
+例如为 `headless` 或 `web` 激活：
 ```bash
-dsh plugin --profile headless add dsh-jev
+dsh plugin --profile headless add github:zhangxaochen/dsh-jev
 ```
 
 ### 方式 2：在 profile 或全局 `cordis.patch.yml` 中手动挂载
