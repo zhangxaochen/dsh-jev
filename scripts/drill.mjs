@@ -13,7 +13,9 @@
  */// Regression drill: for each guarantee, inject the regression it exists to catch
 // and check that a gate fails. Runs in a clone; every mutation is restored.
 import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 // Refuse to run against a dirty tree: a mutation that survives a crash would
 // otherwise be indistinguishable from the operator's own work in progress.
@@ -114,8 +116,23 @@ const drills = [
   },
 ]
 
+/** Whether this machine has a DSH runtime to drive the integration checks. */
+function hasDshRuntime() {
+  const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  for (const profile of ['desktop', 'web', 'headless', 'tui', 'acp']) {
+    if (existsSync(join(dshHome, 'profiles', profile, 'node_modules', '@deepseek-ai', 'dsh-tools'))) return true
+  }
+  return false
+}
+
 const results = []
 for (const drill of drills) {
+  // A script-based drill needs the real runtime; without it the integration script
+  // skips by design, and reporting that as an uncaught regression would be wrong.
+  if (drill.command && !hasDshRuntime()) {
+    results.push({ name: drill.name, skipped: true, why: 'no DSH runtime on this machine' })
+    continue
+  }
   const original = readFileSync(drill.file, 'utf8')
   try {
     if (!original.includes(drill.from)) {
@@ -162,11 +179,21 @@ for (const drill of drills) {
 }
 
 let missed = 0
+let skipped = 0
 for (const result of results) {
+  if (result.skipped) {
+    skipped += 1
+    console.log('SKIPPED ' + result.name.padEnd(52) + ' <- ' + result.why)
+    continue
+  }
   if (!result.caught) missed += 1
   console.log((result.caught ? 'CAUGHT ' : 'MISSED ') + result.name.padEnd(52) + ' <- ' + result.why)
 }
-console.log('\n' + (results.length - missed) + '/' + results.length + ' regressions caught by the net')
+const ran = results.length - skipped
+console.log(
+  '\n' + (ran - missed) + '/' + ran + ' regressions caught by the net' +
+    (skipped > 0 ? ' (' + skipped + ' skipped: no DSH runtime)' : '')
+)
 
 // Each iteration rebuilt lib/ from a mutated source, so the last build reflects a
 // mutation that no longer exists. Rebuild once more and confirm the tree is back.
