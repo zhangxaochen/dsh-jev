@@ -277,3 +277,43 @@ CI 等价流程在**干净 clone**（无 `node_modules`、无本机缓存）中�
 | Slack 通知团队 | `send_slack_message` | 生图 / PDF / SQL | `send_slack_message` | PASS |
 
 延迟 253–700ms。两点观察：必需工具**零遗漏**（最重要的安全属性）；保留数量常少于 `maxTools`，因为「不相关」的工具被阈值滤掉而不是凑数。
+
+## 11. skill 路由的线上质量（`pnpm run verify:router`，2026-09-18）
+
+`skill-router` 此前只有 mock 客户端的服务级覆盖，因此两点从未被测量：能否从**真实 112 项技能目录**中挑出相关技能，以及**一次含 112 个问题的请求能否在建议路径的超时内完成**。
+
+### 11.1 缺陷：请求必然超时，且被静默吞掉
+
+| 配置 | 结果 |
+|---|---|
+| 出厂默认（`pathTimeoutMs` 800ms） | **7/7 用例全部** `This operation was aborted`，耗时 805–815ms |
+| 客户端 `timeoutMs` 提到 2000 / 4000ms | 仍在 ~810ms 中止——`route()` 显式使用 `client.pathTimeoutMs`，与 `timeoutMs` 无关 |
+| `pathTimeoutMs` 提到 15000ms | 请求成功：112 个问题耗时 **1.36–1.45s** |
+
+后果：`apply` 的装配钩子捕获错误后「不带建议继续」，因此这个**默认开启**的模块在生产中从不给建议——一个静默的空转。
+
+修复：路由拥有自己的预算 `requestTimeoutMs`（默认 4000ms，约 3× 余量）。
+
+### 11.2 缺陷：请求字面点名技能时仍可能选错
+
+实测「对这个新产品做一次 SWOT 分析」→ 选中 `company-intel`（score 1.77、confidence 0.65），而目录中存在 `swot-analysis`。请求中出现确定性信号（技能名字面量）却输给模型分数，正是「确定性外壳优先」适用的场合。
+
+修复：`nameMatchBoost`（默认 0.6）——请求中出现技能的完整名或某个 ≥4 字符的连字符片段时加分。生效后同一用例选中 `swot-analysis`。
+
+### 11.3 标注用例结果（真实模型 + 真实目录）
+
+| 用例 | 期望 | 实际 | 延迟 |
+|---|---|---|---|
+| PRD 文档 | `/prd/` | `prd-development`（2, conf 1） | 1.42s |
+| 拆用户故事 | `/user-story/` | `user-story`（2, conf 1） | 1.36s |
+| 竞品对比 | `/competitive|company-intel/` | `company-intel`（2, conf 1） | 0.54s |
+| 定价评估 | `/pricing/` | `finance-based-pricing-advisor`（2, conf 1） | 0.60s |
+| 设计 agent 工作流 | `/agent-orchestration/` | `agent-orchestration-advisor`（2, conf 1） | 0.55s |
+| SWOT | `/swot/` | `swot-analysis`（2, conf 0.65） | 0.66s |
+| 写新闻稿（中文意图 / 英文技能名） | `/press-release/` | `writing-shape`（2, conf 1） | 0.60s |
+
+**6/7 符合预期，1 条已记录的跨语言漏报**：请求用中文点名产物（「新闻稿」），技能名是英文，模型转而选择了语义上说得通的写作技能。该用例标记为 `knownMiss`、报告中显示为 `KNOWN` 而不计入失败——留档而非掩盖；`maxCandidates` 的词法预筛对此类场景反而更危险，故默认关闭。
+
+### 11.4 候选上限的成本-收益（可选）
+
+同一意图、词法预筛到 30 个候选：**445ms**（全目录 1.4s）且仍选对。因默认关闭，此处仅记录：目录规模达到数百项时可考虑开启，但要接受 11.3 那类跨语言风险。

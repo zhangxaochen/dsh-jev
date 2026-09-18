@@ -387,3 +387,14 @@
 - [x] 实测 6/6 通过，必需工具**零遗漏**；保留数常少于 `maxTools`（不相关项被阈值滤掉而非凑数）；延迟 253–700ms
 - [x] 纳入 `tests/isolation.spec.ts` 守卫名单与 README 命令清单；`docs/calibration.md` 新增 §10
 - [x] 覆盖缺口仅剩 `skill-router` 的线上（真实模型 + 真实 112 项目录）路由质量
+
+## Phase 3 补充记录（skill 路由的线上质量，Round 40）
+
+补上最后一个覆盖缺口：`skill-router` 此前只有 mock 的服务级覆盖，从未在真实模型 + 真实 112 项目录上测过。
+
+- [x] **抓到生产级缺陷 1（静默空转）**：`route()` 对 112 个问题的请求沿用 800ms 的 `pathTimeoutMs` → **7/7 用例全部超时**（805–815ms）。`apply` 会捕获错误后「不带建议继续」，因此这个默认开启的模块在生产中从不给建议。把客户端 `timeoutMs` 提到 4s 仍无效——`route()` 显式用 `pathTimeoutMs`。修复：路由自有 `requestTimeoutMs`（默认 4000ms；实测 112 问题需 1.36–1.45s）
+- [x] **抓到真实缺陷 2（确定信号被淹没）**：「对这个新产品做一次 SWOT 分析」在目录含 `swot-analysis` 的情况下选中 `company-intel`（1.77 / conf 0.65）。修复：`nameMatchBoost`（默认 0.6，请求字面点名技能时加分），生效后选中正确技能
+- [x] 新增 `tests/live-router.ts` + `pnpm run verify:router`：7 个标注用例，**6 PASS + 1 条已记录的跨语言漏报（`KNOWN`，不计失败）**
+- [x] 单测 +3：字面点名压过更高分对手、连字符片段算点名而无关词不算、候选上限默认关闭且仅在设置时启用
+- [x] 新增配置项 `requestTimeoutMs` / `nameMatchBoost` / `maxCandidates` 并写入 README（含实测依据）；`docs/calibration.md` 新增 §11
+- [x] 测试数 111 → 114

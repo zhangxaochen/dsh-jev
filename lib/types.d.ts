@@ -220,6 +220,12 @@ export interface SkillRouterConfig {
     minScore?: number;
     /** Minimum answer confidence to advise a skill (default 0.5). */
     minConfidence?: number;
+    /** Score added when the request literally names a skill (default 0.6). */
+    nameMatchBoost?: number;
+    /** Routing request timeout; a full catalog needs seconds, not the advisory 800ms (default 4000). */
+    requestTimeoutMs?: number;
+    /** Optional lexical cap on candidates; 0 sends the whole catalog (default 0). */
+    maxCandidates?: number;
 }
 export interface ResultShaperConfig {
     /** Tools whose textual output may be shaped (default: the output-heavy shell tools). */

@@ -25,10 +25,13 @@ import {
 } from '../lib/safety-guard.js'
 import { DEFAULT_MAX_TOOLS } from '../lib/tool-pruner.js'
 import {
+  DEFAULT_MAX_CANDIDATES,
   DEFAULT_MIN_CANDIDATES,
   DEFAULT_MIN_CONFIDENCE as ROUTER_MIN_CONFIDENCE,
   DEFAULT_MIN_INTENT_CHARS,
   DEFAULT_MIN_SCORE,
+  DEFAULT_NAME_MATCH_BOOST,
+  DEFAULT_REQUEST_TIMEOUT_MS,
 } from '../lib/skill-router.js'
 import {
   DEFAULT_MAX_CLUSTERS,
@@ -79,8 +82,11 @@ test('README documents the pruner, router and shaper defaults the code applies',
   assert.equal(documentedDefault('minCandidates?: number'), DEFAULT_MIN_CANDIDATES)
   assert.equal(documentedDefault('minIntentChars?: number'), DEFAULT_MIN_INTENT_CHARS)
   assert.equal(documentedDefault('minScore?: number'), DEFAULT_MIN_SCORE)
+  assert.equal(documentedDefault('requestTimeoutMs?: number'), DEFAULT_REQUEST_TIMEOUT_MS)
+  assert.equal(documentedDefault('nameMatchBoost?: number'), DEFAULT_NAME_MATCH_BOOST)
   assert.ok(README.includes('（默认 `' + ROUTER_MIN_CONFIDENCE + '`）'))
   assert.equal(documentedDefault('thresholdChars?: number'), DEFAULT_THRESHOLD_CHARS)
+  assert.equal(documentedDefault('maxCandidates?: number'), DEFAULT_MAX_CANDIDATES)
   assert.equal(documentedDefault('maxPerTurn?: number'), DEFAULT_MAX_PER_TURN)
   assert.equal(documentedDefault('minKindConfidence?: number'), DEFAULT_MIN_KIND_CONFIDENCE)
   assert.equal(documentedDefault('maxClusters?: number'), DEFAULT_MAX_CLUSTERS)

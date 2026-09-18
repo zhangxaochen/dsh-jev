@@ -230,6 +230,9 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `minIntentChars?: number`: 请求文本短于该长度不做路由（默认 `12`）。
 - `minScore?: number`: 建议 skill 的最低适用性打分，刻度 `[0, 2]`（默认 `1.5`）。
 - `minConfidence?: number`: 建议所需的最低答案置信度（默认 `0.5`）。
+- `requestTimeoutMs?: number`: 路由请求自身的超时（默认 `4000`）。**实测：112 个技能一次的请求耗时 1.36–1.45s**，沿用 800ms 的建议路径超时会让路由**每次都失败且被静默吞掉**。
+- `nameMatchBoost?: number`: 请求**字面点名**某个技能时给它的加分（默认 `0.6`）。实测「对这个新产品做一次 SWOT 分析」在无此加成时会输给 `company-intel`。
+- `maxCandidates?: number`: 可选候选上限；`0` 表示把整个目录送去排序（默认 `0`）。设成非零会启用**词法**预筛，对「请求语言与技能描述语言不同」的场景有丢正确项的风险，故默认关闭。
 - **语义**：同一意图只在首次装配时给出一次建议（指纹相同即跳过，不重复调用模型也不重复注入）；每轮装配最多一条 `typesafe-skill-router` 条目，同名替换而非堆叠；低于分/置信度阈值时保持沉默；`skills.list()` 抛错时 prompt 原样返回。
 
 ### `ResultShaperConfig`（**默认关闭**）
@@ -302,6 +305,9 @@ pnpm run verify:shaper
 
 # 线上验证：工具剪枝的排序质量（带标注用例：哪些工具必须留下、哪些必须剔除）
 pnpm run verify:pruner
+
+# 线上验证：skill 路由（真实 112 项目录；含 1 条已记录的跨语言漏报）
+pnpm run verify:router
 
 # A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
 pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
