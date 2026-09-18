@@ -30,9 +30,21 @@ export type DecisionInput = Omit<DecisionRecord, 'ts'> & {
     ts?: string;
 };
 export declare const DEFAULT_DECISION_LOG: string;
+/** Environment override for the decision log, used by verification scripts. */
+export declare const DECISIONS_PATH_ENV = "DSH_JEV_DECISIONS_PATH";
+/**
+ * Where decisions are appended, resolved on first use rather than at import.
+ *
+ * This file is the calibration dataset. A script that merely imports the
+ * plugins would otherwise append its own mocked decisions to the operator's
+ * record, and later threshold reviews would be reading planted data.
+ */
+export declare function resolveDecisionsPath(explicit?: string): string;
 export declare class DecisionLog {
-    private readonly path;
-    constructor(path?: string);
+    private readonly explicitPath?;
+    constructor(explicitPath?: string | undefined);
+    /** Resolved log path; honours an explicit argument, then the environment. */
+    path(): string;
     /** Append one decision. Never throws: logging must not break an agent turn. */
     append(record: DecisionInput): void;
     /** Read every recorded decision, skipping unparsable lines. */

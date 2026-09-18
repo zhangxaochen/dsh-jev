@@ -36,15 +36,38 @@ export type DecisionInput = Omit<DecisionRecord, 'ts'> & { ts?: string }
 
 export const DEFAULT_DECISION_LOG = join(homedir(), '.dsh', 'jev-decisions.jsonl')
 
+/** Environment override for the decision log, used by verification scripts. */
+export const DECISIONS_PATH_ENV = 'DSH_JEV_DECISIONS_PATH'
+
+/**
+ * Where decisions are appended, resolved on first use rather than at import.
+ *
+ * This file is the calibration dataset. A script that merely imports the
+ * plugins would otherwise append its own mocked decisions to the operator's
+ * record, and later threshold reviews would be reading planted data.
+ */
+export function resolveDecisionsPath(explicit?: string): string {
+  if (explicit !== undefined && explicit.length > 0) return explicit
+  const override = typeof process !== 'undefined' ? process.env?.[DECISIONS_PATH_ENV] : undefined
+  if (override !== undefined && override.length > 0) return override
+  return DEFAULT_DECISION_LOG
+}
+
 export class DecisionLog {
-  constructor(private readonly path: string = DEFAULT_DECISION_LOG) {}
+  constructor(private readonly explicitPath?: string) {}
+
+  /** Resolved log path; honours an explicit argument, then the environment. */
+  path(): string {
+    return resolveDecisionsPath(this.explicitPath)
+  }
 
   /** Append one decision. Never throws: logging must not break an agent turn. */
   append(record: DecisionInput): void {
     try {
       const full: DecisionRecord = { ...record, ts: record.ts ?? new Date().toISOString() }
-      mkdirSync(dirname(this.path), { recursive: true })
-      appendFileSync(this.path, JSON.stringify(full) + '\n', 'utf8')
+      const path = this.path()
+      mkdirSync(dirname(path), { recursive: true })
+      appendFileSync(path, JSON.stringify(full) + '\n', 'utf8')
     } catch {
       /* read-only or unwritable home: decisions simply stay unlogged */
     }
@@ -52,9 +75,10 @@ export class DecisionLog {
 
   /** Read every recorded decision, skipping unparsable lines. */
   read(): DecisionRecord[] {
-    if (!existsSync(this.path)) return []
+    const path = this.path()
+    if (!existsSync(path)) return []
     const out: DecisionRecord[] = []
-    for (const line of readFileSync(this.path, 'utf8').split('\n')) {
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
       if (line.trim().length === 0) continue
       try {
         out.push(JSON.parse(line) as DecisionRecord)

@@ -21,6 +21,7 @@ function loadKey(): string {
 
 // Keep this run out of the operator's live metrics file.
 process.env.DSH_JEV_METRICS_PATH ??= join(tmpdir(), 'jev-live-tools-metrics.json')
+process.env.DSH_JEV_DECISIONS_PATH ??= join(tmpdir(), 'jev-live-tools-decisions.jsonl')
 
 const client = new TypeSafeClient({ apiKey: loadKey() })
 const registered = new Map<string, any>()

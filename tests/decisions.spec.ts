@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { appendFileSync, rmSync } from 'node:fs'
+import { appendFileSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { DecisionLog } from '../lib/decisions.js'
+import { DECISIONS_PATH_ENV, DecisionLog, resolveDecisionsPath } from '../lib/decisions.js'
 
 function tempLogPath(): string {
   return join(tmpdir(), 'jev-decisions-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.jsonl')
@@ -69,4 +69,50 @@ test('DecisionLog is silent when the target is unwritable', () => {
   // Must not throw even though the parent cannot be created on a read-only host.
   log.append({ module: 'loop-guard', action: 'pass' })
   assert.ok(true)
+})
+
+test('the decision log path is overridable and resolved lazily', () => {
+  assert.equal(resolveDecisionsPath('/explicit.jsonl'), '/explicit.jsonl')
+
+  const previous = process.env[DECISIONS_PATH_ENV]
+  process.env[DECISIONS_PATH_ENV] = '/from/env.jsonl'
+  try {
+    assert.equal(resolveDecisionsPath(), '/from/env.jsonl')
+    assert.equal(resolveDecisionsPath('/explicit.jsonl'), '/explicit.jsonl')
+    assert.equal(new DecisionLog().path(), '/from/env.jsonl')
+  } finally {
+    if (previous === undefined) delete process.env[DECISIONS_PATH_ENV]
+    else process.env[DECISIONS_PATH_ENV] = previous
+  }
+
+  assert.match(resolveDecisionsPath(), /jev-decisions\.jsonl$/)
+})
+
+test('constructing a log writes nothing until a decision is appended', () => {
+  const target = tempLogPath()
+  const log = new DecisionLog(target)
+
+  assert.equal(log.read().length, 0)
+  assert.equal(existsSync(target), false, 'construction and reads must not create the log')
+
+  log.append({ module: 'loop-guard', action: 'pass' })
+  assert.equal(existsSync(target), true)
+
+  rmSync(target, { force: true })
+})
+
+test('the environment override keeps verification decisions out of the live log', () => {
+  const target = tempLogPath()
+  const previous = process.env[DECISIONS_PATH_ENV]
+  process.env[DECISIONS_PATH_ENV] = target
+  try {
+    new DecisionLog().append({ module: 'safety-guard', action: 'deny', probability: 0.98 })
+    const records = new DecisionLog().read()
+    assert.equal(records.length, 1)
+    assert.equal(records[0]?.module, 'safety-guard')
+  } finally {
+    if (previous === undefined) delete process.env[DECISIONS_PATH_ENV]
+    else process.env[DECISIONS_PATH_ENV] = previous
+    rmSync(target, { force: true })
+  }
 })
