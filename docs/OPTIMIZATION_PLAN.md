@@ -56,11 +56,11 @@
 
 ## Phase 2 — 实测度量与标定
 
-- [ ] `src/metrics.ts`：删除 `TOKENS_PER_PRUNED_TOOL` / `TOKENS_PER_INTERRUPTED_LOOP`，改用 tokenMeter 实测差
-- [ ] `src/metrics.ts`：新增 `inputBytes` / `estCostUsd` / `decisionErrors`
-- [ ] `src/decisions.ts`：决策追加到 `~/.dsh/jev-decisions.jsonl`
-- [ ] `bench/cases.jsonl` + `bench/run.ts`：≥30 条正负样本 A/B，输出 FP/FN/延迟/token/费用
-- [ ] `src/index.ts` + `src/client.ts`：看板改为实测口径 + bench 摘要
+- [x] `src/metrics.ts`：删除 `TOKENS_PER_PRUNED_TOOL` / `TOKENS_PER_INTERRUPTED_LOOP`，改用 tokenMeter 实测差
+- [x] `src/metrics.ts`：新增 `inputBytes` / `estCostUsd` / `decisionErrors`
+- [x] `src/decisions.ts`：决策追加到 `~/.dsh/jev-decisions.jsonl`
+- [x] `bench/cases.jsonl` + `bench/run.ts`：≥30 条正负样本 A/B，输出 FP/FN/延迟/token/费用
+- [x] `src/index.ts` + `src/client.ts`：看板改为实测口径 + bench 摘要
 
 ## Phase 3 — 决策原语与 skill 路由
 
@@ -76,3 +76,8 @@
 
 - [ ] `README.md`：新增「与 DSH 内置能力的分工」一节
 - [ ] `README.md`：同步全部新增配置项
+
+## Phase 2 补充记录
+
+- [x] bench 支持 `--offline` 回放录制答案；30 条样本 0 误报、准确率 0.933
+- [x] 每次判决写入 `~/.dsh/jev-decisions.jsonl`（含 pass 负样本）

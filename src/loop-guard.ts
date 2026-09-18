@@ -13,6 +13,7 @@
 import { randomUUID } from 'node:crypto'
 import { noul, resolveClientFrom, score, scoreConfidence, topBucketProbability, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
+import { defaultDecisionLog } from './decisions.js'
 import type {
   CordisContext,
   LoopGuardConfig,
@@ -210,6 +211,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
 
       try {
         const client = getClient()
+        const decisionStarted = Date.now()
         const evalResults = await client.systemOne(
           {
             state,
@@ -225,6 +227,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           },
           { timeoutMs: client.pathTimeoutMs }
         )
+        const decisionLatencyMs = Date.now() - decisionStarted
 
         const progressResult = evalResults.has_progress as NoulResult | undefined
         const stuckResult = evalResults.stuck_severity as ScoreResult | undefined
@@ -242,7 +245,13 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         if (progressProb === undefined || pLoop === undefined || confidence === undefined) {
           // Unknown answer is not evidence of a loop; stay silent and record it.
           defaultMetrics.recordDecisionError()
-          defaultMetrics.recordLoopCheck('normal')
+          defaultMetrics.recordLoopCheck('uncertain')
+          defaultDecisionLog.append({
+            module: 'loop-guard',
+            action: 'unknown',
+            latencyMs: decisionLatencyMs,
+            detail: { tool: exec.name, reason: 'answer unusable' },
+          })
           chain.noProgressStreak += 1
           return next()
         }
@@ -256,6 +265,14 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           chain.cooldown = cooldownSteps
           const outcome = pLoop >= 0.85 ? 'interrupt' : 'warn'
           defaultMetrics.recordLoopCheck(outcome)
+          defaultDecisionLog.append({
+            module: 'loop-guard',
+            action: outcome,
+            latencyMs: decisionLatencyMs,
+            confidence,
+            probability: pLoop,
+            detail: { tool: exec.name, score: stuckResult?.score, progress: progressProb },
+          })
 
           const reminderText =
             `[TypeSafe LoopGuard] Potential loop or stagnation detected on tool "${exec.name}". ` +
@@ -304,6 +321,15 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
 
         chain.noProgressStreak = madeNoProgress ? chain.noProgressStreak + 1 : 0
         defaultMetrics.recordLoopCheck('normal')
+        // Negative examples matter as much as positive ones for calibration.
+        defaultDecisionLog.append({
+          module: 'loop-guard',
+          action: 'pass',
+          latencyMs: decisionLatencyMs,
+          confidence,
+          probability: pLoop,
+          detail: { tool: exec.name, score: stuckResult?.score, progress: progressProb },
+        })
       } catch (err) {
         // Advisory path: a failed decision never blocks or delays the agent.
         console.warn('[TypeSafe LoopGuard] Evaluation failed, continuing without intervention:', err)

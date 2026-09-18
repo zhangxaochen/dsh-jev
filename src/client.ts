@@ -250,10 +250,15 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
             .finally(() => setActionPending(false))
         }
 
-        const totalTokens = data
-          ? (data.toolPruner?.estimatedTokensSaved ?? 0) +
-            (data.loopGuard?.estimatedTokensSaved ?? 0)
-          : 0
+        // Only the tool surface is measurable; loop notices report counts instead
+        // of an invented token total.
+        const totalTokens = data ? (data.toolPruner?.estimatedTokensSaved ?? 0) : 0
+        const tokenSourceLabel =
+          data?.toolPruner?.tokenSource === 'tokenMeter'
+            ? 'tokenMeter 口径'
+            : data?.toolPruner?.tokenSource === 'mixed'
+              ? 'tokenMeter + 本地启发混合'
+              : '本地启发式口径'
 
         const formattedTokens =
           totalTokens >= 1_000_000
@@ -345,7 +350,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 h(
                   'span',
                   { className: 'jev-metric-highlight' },
-                  `~${(((data?.toolPruner?.estimatedTokensSaved ?? 0) / 1000)).toFixed(1)}K Tokens`
+                  `~${((data?.toolPruner?.estimatedTokensSaved ?? 0) / 1000).toFixed(1)}K Tokens`
                 )
               ),
               h(
@@ -365,6 +370,18 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 { className: 'jev-card-metric' },
                 h('span', { className: 'jev-metric-label' }, '保留命中核心工具'),
                 h('span', { className: 'jev-metric-val' }, `${data?.toolPruner?.toolsRetained ?? 0} 个`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '精确移除 Schema 字符'),
+                h('span', { className: 'jev-metric-val' }, `${data?.toolPruner?.removedSchemaChars ?? 0}`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, 'Token 折算口径'),
+                h('span', { className: 'jev-metric-val' }, tokenSourceLabel)
               )
             ),
 
@@ -379,7 +396,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 h(
                   'span',
                   { className: 'jev-metric-highlight' },
-                  `~${(((data?.loopGuard?.estimatedTokensSaved ?? 0) / 1000)).toFixed(1)}K Tokens`
+                  `${data?.loopGuard?.notices ?? 0} 条提示`
                 )
               ),
               h(
@@ -399,6 +416,12 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 { className: 'jev-card-metric' },
                 h('span', { className: 'jev-metric-label' }, '注入自愈警示'),
                 h('span', { className: 'jev-metric-val' }, `${data?.loopGuard?.warned ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '判定不可用（跳过）'),
+                h('span', { className: 'jev-metric-val' }, `${data?.loopGuard?.uncertain ?? 0} 次`)
               )
             ),
 
@@ -429,6 +452,18 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 { className: 'jev-card-metric' },
                 h('span', { className: 'jev-metric-label' }, '降级人工审批提醒'),
                 h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.approvals ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '确定性拒止（0 次模型调用）'),
+                h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.hardDenied ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '判定不可用 fail-closed'),
+                h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.uncertainDenied ?? 0} 次`)
               )
             ),
 
@@ -463,6 +498,22 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 { className: 'jev-card-metric' },
                 h('span', { className: 'jev-metric-label' }, '异常错误数'),
                 h('span', { className: 'jev-metric-val' }, `${data?.systemOne?.errors ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '相同载荷缓存命中'),
+                h('span', { className: 'jev-metric-val' }, `${data?.systemOne?.cacheHits ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '输入 token 与预估费用'),
+                h(
+                  'span',
+                  { className: 'jev-metric-val' },
+                  `${(((data?.systemOne?.inputBytes ?? 0) / 1024)).toFixed(1)}KB / $${(data?.systemOne?.estimatedCostUsd ?? 0).toFixed(4)}`
+                )
               )
             )
           ),

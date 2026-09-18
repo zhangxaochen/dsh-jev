@@ -5,7 +5,7 @@
  */
 
 import { resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
-import { defaultMetrics } from './metrics.js'
+import { defaultMetrics, FALLBACK_CHARS_PER_TOKEN } from './metrics.js'
 import type {
   CordisContext,
   ScoreResult,
@@ -33,10 +33,53 @@ export const DEFAULT_ALWAYS_RETAIN = [
   'replace_file_content',
 ]
 
+/** Minimal shape of the harness token estimator, kept structural on purpose. */
+export interface TokenEstimator {
+  estimateMessage?: (message: unknown) => number
+}
+
+/**
+ * Price the tool schemas that were removed from the model-facing surface.
+ *
+ * The previous build multiplied a flat 150 tokens per tool. Here the removed
+ * text is counted exactly and priced with the harness estimator when one is
+ * mounted, falling back to a documented characters-per-token constant.
+ */
+export function measureRemovedTools(
+  meter: TokenEstimator | undefined,
+  prunedTools: ToolDefinitionMinimal[]
+): { removedChars: number; estimatedTokens: number; tokenSource: 'tokenMeter' | 'heuristic' } {
+  let removedChars = 0
+  let estimatedTokens = 0
+  let tokenSource: 'tokenMeter' | 'heuristic' = 'heuristic'
+
+  for (const tool of prunedTools) {
+    const text = JSON.stringify(tool)
+    const chars = Array.from(text).length
+    removedChars += chars
+
+    let priced: number | undefined
+    if (meter && typeof meter.estimateMessage === 'function') {
+      try {
+        const estimate = meter.estimateMessage({ role: 'system', content: [{ type: 'text', text }] })
+        if (typeof estimate === 'number' && Number.isFinite(estimate)) {
+          priced = estimate
+          tokenSource = 'tokenMeter'
+        }
+      } catch {
+        /* estimator refused this shape; fall through to the local heuristic */
+      }
+    }
+    estimatedTokens += priced ?? Math.ceil(chars / FALLBACK_CHARS_PER_TOKEN)
+  }
+
+  return { removedChars, estimatedTokens, tokenSource }
+}
+
 export class ToolPrunerService {
   constructor(
     private readonly getClient: () => TypeSafeClient,
-    private readonly config: ToolPrunerConfig = {}
+    private readonly config: ToolPrunerConfig & { meter?: TokenEstimator } = {}
   ) {}
 
   /**
@@ -110,12 +153,11 @@ export class ToolPrunerService {
 
       const finalTools = [...retainedTools, ...selected]
       const prunedTools = evaluateCandidates.filter((item) => !selected.includes(item))
-      const prunedChars = prunedTools.reduce((acc, t) => acc + JSON.stringify(t).length, 0)
-      const exactTokens = Math.max(
-        prunedTools.length * 50,
-        Math.round(prunedChars / 3.5)
+      defaultMetrics.recordPrune(
+        candidates.length,
+        finalTools.length,
+        measureRemovedTools(this.config.meter, prunedTools)
       )
-      defaultMetrics.recordPrune(candidates.length, finalTools.length, exactTokens)
       return finalTools
     } catch (err) {
       console.warn('[TypeSafe ToolPruner] Pruning failed, returning original candidate list:', err)
@@ -129,7 +171,13 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
     return resolveClientFrom(ctx)
   }
 
-  const pruner = new ToolPrunerService(getClient, config)
+  // Prefer the harness estimator for pricing removed schemas; the pruner works
+  // without it and falls back to the documented local constant.
+  const meter: TokenEstimator | undefined =
+    (typeof ctx.get === 'function' ? (ctx.get('tokenMeter') as TokenEstimator | undefined) : undefined) ??
+    ((ctx as any).tokenMeter as TokenEstimator | undefined)
+
+  const pruner = new ToolPrunerService(getClient, { ...config, meter })
 
   // Listen to system-prompt/assemble waterfall to prune tool schemas before model call
   const unsubscribe = typeof ctx.on === 'function'

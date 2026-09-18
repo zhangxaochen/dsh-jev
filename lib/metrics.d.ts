@@ -4,31 +4,45 @@
  * @module dsh-jev/metrics
  */
 export interface JevMetricsData {
-    version: 1;
+    version: 2;
     firstRecordedAt: string;
     lastUpdatedAt: string;
     toolPruner: {
         evaluations: number;
         toolsPruned: number;
         toolsRetained: number;
+        /** Exact Unicode code points removed from the model-facing tool surface. */
+        removedSchemaChars: number;
+        /** Tokens the removed schemas were priced at, by whichever estimator was available. */
         estimatedTokensSaved: number;
+        /** Which estimator produced `estimatedTokensSaved`. */
+        tokenSource: 'tokenMeter' | 'heuristic' | 'mixed';
     };
     loopGuard: {
         checks: number;
         interrupted: number;
         warned: number;
-        estimatedTokensSaved: number;
+        /** Notices actually injected into the conversation. */
+        notices: number;
+        /** Decisions skipped because the answer was unusable. */
+        uncertain: number;
     };
     safetyGuard: {
         screened: number;
         blocked: number;
         approvals: number;
+        /** Denials produced by the deterministic envelope. */
+        hardDenied: number;
+        /** Denials produced because the verdict was unknown and the policy fails closed. */
+        uncertainDenied: number;
     };
     systemOne: {
         totalCalls: number;
         totalLatencyMs: number;
         avgLatencyMs: number;
         errors: number;
+        /** Successful calls that actually reached the model, excluded cache hits and failures. */
+        latencySamples: number;
         /** Billed input bytes sent to System One (cache hits cost nothing). */
         inputBytes: number;
         /** Estimated USD cost at $0.042 per million input tokens; output is free. */
@@ -47,10 +61,12 @@ export interface CallAccounting {
     cacheHit?: boolean;
     decisionError?: boolean;
 }
-/** Estimated tokens per pruned MCP/system tool schema */
-export declare const TOKENS_PER_PRUNED_TOOL = 150;
-/** Estimated tokens saved per early-stopped runaway loop (averages 3-5 wasted cycles) */
-export declare const TOKENS_PER_INTERRUPTED_LOOP = 15000;
+/**
+ * Fallback characters-per-token used only when no token estimator is available.
+ * The previous build multiplied a flat 150 tokens per pruned tool and claimed
+ * 15000 tokens saved per interrupted loop; neither was measured, so both are gone.
+ */
+export declare const FALLBACK_CHARS_PER_TOKEN = 3.5;
 export declare class MetricsCollector {
     private data;
     private readonly storagePath;
@@ -61,13 +77,21 @@ export declare class MetricsCollector {
      * Record a tool pruning evaluation.
      * @param candidatesCount Total candidate tools evaluated
      * @param retainedCount Tools retained after pruning
-     * @param exactTokensSaved Optional exact token count based on pruned schema sizes
+     * @param measured Exact removal facts: code points dropped and their token price.
      */
-    recordPrune(candidatesCount: number, retainedCount: number, exactTokensSaved?: number): void;
+    recordPrune(candidatesCount: number, retainedCount: number, measured: {
+        removedChars: number;
+        estimatedTokens: number;
+        tokenSource: 'tokenMeter' | 'heuristic';
+    }): void;
     /**
      * Record a loop guard check outcome.
      */
-    recordLoopCheck(outcome: 'normal' | 'warn' | 'interrupt'): void;
+    recordLoopCheck(outcome: 'normal' | 'warn' | 'interrupt' | 'uncertain'): void;
+    /** Record a denial produced by the deterministic envelope. */
+    recordHardDeny(): void;
+    /** Record a denial produced by a fail-closed policy on an unusable verdict. */
+    recordUncertainDeny(): void;
     /**
      * Record a safety guard pre-execution screen.
      */
@@ -83,7 +107,9 @@ export declare class MetricsCollector {
      */
     getSnapshot(): JevMetricsData;
     /**
-     * Total tokens saved across all modules.
+     * Tokens saved, measured only where measurement exists: the removed tool
+     * schemas. Loop notices prevent work but their avoided cost is not measurable,
+     * so they are reported as a count instead of an invented token total.
      */
     getTotalTokensSaved(): number;
     /**

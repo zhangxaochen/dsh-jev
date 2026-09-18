@@ -69,6 +69,10 @@
     "build": "tsc && node scripts/bundle-client.js",
     "pretest": "tsc && node scripts/bundle-client.js",
     "test": "node --test tests/*.spec.ts",
+    "probe": "node --experimental-strip-types tests/probe.ts",
+    "verify:live": "node --experimental-strip-types tests/live-verify.ts",
+    "bench": "node --experimental-strip-types bench/run.ts",
+    "bench:offline": "node --experimental-strip-types bench/run.ts --offline",
     "sync:desktop": "pnpm run build && node -e \"const fs = require('fs'), path = require('path'), dest = path.join(process.env.USERPROFILE, '.dsh/profiles/desktop/node_modules/dsh-jev'); fs.cpSync('lib', path.join(dest, 'lib'), {recursive: true, force: true}); fs.copyFileSync('package.json', path.join(dest, 'package.json')); fs.copyFileSync('cordis.patch.yml', path.join(dest, 'cordis.patch.yml')); console.log('Successfully synced dsh-jev to desktop!');\""
   },
   "keywords": [

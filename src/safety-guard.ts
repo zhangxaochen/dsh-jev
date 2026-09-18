@@ -16,6 +16,7 @@
 
 import { choice, noul, resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
+import { defaultDecisionLog } from './decisions.js'
 import type {
   ChoiceResult,
   CordisContext,
@@ -167,8 +168,24 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
     return guardedTools.includes(toolName)
   }
 
+  /** Best-effort accounting for a hard denial: no model call was made. */
   function deny(reason: string): PreToolDecision {
+    defaultMetrics.recordHardDeny()
+    defaultDecisionLog.append({ module: 'safety-guard', action: 'deny', detail: { reason: reason.slice(0, 200) } })
+    return { kind: 'deny', action: 'deny', reason }
+  }
+
+  /** Accounting for a semantic denial, carrying the deciding probability. */
+  function denyWithFacts(reason: string, facts: Record<string, unknown>): PreToolDecision {
     defaultMetrics.recordSafetyCheck('deny')
+    defaultDecisionLog.append({
+      module: 'safety-guard',
+      action: 'deny',
+      probability: typeof facts.probability === 'number' ? facts.probability : undefined,
+      confidence: typeof facts.confidence === 'number' ? facts.confidence : undefined,
+      latencyMs: typeof facts.latencyMs === 'number' ? facts.latencyMs : undefined,
+      detail: facts,
+    })
     return { kind: 'deny', action: 'deny', reason }
   }
 
@@ -274,10 +291,12 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
 
       try {
         const client = getClient()
+        const decisionStarted = Date.now()
         const evalResults = await client.systemOne(
           { state, questions: questions as any },
           { timeoutMs: client.pathTimeoutMs }
         )
+        const decisionLatencyMs = Date.now() - decisionStarted
 
         const probabilityOf = (key: string): number | undefined => {
           const r = evalResults[key] as NoulResult | undefined
@@ -348,10 +367,17 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
 
         // 1. Critical hazard -> DENY
         if (maxHazard >= blockThreshold || (riskScore !== undefined && riskScore >= 1.7)) {
-          return deny(
+          return denyWithFacts(
             `[TypeSafe SafetyGuard] Execution blocked: hazard probability ${(maxHazard * 100).toFixed(0)}%` +
               (riskScore !== undefined ? `, risk ${riskScore.toFixed(2)}/2` : '') +
-              '.'
+              '.',
+            {
+              tool: exec.name,
+              probability: maxHazard,
+              credentialHazard,
+              riskScore,
+              latencyMs: decisionLatencyMs,
+            }
           )
         }
 
@@ -375,6 +401,13 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         }
 
         defaultMetrics.recordSafetyCheck('pass')
+        defaultDecisionLog.append({
+          module: 'safety-guard',
+          action: 'pass',
+          probability: maxHazard,
+          latencyMs: decisionLatencyMs,
+          detail: { tool: exec.name, credentialHazard, riskScore },
+        })
         return next()
       } catch (err) {
         console.warn('[TypeSafe SafetyGuard] Inspection failed, applying', onError, 'policy:', err)

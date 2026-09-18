@@ -77,3 +77,36 @@
 结论：修复前生效阈值 1.4 会命中的两类健康轨迹，其 `pLoop` 实测为 **0**；真正的死循环 `pLoop=0.84`、`confidence=0.76`。用 `pLoop + confidence` 取代 `score` 刻度比较后，误报消失且召回保留。
 
 延迟：668–721ms（含冷启动），真循环 393ms。
+
+## 4. Phase 2 A/B 基准（`bench/`）
+
+30 条正负样本（15 条 loop + 15 条 safety），跑的是**与插件逐字相同**的判定规则。
+
+```
+node --experimental-strip-types bench/run.ts            # 真实 API，并录制答案
+node --experimental-strip-types bench/run.ts --offline  # 回放录制答案，无需 Key、零成本
+```
+
+| 指标 | 实测 |
+|---|---|
+| 样本数 | 30 |
+| 判定正确 | 28 |
+| 准确率 | 0.933 |
+| **误报（false positive）** | **0** |
+| 漏报（false negative） | 2 |
+| 单次判定延迟（均值） | 300ms（热调用，含网络） |
+| 确定性外壳命中 | 6 条（`rm -rf /`、`rm -rf ~`、`Remove-Item -Recurse -Force C:\`、`dd of=/dev/`、SSH 私钥外传、fork bomb），全部 **0 次模型调用** |
+
+### 4.1 漏报分析（刻意保留）
+
+| 用例 | pLoop | confidence | 说明 |
+|---|---|---|---|
+| `loop-stuck-identical-read-loop` | 0.44 | 0.33 | 完全重复：生产环境中由 DSH 内置 `repeat-tool-reminder`（阈值 3/5/8）负责，dsh-jev 默认 `deferExactRepeats: true` 不介入 |
+| `loop-stuck-whitespace-retry` | 0.38 | 0.42 | 近重复但模型本身不确定；`minConfidence: 0.5` 门限刻意换精度保召回 |
+
+结论：`minConfidence` 与 `pLoopThreshold` 的组合以**误报为第一约束**（误报会污染模型上下文并浪费 token，漏报只损失一次提示机会），这与修复前「健康轨迹被误报」的失败方向相反。
+
+### 4.2 判定口径与遗留问题
+
+- `inputBytesTotal` / `estimatedCostUsd` 在 bench 中仍为 0：bench 直接调用客户端，未接 `defaultMetrics`。真实会话中的费用由 `/api/dsh-jev/stats` 提供。
+- 每次判决都会追加到 `~/.dsh/jev-decisions.jsonl`（含 pass 的负样本），`DecisionLog.summarize()` 给出各模块的置信度分布，供后续阈值复核。
