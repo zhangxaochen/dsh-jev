@@ -101,6 +101,7 @@ pnpm run verify:router    # skill 路由（真实目录）
 pnpm run verify:turn      # 整轮演练：全部模块 + 真实模型 + 真实装配
 pnpm run drill            # 守卫网自检：注入回退，确认闸门拦得住
 pnpm run bench:offline    # 36 条基准，零成本
+pnpm run verify:host      # 宿主验收（需先重启；未重启时 exit 1 是应有结果）
 pnpm run doctor           # 本机是否真的在跑当前构建
 ```
 

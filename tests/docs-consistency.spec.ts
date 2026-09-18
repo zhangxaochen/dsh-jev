@@ -250,9 +250,18 @@ test('the evidence index names every gate the package exposes', () => {
 
   const missing = []
 
+  // The commands must appear in the reproduce block, not merely somewhere in the
+  // prose: a row that mentions `pnpm run drill` while the runnable list omits it is
+  // exactly the drift this guards.
+  const block = report.match(/```bash\n([\s\S]*?)```/)
+  assert.ok(block, 'the report needs a runnable reproduce block')
+  const runnable = block![1]
+
   for (const name of Object.keys(scripts)) {
     const isGate = name.startsWith('verify:') || ['test', 'drill', 'bench:offline', 'typecheck:scripts'].includes(name)
-    if (isGate && !report.includes(name)) missing.push('script ' + name)
+    if (!isGate) continue
+    const invocable = new RegExp('pnpm (?:run )?' + name.replace(':', '\\:') + '(?:\\s|$)')
+    if (!invocable.test(runnable)) missing.push('script ' + name)
   }
 
   for (const file of readdirSync(join(cwd(), 'tests')).filter((name) => name.includes('corpus') && name.endsWith('.spec.ts'))) {
