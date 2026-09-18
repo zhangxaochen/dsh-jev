@@ -96,7 +96,16 @@ export type PreToolDecision =
   | { kind: 'cancel'; action?: 'cancel' }
 
 export type PostToolDecision =
-  | { kind: 'accept'; action?: 'accept'; content?: string; value?: unknown; contexts?: readonly ModelContext[]; additionalContexts?: ModelContext[] }
+  | {
+      kind: 'accept'
+      action?: 'accept'
+      content?: string
+      value?: unknown
+      /** Carried by dsh-jev for hosts that read the older key. */
+      contexts?: readonly ModelContext[]
+      /** The key the tools service merges into the conversation. */
+      additionalContexts?: ModelContext[]
+    }
   | { kind: 'block'; action?: 'block'; feedback: readonly string[] }
 
 export interface ToolExecution {

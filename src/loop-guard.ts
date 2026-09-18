@@ -316,6 +316,10 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
             content: [{ type: 'text' as const, text: reminderText }],
           }
 
+          // `additionalContexts` is the key the tools service merges into the
+          // conversation (verified against the installed 0.1.5-rc.2); `contexts`
+          // is kept alongside it for hosts that read the older name. Both carry
+          // the same single entry, never a duplicate of each other.
           const decisionResult: any = {
             kind: 'accept',
             action: 'accept',

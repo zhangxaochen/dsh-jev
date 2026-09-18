@@ -92,7 +92,9 @@ export type PostToolDecision = {
     action?: 'accept';
     content?: string;
     value?: unknown;
+    /** Carried by dsh-jev for hosts that read the older key. */
     contexts?: readonly ModelContext[];
+    /** The key the tools service merges into the conversation. */
     additionalContexts?: ModelContext[];
 } | {
     kind: 'block';

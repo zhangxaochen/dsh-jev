@@ -107,11 +107,12 @@ const exec = { name: 'bash', args: { command: 'npm test' }, agent: { id: 'integr
 const passthrough = async () => ({ kind: 'accept', action: 'accept' })
 await ctx.waterfall('tools/post-execute', exec, { content: 'first failure' }, passthrough)
 const afterSecond = await ctx.waterfall('tools/post-execute', exec, { content: 'second failure' }, passthrough)
-const notices = afterSecond?.contexts ?? afterSecond?.additionalContexts ?? []
+// Assert the field the tools service actually merges, not whichever key exists.
+const notices = afterSecond?.additionalContexts ?? []
 check(
   'loop-guard attaches a notice through the real post-execute waterfall',
   notices.length === 1 && notices[0]?.source?.plugin === 'typesafe-loop-guard',
-  'contexts=' + notices.length
+  'additionalContexts=' + notices.length
 )
 
 // 2. Real pre-execute waterfall: the deterministic envelope must deny.

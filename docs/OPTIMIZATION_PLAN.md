@@ -278,3 +278,11 @@
 - [x] 复核改动后的 `test` 脚本（新增 `node --import ./tests/isolate.mjs`）在**全新 clone** 中成立：install → build → 98/98 → bench（93.3%、误报 0、退出码 0）
 - [x] 干净 clone 的整轮运行后，实机状态仍未被动过（指标 `version 1` + mtime 不变、决策日志行数不变），确认预载隔离在 CI 式环境下同样生效
 - [x] 说明：此前用 bash 逐条复演 CI `run:` 块的做法本轮被拒（命令未执行），改以干净 clone 直接跑等价步骤验证
+
+## Phase 5 补充记录（决策字段语义澄清，Round 27）
+
+- [x] 无遗留 TODO/FIXME（`src` / `scripts` / `tests` 全量扫描，唯一命中是测试夹具里的字符串 `grep -rn TODO src`）
+- [x] 澄清 `loop-guard` 同时写 `contexts` 与 `additionalContexts` 的理由：实测宿主 `dsh-tools` 只合并 `additionalContexts`，`contexts` 仅供读旧键的宿主使用；代码注释与 `types.ts` 均写明，并保证两者承载**同一条**提示（不会重复注入）
+- [x] 收紧断言：集成校验原先用 `contexts ?? additionalContexts` 回退，无法分辨哪个键真正生效；现改为断言**服务实际合并的那个键**（输出 `additionalContexts=1`）
+- [x] 新增单测：两个键各含 1 条且 `id` 相同（防止未来出现双份注入）
+- [x] 测试数 98 → 99

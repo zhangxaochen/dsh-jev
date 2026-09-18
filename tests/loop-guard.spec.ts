@@ -173,3 +173,20 @@ test('LoopGuard honours the exclude list and ignores agent-less calls', async ()
   await h.step({ name: 'bash', args: { command: 'npm test' } }, 'd')
   assert.equal(modelCalls, 0, 'calls without an agent have nobody to remind')
 })
+
+test('LoopGuard carries one notice under both accepted context keys', async () => {
+  const h = harness(async () => STUCK_FORESEEABLE)
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+
+  await h.step(exec, 'a')
+  const decision = await h.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
+
+  // The tools service merges `additionalContexts`; `contexts` exists for hosts
+  // that read the older name. Each must hold the same single entry so no host
+  // ever sees the notice twice.
+  const additional = (decision as any).additionalContexts ?? []
+  const legacy = (decision as any).contexts ?? []
+  assert.equal(additional.length, 1)
+  assert.equal(legacy.length, 1)
+  assert.equal(additional[0].id, legacy[0].id)
+})
