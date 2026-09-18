@@ -73,18 +73,10 @@
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-agent": "*",
-    "@deepseek-ai/dsh-tools": "*"
+    "@deepseek-ai/cordis": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-agent": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-tools": {
       "optional": true
     }
   }
