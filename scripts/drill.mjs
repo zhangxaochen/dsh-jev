@@ -163,6 +163,14 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
+    // The index reports the drill's size; a stale number there is a stale claim.
+    name: 'the index reports a stale drill size',
+    file: 'docs/verification-report.md',
+    from: '`pnpm run drill` **23/23**',
+    to: '`pnpm run drill` **21/21**',
+    test: 'tests/docs-consistency.spec.ts',
+  },
+  {
     // The delivery summary's per-module counts must track the specs they describe.
     name: 'the delivery summary miscounts a module',
     file: 'docs/OPTIMIZATION_PLAN.md',

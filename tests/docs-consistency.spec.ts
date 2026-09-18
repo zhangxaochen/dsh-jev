@@ -312,3 +312,47 @@ test('the delivery summary counts each module as it stands', () => {
   }
   assert.deepEqual(wrong, [], 'update the mapping and the summary together')
 })
+
+test('the reported drill and corpus sizes match the files', () => {
+  // The index names the gates but not their sizes, so these drifted: the drill grew
+  // from 21 to 23 entries and both corpora grew while the documents kept the old
+  // numbers. Counts are read from the sources, never restated here.
+  const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
+  const plan = readFileSync(join(cwd(), 'docs', 'OPTIMIZATION_PLAN.md'), 'utf8')
+
+  const drill = readFileSync(join(cwd(), 'scripts', 'drill.mjs'), 'utf8')
+  const drillBlock = drill.slice(drill.indexOf('const drills'), drill.indexOf('const results'))
+  const drillEntries = (drillBlock.match(/name: '/g) ?? []).length
+  assert.ok(drillEntries > 0, 'the drill must declare its entries')
+
+  for (const [label, text] of [['verification-report.md', report]] as Array<[string, string]>) {
+    for (const match of text.matchAll(/drill` \*\*(\d+)\/(\d+)\*\*/g)) {
+      assert.equal(Number(match[1]), drillEntries, label + ' claims a drill total the script does not have')
+      assert.equal(Number(match[2]), drillEntries, label + ' claims a drill pass count the script does not have')
+    }
+  }
+  for (const match of report.matchAll(/`pnpm run drill`，(\d+) 条注入/g)) {
+    assert.equal(Number(match[1]), drillEntries, 'the report claims a drill size the script does not have')
+  }
+
+  // Corpus sizes, as claimed in the report and the plan summary.
+  // Count the case entries by their indentation: one corpus labels each case
+  // `expect: 'deny' | 'pass'` and the other `expect: true | false`.
+  const corpusSize = (file: string) => {
+    const text = readFileSync(join(cwd(), 'tests', file), 'utf8')
+    const block = text.slice(text.indexOf('const CASES'), text.indexOf('test('))
+    return (block.match(/^ {2}\{/gm) ?? []).length
+  }
+  const envelope = corpusSize('deterministic-corpus.spec.ts')
+  const precheck = corpusSize('repetition-corpus.spec.ts')
+
+  for (const [label, text] of [['verification-report.md', report], ['OPTIMIZATION_PLAN.md', plan]] as Array<[string, string]>) {
+    for (const match of text.matchAll(/deterministic-corpus\.spec\.ts`?[^|]{0,20}?\*{0,2}(\d+) 例/g)) {
+      assert.equal(Number(match[1]), envelope, label + ' claims an envelope corpus size the file does not have')
+    }
+    for (const match of text.matchAll(/repetition-corpus\.spec\.ts`?[^|]{0,20}?(\d+) 例|16 例前置检查语料/g)) {
+      if (match[1] === undefined) continue
+      assert.equal(Number(match[1]), precheck, label + ' claims a pre-check corpus size the file does not have')
+    }
+  }
+})
