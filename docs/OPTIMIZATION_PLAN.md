@@ -728,3 +728,12 @@
 - [x] 撤掉 CI 中重复且较弱的 `Packed contents include every built module` 步骤（单测在 CI 的 Unit tests 步骤里已跑，且检查更多）；CI 现有 7 个 run 步骤
 - [x] 两处自查修正：Windows 上 `npm` 是 `npm.cmd`，`execFileSync` 需 `shell: true`；替换注释时 `\n` 陷阱导致调用被并入注释行
 - [x] 测试数 154 → 155
+
+## Phase 5 补充记录（发布物可安装性，Round 75）
+
+- [x] 把发布物检查推进到最后一环：**打包 → 装进干净目录 → 按包名导入**。单测导入的是工作区里的 `lib/`，因此「装不上」或「`main`/`types`/`exports` 指向不当」对用户才暴露，此前无任何闸门
+- [x] 新增 `scripts/verify-pack.mjs` + `pnpm run verify:pack`，断言五项：产出 tarball；入口导出宿主挂载所需的 **8 个符号**；**5 个服务类**同样在包内；安装后的清单三个目标（`main`/`types`/`dsh.bundle.patch`）均可解析；补丁文件可读且确实挂载 `dsh-jev`
+- [x] 实测通过：tarball 57 项、安装后按名解析成功、入口 8 个导出齐全
+- [x] 纳入 CI 作为独立步骤（CI 现有 8 个 run 步骤）与 README／证据索引（索引守卫要求 `verify:*` 必须出现在复现块内，加入后立即通过）
+- [x] 新增演练条目：把 `main` 指向不存在的文件 → `verify:pack` 必须失败
+- [x] 自查修正：脚本首版用 `readdirSync` 判断**文件**存在（`ENOTDIR` → 一律判缺失），改用 `existsSync`

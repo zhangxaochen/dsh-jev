@@ -55,6 +55,11 @@ jobs:
       # No DSH runtime exists on a runner, so this exercises the skip path: it
       # must report SKIP and exit 0 rather than fail. Behaviour against a real
       # runtime is covered by running this on a machine with DSH installed.
+      # Packs the tarball, installs it into a scratch directory and imports it by
+      # package name: the only check that proves a published install resolves.
+      - name: Published artifact installs and resolves
+        run: pnpm run verify:pack
+
       - name: DSH integration checks (skip when no runtime)
         run: pnpm run verify:dsh
 

@@ -163,6 +163,15 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
+    // The manifest is what the host resolves; pointing `main` at a file that is not
+    // in the package must fail the published-artifact smoke test.
+    name: 'the manifest points at a file the package does not ship',
+    file: 'package.json',
+    from: '"main": "./lib/index.js"',
+    to: '"main": "./lib/entrypoint-that-does-not-exist.js"',
+    command: ['scripts/verify-pack.mjs'],
+  },
+  {
     // The index reports the drill's size; a stale number there is a stale claim. The
     // pattern matches whatever the current numbers are, so syncing the document does
     // not invalidate the drill.

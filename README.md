@@ -336,6 +336,9 @@ pnpm run verify:host
 # 构建产物一致性：lib/ 入库且单测导入的是它，改了 src 忘记重建必须报错
 pnpm run build && pnpm run verify:build
 
+# 发布物冒烟：打包 → 装进干净目录 → 按包名导入，确认装得上、解析得到
+pnpm run verify:pack
+
 # 覆盖率审计：查看哪些发布代码没有被任何离线用例执行（Node 内置，无额外依赖）
 node --experimental-test-coverage --test-coverage-include='lib/*.js' --test --import ./tests/isolate.mjs tests/*.spec.ts
 
