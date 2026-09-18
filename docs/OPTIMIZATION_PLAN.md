@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **162** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **163** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -812,3 +812,10 @@
 - [x] 新增宿主论断闸门（`dsh-contract` 第 7 项）：断言我们的补丁仍使用该表达式、且宿主补丁方言仍文档化 `!!js` —— 若 DSH 弃用该标签，闸门会失败而非静默失效
 - [x] **重启就绪链至此闭环**（全部有实测或闸门）：① profile `bundles` 含 `dsh-jev` ② 安装副本 0.2.0 且声明已对齐 ③ `main`/`types`/`dsh.bundle.patch` 在安装后可解析 ④ 面板注入的 `dsh-client-ui-settings` 存在于宿主 ⑤ 补丁 `!!js` 语法受支持 ⑥ 客户端在宿主不导出环境变量时仍能读到密钥 ⑦ 验收脚本 7 项就绪
 - [x] 测试数 161 → 162（`dsh-contract` 7 项，无 DSH 时跳过）
+
+## 部署补充（面板可用性，Round 87）
+
+- [x] 追问最后一项部署面隐患：面板轮询 `/api/dsh-jev/stats`，而该路由注册在 `connection.fetch`（或 `webServer`）上——**若 desktop 宿主两者都不提供，重启后面板会 404 且无任何提示**
+- [x] 查证（有证据）：desktop 的 bundles 含 **`@deepseek-ai/dsh-web-app`**，其补丁挂载 `- id: webserver`（`dsh-host-webserver`）与 `- id: connection`（`dsh-client-connection`），并注明「webserver under /api; browser half is the fetch/SSE client」——正是本插件注册路由的方式 ✓ **无缺口**
+- [x] 新增宿主论断闸门（`dsh-contract` 第 8 项）：断言源码同时在 `connection.fetch` 与 `webServer` 上注册，且宿主 web-app bundle 仍挂载 `webserver`/`connection` 两行——若宿主改结构，闸门失败而非面板静默失效
+- [x] 测试数 162 → 163（`dsh-contract` 8 项，无 DSH 时跳过）

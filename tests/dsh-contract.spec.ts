@@ -207,3 +207,19 @@ test('the host patch dialect still supports the !!js expression the patch uses',
   const mentions = dialect.some((text) => /`!!js`|!!js\b/.test(text))
   assert.ok(mentions, 'the host no longer documents the !!js tag; re-verify the patch syntax')
 })
+
+test('the services our routes register on are the ones a web-app profile mounts', { skip: !nodeModules }, () => {
+  // The settings panel polls /api/dsh-jev/stats, which we register on
+  // `connection.fetch` (or `webServer`). If a desktop-style profile mounted neither
+  // service, that registration would do nothing and the panel would 404 with no sign
+  // that anything was wired wrong.
+  const source = readFileSync(join(process.cwd(), 'src', 'index.ts'), 'utf8')
+  assert.match(source, /connection[^\n]*fetch[^\n]*register|fetch[^\n]*register/, 'the route is registered on connection.fetch')
+  assert.match(source, /webServer[^\n]*register/, 'the route is also registered on webServer')
+
+  const webApp = join(nodeModules!, '@deepseek-ai', 'dsh-web-app', 'cordis.patch.yml')
+  assert.ok(existsSync(webApp), 'the web-app bundle should be installed')
+  const patch = readFileSync(webApp, 'utf8')
+  assert.match(patch, /id:\s*webserver\b/, 'the web-app bundle no longer mounts a webserver row')
+  assert.match(patch, /id:\s*connection\b/, 'the web-app bundle no longer mounts a connection row')
+})

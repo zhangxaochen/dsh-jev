@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **162/162**（`pnpm test`；其中 7 项在无 DSH 时跳过） |
+| 离线单测 | **163/163**（`pnpm test`；其中 8 项在无 DSH 时跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 4/4（单轮语义开销 2.7–3.1s） |
 | 守卫网自检 | `pnpm run drill` **26/26**（对 26 条承诺注入对应回退，全部被某道闸门拦下） |
