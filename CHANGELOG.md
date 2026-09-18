@@ -50,6 +50,9 @@
 
 ### Fixed
 
+- **`agent/pre-step` 监听说谎式返回（Phase 1 引入，0.2.0 内修复）**：该事件是 waterfall，监听器不调用 `next()`
+  会返回 `undefined`，下游决策随之丢失，DSH 的 agent loop 会在 `decision.kind` 上抛错。`loop-guard`
+  的清链与 `result-shaper` 的预算重置已改为委派——清链照旧执行，决策原样交还。
 - `deterministicVerdict` 此前对 `rm -rf /`、`rm -rf ~` 等常见形态失效：模式以 `(?:\s|$)` 结尾，
   而参数经 JSON 序列化后命令尾部是引号。改为结构化解析删除命令的动词/开关/目标，并对多个候选串匹配。
 - `normalizeAnswers` 不再把缺失或异形的答案强制成 `0`（那等于把「不知道」当成「安全」）。

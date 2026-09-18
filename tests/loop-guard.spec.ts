@@ -33,7 +33,8 @@ function harness(mock: () => Promise<Record<string, unknown>>, config: Record<st
   apply(ctx, config)
   return {
     ctx,
-    preStep: (agent: unknown) => preStepHandler?.({ agent }),
+    // agent/pre-step is a waterfall: the handler must hand the decision back.
+    preStep: (agent: unknown) => preStepHandler?.({ agent }, async () => ({ kind: 'enter', messages: ['kept'] })),
     // Mirrors the DSH waterfall contract: (exec, result, next) where next takes no arguments.
     step: async (exec: ToolExecution, content = 'same output') =>
       postHandler(exec, { content }, async () => ({ kind: 'accept', action: 'accept' })) as Promise<
@@ -99,6 +100,18 @@ test('LoopGuard defers exact repeats to repeat-tool-reminder', async () => {
   await strict.step(exec, 'identical output')
   const judged = await strict.step({ name: 'bash', args: { command: 'npm test' }, agent }, 'identical output')
   assert.ok(judged.additionalContexts, 'with the deferral disabled the semantic verdict applies')
+})
+
+test('LoopGuard passes the agent/pre-step decision through untouched', async () => {
+  const h = harness(async () => HEALTHY)
+  const decision = await h.preStep(agent)
+
+  assert.equal(
+    decision?.kind,
+    'enter',
+    'a waterfall listener that does not delegate leaves the agent loop without a decision'
+  )
+  assert.deepEqual(decision?.messages, ['kept'])
 })
 
 test('LoopGuard honours the cooldown after a notice', async () => {

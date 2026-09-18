@@ -119,12 +119,19 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
   /**
    * Reset per-agent state on a new user instruction, matching
    * `dsh-repeat-tool-reminder`: a fresh instruction is never a loop.
+   *
+   * `agent/pre-step` is a waterfall: a listener that does not delegate returns
+   * `undefined` and the agent loop loses the decision it is waiting for. The
+   * reset is bookkeeping, so it must always pass the chain on untouched.
    */
   const unsubscribePreStep = ctx.on('agent/pre-step', (...hookArgs: any[]) => {
-    const agent = hookArgs[0]?.agent ?? hookArgs[0]
+    const payload = hookArgs[0]
+    const next = hookArgs[hookArgs.length - 1]
+    const agent = payload?.agent ?? payload
     if (agent && typeof agent === 'object') {
       chains.delete(agent)
     }
+    return typeof next === 'function' ? next() : undefined
   })
 
   const unsubscribe = ctx.on(

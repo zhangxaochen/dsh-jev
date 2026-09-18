@@ -198,3 +198,14 @@
 - [x] 新增 2 个回归用例：随包 `guardedTools` 必须 ⊇ 库默认（且必须含两个文件写入工具）；随包 `alwaysRetain` 必须 ⊇ 库默认，防止后续编辑悄悄缩小保护面
 - [x] 已验证有牙齿：对修复前的 5 项清单，检查会报出 `execute_command, write_to_file, replace_file_content`
 - [x] README 明确列出该清单；CHANGELOG 记录；测试数 86 → 88
+
+## Phase 5 补充记录（waterfall 委派回归，Round 20）
+
+审计「每个 waterfall 监听器是否都把决策交还下游」——在真实 cordis 上驱动 `agent/pre-step` 时抓到**本轮最严重的问题**。
+
+- [x] **缺陷（Phase 1 引入）**：`loop-guard` 的 `agent/pre-step` 监听器只做清链、不调用 `next()`。waterfall 语义下这会返回 `undefined`，下游决策丢失；DSH 的 agent loop 随即在 `decision.kind` 上抛 TypeError。真实 cordis 实测：`waterfall result: undefined`，下游 `{kind:'enter'}` 未存活。**该版本一旦重启即会让 agent loop 崩溃**
+- [x] 修复：`loop-guard` 与 `result-shaper` 的 pre-step 监听器都改为取最后一个参数为 `next` 并 `return next()`；清链/重置预算照旧执行
+- [x] 修复后实测：两个监听器均返回下游决策 `{"kind":"enter","messages":["kept"]}`
+- [x] 集成校验新增「挂载全部插件时 `agent/pre-step` 决策必须存活」一项（现 8/8），并把 `result-shaper` 一并挂载（此前集成校验漏挂它）
+- [x] 单测新增「pre-step 决策原样透传」，并核对代码里全部 7 处事件监听：`agent/pre-step`×2、`tools/post-execute`×2、`tools/pre-execute`×1、`system-prompt/assemble`×2——四类事件现均有真实 waterfall 覆盖
+- [x] 测试数 88 → 89

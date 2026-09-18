@@ -167,8 +167,11 @@ export class ResultShaperService {
 export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
   const shaper = new ResultShaperService(() => resolveClientFrom(ctx), config)
 
-  const unsubscribePreStep = ctx.on('agent/pre-step', () => {
+  // Waterfall listener: the budget reset must not swallow the step decision.
+  const unsubscribePreStep = ctx.on('agent/pre-step', (...hookArgs: any[]) => {
+    const next = hookArgs[hookArgs.length - 1]
     shaper.resetTurnBudget()
+    return typeof next === 'function' ? next() : undefined
   })
 
   const unsubscribe = ctx.on('tools/post-execute', async (...hookArgs: any[]): Promise<PostToolDecision> => {

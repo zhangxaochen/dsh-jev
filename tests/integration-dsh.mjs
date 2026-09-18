@@ -20,6 +20,7 @@ import * as ClientPlugin from '../lib/typesafe-client.js'
 import * as LoopGuard from '../lib/loop-guard.js'
 import * as SafetyGuard from '../lib/safety-guard.js'
 import * as ToolPruner from '../lib/tool-pruner.js'
+import * as ResultShaper from '../lib/result-shaper.js'
 
 /** Locate the cordis package the host actually loaded. */
 function findCordis() {
@@ -75,6 +76,9 @@ ctx.plugin(ClientPlugin, { mockHandler: answersFor })
 LoopGuard.apply(ctx, { triggerThreshold: 2, cooldownSteps: 2 })
 SafetyGuard.apply(ctx, { headless: false })
 ToolPruner.apply(ctx, { maxTools: 2 })
+// Mounted although disabled by default: its pre-step bookkeeping must still not
+// interfere with the step decision.
+ResultShaper.apply(ctx, {})
 
 // The client service must be reachable the way the guards look it up. Cordis
 // starts a plugin fiber asynchronously, so let it settle first.
@@ -111,7 +115,18 @@ check(
 const safeDecision = await ctx.waterfall('tools/pre-execute', { name: 'pwsh', args: { command: 'npm test' } }, allow)
 check('safety-guard lets a benign call reach the downstream listener', safeDecision?.kind === 'allow')
 
-// 3. Real system-prompt/assemble waterfall: pruning must survive the invariant.
+// 3. Every plugin must pass the agent/pre-step decision through untouched.
+//    A waterfall listener that forgets to call next() returns undefined and the
+//    agent loop loses the decision it awaits, which is a crash, not a warning.
+const stepDecision = { kind: 'enter', messages: ['kept'] }
+const afterPreStep = await ctx.waterfall('agent/pre-step', { agent: { id: 'integration' }, messages: [], step: 1 }, async () => stepDecision)
+check(
+  'agent/pre-step keeps the downstream decision when every plugin is mounted',
+  afterPreStep?.kind === 'enter' && afterPreStep?.messages?.[0] === 'kept',
+  'result=' + JSON.stringify(afterPreStep)
+)
+
+// 4. Real system-prompt/assemble waterfall: pruning must survive the invariant.
 const assembly = {
   sections: [{ name: 'persona', text: 'you are a careful engineer working on the repository' }],
   contexts: [],
