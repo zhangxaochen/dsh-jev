@@ -17,6 +17,24 @@
 import { type TypeSafeClient } from './typesafe-client.js';
 import type { CordisContext, ResultShaperConfig, ToolExecution } from './types.js';
 export declare const name = "typesafe-result-shaper";
+/** One model-facing content block, as the tools service carries it. */
+export interface ContentBlock {
+    type: string;
+    text?: string;
+    [key: string]: unknown;
+}
+/**
+ * Text of a tool result, whether it arrives as a plain string or as the block
+ * array the real tools service uses. Returning undefined means there is nothing
+ * textual to shape.
+ */
+export declare function extractText(content: unknown): string | undefined;
+/**
+ * Rebuild the content with the shaped text. In the block form the text blocks
+ * collapse into one, and every non-text block keeps its relative position —
+ * the same property DSH's own pruner preserves.
+ */
+export declare function replaceText(content: unknown, text: string): unknown;
 export declare const DEFAULT_SHAPE_TOOLS: string[];
 export declare const DROP_MARKER = "[... %d lines dropped by TypeSafe result shaper ...]";
 /** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */

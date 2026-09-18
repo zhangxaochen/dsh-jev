@@ -209,3 +209,13 @@
 - [x] 集成校验新增「挂载全部插件时 `agent/pre-step` 决策必须存活」一项（现 8/8），并把 `result-shaper` 一并挂载（此前集成校验漏挂它）
 - [x] 单测新增「pre-step 决策原样透传」，并核对代码里全部 7 处事件监听：`agent/pre-step`×2、`tools/post-execute`×2、`tools/pre-execute`×1、`system-prompt/assemble`×2——四类事件现均有真实 waterfall 覆盖
 - [x] 测试数 88 → 89
+
+## Phase 5 补充记录（服务层决策规范化，Round 21）
+
+前一轮的集成校验只驱动 `ctx.waterfall`，**绕过了 tools 服务的规范化与不变量**。本轮挂载真实 `dsh-system-prompt` + `dsh-tools`，跑通完整服务级路径（`createExecution` → `prepareExecution` → `postExecute`）。
+
+- [x] **抓到的功能缺陷**：真实 `result.content` 是**块数组**（`[{type:'text',text:...}]`），而 `result-shaper` 要求 `typeof content === 'string'` → 该模块在真实管线里从不生效（单测通过是因为我传了字符串）。新增 `extractText` / `replaceText`：兼容两种形态；块形态下文本块折叠为一个，非文本块保持相对位置（与 DSH 自身 pruner 的约定一致）
+- [x] 集成校验新增 3 项（现 11/11）：真实服务把探针调用 prepare 为 `dispatch`；`postExecute` 接受整形决策且**不违反不变量**（1592 → 226 字符）；整形后保留信息行并插入丢弃标记
+- [x] 单测新增 2 项覆盖 `extractText` / `replaceText` 的字符串与块形态、非文本块顺序保持、无文本块时追加
+- [x] 记录两处踩坑（都属我方脚本）：把守卫挂 root、client 挂子 fiber 会让 `resolveClientFrom` 取不到服务（改用 `apply` 在 root 提供）；PowerShell 双引号里的 `\n` 是字面量，导致替换的赋值行被写进注释、mock 返回空答案
+- [x] 测试数 89 → 91

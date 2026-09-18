@@ -1,6 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, DROP_MARKER, looksRepetitive, ResultShaperService, segmentText } from '../lib/result-shaper.js'
+import {
+  apply,
+  DROP_MARKER,
+  extractText,
+  looksRepetitive,
+  replaceText,
+  ResultShaperService,
+  segmentText,
+} from '../lib/result-shaper.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { CordisContext, PostToolDecision, ToolExecution } from '../lib/types.js'
 
@@ -152,4 +160,36 @@ test('apply stays silent when the decision call fails', async () => {
   const decision = await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3))
   assert.equal(decision.content, undefined)
   assert.equal(decision.kind, 'accept')
+})
+
+test('extractText reads both the string form and the block form the service uses', () => {
+  assert.equal(extractText('plain text'), 'plain text')
+  assert.equal(extractText([{ type: 'text', text: 'a' }, { type: 'image', url: 'x' }, { type: 'text', text: 'b' }]), 'a\nb')
+  assert.equal(extractText([{ type: 'image', url: 'x' }]), undefined, 'a non-text-only result has nothing to shape')
+  assert.equal(extractText(undefined), undefined)
+  assert.equal(extractText({ type: 'text', text: 'not an array' }), undefined)
+})
+
+test('replaceText collapses text blocks in place and preserves every other block order', () => {
+  assert.equal(replaceText('old', 'new'), 'new')
+
+  const rebuilt = replaceText(
+    [
+      { type: 'image', url: 'first' },
+      { type: 'text', text: 'old a' },
+      { type: 'resource', uri: 'middle' },
+      { type: 'text', text: 'old b' },
+      { type: 'image', url: 'last' },
+    ],
+    'shaped'
+  ) as Array<Record<string, unknown>>
+
+  assert.deepEqual(
+    rebuilt.map((block) => (block.type === 'text' ? block.text : block.type)),
+    ['image', 'shaped', 'resource', 'image'],
+    'rich blocks must keep their relative positions around the single text block'
+  )
+
+  const appended = replaceText([{ type: 'image', url: 'only' }], 'shaped') as Array<Record<string, unknown>>
+  assert.deepEqual(appended.map((block) => block.type), ['image', 'text'])
 })

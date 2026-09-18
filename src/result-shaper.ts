@@ -22,6 +22,52 @@ import type { CordisContext, PostToolDecision, ResultShaperConfig, ToolExecution
 
 export const name = 'typesafe-result-shaper'
 
+/** One model-facing content block, as the tools service carries it. */
+export interface ContentBlock {
+  type: string
+  text?: string
+  [key: string]: unknown
+}
+
+/**
+ * Text of a tool result, whether it arrives as a plain string or as the block
+ * array the real tools service uses. Returning undefined means there is nothing
+ * textual to shape.
+ */
+export function extractText(content: unknown): string | undefined {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return undefined
+  const parts: string[] = []
+  for (const block of content as ContentBlock[]) {
+    if (block && block.type === 'text' && typeof block.text === 'string') parts.push(block.text)
+  }
+  return parts.length > 0 ? parts.join('\n') : undefined
+}
+
+/**
+ * Rebuild the content with the shaped text. In the block form the text blocks
+ * collapse into one, and every non-text block keeps its relative position —
+ * the same property DSH's own pruner preserves.
+ */
+export function replaceText(content: unknown, text: string): unknown {
+  if (typeof content === 'string') return text
+  if (!Array.isArray(content)) return text
+  const rebuilt: ContentBlock[] = []
+  let inserted = false
+  for (const block of content as ContentBlock[]) {
+    if (block && block.type === 'text') {
+      if (!inserted) {
+        rebuilt.push({ ...block, text })
+        inserted = true
+      }
+      continue
+    }
+    rebuilt.push(block)
+  }
+  if (!inserted) rebuilt.push({ type: 'text', text })
+  return rebuilt
+}
+
 export const DEFAULT_SHAPE_TOOLS = [
   'bash',
   'pwsh',
@@ -199,8 +245,11 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
 
     try {
       if (!result || result.isError) return baseDecision
-      if (typeof result.content !== 'string') return baseDecision
-      if (!shaper.shouldConsider(exec, result.content)) return baseDecision
+      // The real service carries content as a block array; a string-only check
+      // made this module inert in the pipeline while its unit tests passed.
+      const originalText = extractText(result.content)
+      if (originalText === undefined) return baseDecision
+      if (!shaper.shouldConsider(exec, originalText)) return baseDecision
       // A downstream listener already replaced the value; content replacement
       // alongside it is rejected by the tools service.
       if (baseDecision && Object.hasOwn(baseDecision, 'value')) return baseDecision
@@ -208,10 +257,10 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
       if (baseDecision && Object.hasOwn(baseDecision, 'content')) return baseDecision
       if (baseDecision && baseDecision.kind === 'block') return baseDecision
 
-      const shaped = await shaper.shape(result.content, exec.name)
+      const shaped = await shaper.shape(originalText, exec.name)
       if (!shaped) return baseDecision
 
-      defaultMetrics.recordShape(result.content.length - shaped.text.length)
+      defaultMetrics.recordShape(originalText.length - shaped.text.length)
       defaultDecisionLog.append({
         module: 'result-shaper',
         action: 'shaped',
@@ -220,11 +269,16 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
           tool: exec.name,
           keptSegments: shaped.keptSegments,
           droppedSegments: shaped.droppedSegments,
-          charsRemoved: result.content.length - shaped.text.length,
+          charsRemoved: originalText.length - shaped.text.length,
         },
       })
 
-      return { ...(baseDecision as any), kind: 'accept', action: 'accept', content: shaped.text }
+      return {
+        ...(baseDecision as any),
+        kind: 'accept',
+        action: 'accept',
+        content: replaceText(result.content, shaped.text),
+      }
     } catch (err) {
       // Never change what the tool returned because a decision failed.
       console.warn('[TypeSafe ResultShaper] Shaping failed, returning original content:', err)

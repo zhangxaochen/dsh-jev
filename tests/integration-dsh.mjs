@@ -21,6 +21,7 @@ import * as LoopGuard from '../lib/loop-guard.js'
 import * as SafetyGuard from '../lib/safety-guard.js'
 import * as ToolPruner from '../lib/tool-pruner.js'
 import * as ResultShaper from '../lib/result-shaper.js'
+import { join as joinPath } from 'node:path'
 
 /** Locate the cordis package the host actually loaded. */
 function findCordis() {
@@ -56,6 +57,12 @@ function check(name, condition, detail) {
 /** Answer the two question sets the guards ask, based on the question ids. */
 async function answersFor(req) {
   const ids = Object.keys(req.questions ?? {})
+  if (ids.every((id) => id.startsWith('keep_'))) {
+    // Result shaper: keep the segment that carries the informative lines.
+    const answers = {}
+    for (const id of ids) answers[id] = { type: 'noul', noul: id === 'keep_6' ? 0.95 : 0.02 }
+    return answers
+  }
   if (ids.includes('stuck_severity')) {
     return {
       has_progress: { type: 'noul', noul: 0.1 },
@@ -151,6 +158,72 @@ check(
   'the assembled result keeps the fields the harness invariant requires',
   typeof assembled.sections?.[0]?.text === 'string' && Array.isArray(assembled.contexts)
 )
+
+// 5. Service-level pass: run one tool call through the real Tools service so its
+//    decision normalization and invariants execute, not just the bare waterfall.
+try {
+  const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+  const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)
+  const SystemPrompt = await loadPkg('@deepseek-ai/dsh-system-prompt')
+  const Tools = await loadPkg('@deepseek-ai/dsh-tools')
+
+  const serviceCtx = new Context()
+  serviceCtx.plugin(SystemPrompt.default ?? SystemPrompt)
+  serviceCtx.plugin(Tools.default ?? Tools, { mode: 'native' })
+  // The client must live in the scope the guards resolve from.
+  ClientPlugin.apply(serviceCtx, { mockHandler: answersFor })
+  const repetitive = [
+    ...Array.from({ length: 40 }, () => 'progress: chunk ok'),
+    'IMPORTANT error at src/a.ts',
+    'IMPORTANT detail',
+    'stack: at run (src/a.ts:12)',
+    ...Array.from({ length: 40 }, () => 'progress: chunk ok'),
+  ].join('\n')
+  ResultShaper.apply(serviceCtx, {
+    thresholdChars: 10,
+    shapeTools: ['noisy_tool'],
+    linesPerSegment: 3,
+    maxSegments: 24,
+  })
+
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  const tools = serviceCtx.get('tools')
+  tools.register({
+    name: 'noisy_tool',
+    description: 'integration probe',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+    async execute() {
+      return { ok: true }
+    },
+  })
+
+  const created = tools.createExecution({
+    name: 'noisy_tool',
+    arguments: {},
+    signal: new AbortController().signal,
+  })
+  const prepared = await tools.prepareExecution(created.exec, (p) => p)
+  check('the real service prepares the probe call for dispatch', prepared.kind === 'dispatch', 'kind=' + prepared.kind)
+
+  const exec = prepared.exec ?? prepared
+  const afterPost = await tools.postExecute(exec, { content: [{ type: 'text', text: repetitive }] })
+  const shapedText = afterPost?.content?.[0]?.text ?? ''
+  check(
+    'the service accepts the shaper decision and keeps the invariants intact',
+    Array.isArray(afterPost?.content) && shapedText.length < repetitive.length,
+    'chars ' + repetitive.length + ' -> ' + shapedText.length
+  )
+  check(
+    'the shaped content keeps the informative lines and marks what it dropped',
+    shapedText.includes('IMPORTANT error at src/a.ts') &&
+      /dropped by TypeSafe result shaper/.test(shapedText),
+    'marker=' + /dropped by TypeSafe result shaper/.test(shapedText)
+  )
+} catch (err) {
+  check('service-level pass runs', false, err instanceof Error ? err.message : String(err))
+}
 
 const failed = results.filter((entry) => !entry.ok)
 console.log('\n' + (failed.length === 0 ? 'all integration checks passed' : failed.length + ' integration check(s) failed'))
