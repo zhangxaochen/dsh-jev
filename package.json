@@ -26,6 +26,10 @@
       "types": "./lib/tool-pruner.d.ts",
       "default": "./lib/tool-pruner.js"
     },
+    "./metrics": {
+      "types": "./lib/metrics.d.ts",
+      "default": "./lib/metrics.js"
+    },
     "./types": {
       "types": "./lib/types.d.ts",
       "default": "./lib/types.js"

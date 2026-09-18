@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { noul, score, TypeSafeClient } from './client.js'
+import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,
   LoopGuardConfig,
@@ -147,6 +148,9 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         const isSeverelyStuck = scoreVal >= (stuckSeverityThreshold > 1.5 ? 1.4 : stuckSeverityThreshold)
 
         if (!hasProgress && isSeverelyStuck) {
+          const outcome = scoreVal >= 2.5 ? 'interrupt' : 'warn'
+          defaultMetrics.recordLoopCheck(outcome)
+
           const confidenceInfo = stuckResult?.confidence ? ` (confidence: ${(stuckResult.confidence * 100).toFixed(0)}%)` : ''
           const reminderText =
             `[TypeSafe LoopGuard] Potential loop or stagnation detected on tool "${exec.name}". ` +
@@ -188,6 +192,8 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           }
 
           return decisionResult
+        } else {
+          defaultMetrics.recordLoopCheck('normal')
         }
       } catch (err) {
         // Loop guard fails open (safe against guard crashes)

@@ -5,6 +5,7 @@
  */
 
 import { noul, score, TypeSafeClient } from './client.js'
+import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,
   NoulResult,
@@ -117,6 +118,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
 
         // 1. Critical risk / high probability hazard -> DENY
         if (maxHazardProb >= blockThreshold || riskScore >= 1.7) {
+          defaultMetrics.recordSafetyCheck('deny')
           const reason =
             `[TypeSafe SafetyGuard] Execution blocked: Tool action deemed high risk ` +
             `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
@@ -132,9 +134,11 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         // In headless mode, moderate risk is logged and fails-open to next().
         if (maxHazardProb >= askApprovalThreshold || riskScore >= 0.7) {
           if (isHeadless) {
+            defaultMetrics.recordSafetyCheck('pass')
             return next()
           }
 
+          defaultMetrics.recordSafetyCheck('ask')
           const reason =
             `[TypeSafe SafetyGuard] Approval required: Tool action requires confirmation ` +
             `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
@@ -145,6 +149,8 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
             reason,
           }
         }
+
+        defaultMetrics.recordSafetyCheck('pass')
       } catch (err) {
         console.warn('[TypeSafe SafetyGuard] Inspection failed, defaulting to configured policy:', err)
       }

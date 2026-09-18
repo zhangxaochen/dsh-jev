@@ -12,6 +12,7 @@ import type {
   SystemOneRequest,
   TypeSafeClientConfig,
 } from './types.js'
+import { defaultMetrics } from './metrics.js'
 
 export const DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1/systemone'
 export const DEFAULT_MODEL = 'jev-latest'
@@ -64,10 +65,17 @@ export class TypeSafeClient {
    * Execute parallel questions against a single state context.
    */
   async systemOne(req: SystemOneRequest): Promise<Record<string, QuestionResult>> {
+    const start = Date.now()
     // 1. If mock handler is provided, execute mock
     if (this.mockHandler) {
-      const raw = await this.mockHandler(req)
-      return this.normalizeAnswers(raw)
+      try {
+        const raw = await this.mockHandler(req)
+        defaultMetrics.recordCall(Date.now() - start, true)
+        return this.normalizeAnswers(raw)
+      } catch (err) {
+        defaultMetrics.recordCall(Date.now() - start, false)
+        throw err
+      }
     }
 
     // 2. Validate API key
@@ -104,7 +112,11 @@ export class TypeSafeClient {
 
       const data = (await res.json()) as any
       const answers: Record<string, QuestionResult> = data.answers || data.results || data
+      defaultMetrics.recordCall(Date.now() - start, true)
       return this.normalizeAnswers(answers)
+    } catch (err) {
+      defaultMetrics.recordCall(Date.now() - start, false)
+      throw err
     } finally {
       clearTimeout(timer)
     }

@@ -5,6 +5,7 @@
  */
 
 import { score, TypeSafeClient } from './client.js'
+import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,
   ScoreResult,
@@ -107,7 +108,9 @@ export class ToolPrunerService {
         .slice(0, capacity)
         .map((item) => item.tool)
 
-      return [...retainedTools, ...selected]
+      const finalTools = [...retainedTools, ...selected]
+      defaultMetrics.recordPrune(candidates.length, finalTools.length)
+      return finalTools
     } catch (err) {
       console.warn('[TypeSafe ToolPruner] Pruning failed, returning original candidate list:', err)
       return candidates
