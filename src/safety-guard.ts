@@ -88,9 +88,27 @@ export function inspectableText(exec: ToolExecution): string[] {
 }
 
 /** Flags and targets of a delete command, without regex golf on quoting. */
+/**
+ * A top-level system directory, or a whole home tree.
+ *
+ * Denying `rm -rf /` alone left `/etc` and `/usr` to the semantic layer, which is
+ * the wrong side of that trade: a miss there costs everything, and the list is
+ * small and stable. Only the directory itself (optionally with a `/*` glob) is
+ * matched — `/etc/nginx` and `/home/user/project` are scoped work for the model to
+ * judge, not shapes for a pattern to forbid.
+ */
+const SYSTEM_ROOT_DIRS =
+  /^(?:\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev|home|Users)\/?|\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev)\/\*|\/home\/[^/\s]+\/?|\/home\/[^/\s]+\/\*|\/Users\/[^/\s]+\/?|\/Users\/[^/\s]+\/\*|[a-zA-Z]:\\Users\\[^\\\s]+\\?)$/i
+
 function looksLikeRootDelete(text: string): boolean {
   for (const segment of text.split(/[\n\r;&|]+/)) {
-    const tokens = segment.trim().split(/\s+/).filter(Boolean)
+    // A shell wrapper quotes the payload (`bash -c "rm -rf /"`), which would leave
+    // the verb as the token `"rm` and hide the whole command from this check.
+    const tokens = segment
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => token.replace(/^['"]+|['"]+$/g, ''))
     if (tokens.length < 2) continue
     const verbIndex = tokens.findIndex((token) => /(^|\/)(rm|del|rd|rmdir|remove-item)$/i.test(token))
     if (verbIndex === -1) continue
@@ -99,8 +117,10 @@ function looksLikeRootDelete(text: string): boolean {
     const targets = rest.filter((token) => !flags.includes(token) && !/^\/[a-z]$/i.test(token))
     const recursive = flags.some((flag) => /^(?:-{1,2}(?:recursive|r[a-z]*|f[a-z]*)|-[a-z]*r[a-z]*|\/s|\/e)$/i.test(flag))
     const force = flags.some((flag) => /^(?:-{1,2}(?:force|f[a-z]*)|-[a-z]*f[a-z]*|\/f|\/q|\/y)$/i.test(flag))
-    const rootish = targets.some((token) =>
-      /^(?:\/|\/\*|~|~\/|\$HOME|\$HOME\/|\$\{HOME\}\/?|[a-zA-Z]:\\?|[a-zA-Z]:\\?\*)$/.test(token)
+    const rootish = targets.some(
+      (token) =>
+        /^(?:\/|\/\*|~|~\/|\$HOME|\$HOME\/|\$\{HOME\}\/?|[a-zA-Z]:\\?|[a-zA-Z]:\\?\*)$/.test(token) ||
+        SYSTEM_ROOT_DIRS.test(token)
     )
     if (recursive && force && rootish) return true
   }
@@ -125,7 +145,7 @@ export const HARD_DENY_RULES: HardDenyRule[] = [
   {
     id: 'credential-exfiltration',
     reason: 'uploading or piping private key material off the machine',
-    test: /(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr)\b[^\n]*(?:-d\s*@|-F\s*\w+=@|--data(?:-binary)?\s*@|-InFile\b|--upload-file\b)[^\n]*(?:\.ssh|\.aws|\.env|id_rsa|id_ed25519|credentials|keystore|\.pem)\b|(?:cat|type|Get-Content)\b[^\n]*(?:\.ssh\/id_|\.aws\/credentials|\.env)\b[^\n]*\|\s*(?:curl|wget|nc|Invoke-WebRequest|iwr)\b/i,
+    test: /(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr)\b[^\n]*(?:-d\s*@|-F\s*\w+=@|--data(?:-binary)?\s*@|-InFile\b|--upload-file\b)[^\n]*(?:\.ssh|\.aws|\.env|id_rsa|id_ed25519|credentials|keystore|\.pem)\b|(?:cat|type|Get-Content)\b[^\n]*(?:\.ssh\/id_(?:rsa|ed25519|ecdsa|dsa)|\.aws\/credentials|\.env)\b[^\n]*\|\s*(?:curl|wget|nc|Invoke-WebRequest|iwr)\b/i,
   },
   {
     id: 'fork-bomb',
