@@ -4,3 +4,6 @@ dist
 .env
 .DS_Store
 *.tgz
+
+# Scratch scripts and one-off measurement harnesses
+tmp/
