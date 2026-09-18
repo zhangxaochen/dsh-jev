@@ -517,3 +517,13 @@
 - [x] 新增 `tests/live-turn.ts` + `pnpm run verify:turn`：全模块 + 真实模型 + 真实装配的整轮演练；实测工具面 12 → 5、路由恰好 1 条建议、整形 32.7KB → 237 字符，单轮语义开销约 2.7–3.1s
 - [x] 排查中修正自身两处错误：舞练一度传 `sections` 给 `assemble()`（该参数是**上下文**，section 须经 `ctx.systemPrompt.section({name,order,text})` 注册），导致两个模块都在对**空目标**排序；另修正了「阈值 2 一定错」的初判
 - [x] 单测 +2（下限补齐、无目标跳过）；测试数 117 → 119；README 增两个配置项说明并纳入文档一致性断言
+
+## Phase 5 补充记录（闸门是否真跑发布代码，Round 51）
+
+延续第 50 轮的问题类别（「发布路径从未被真正执行」），系统审计 CI 闸门本身。
+
+- [x] **发现结构性缺陷**：`bench/run.ts` 的 `loopVerdict` / `safetyVerdict` 把阈值**抄了一份**（0.3/0.6/0.5 与 0.85/1.7/0.5/0.7），而 bench 正是这两个模块的 CI 闸门 → 改发布阈值不会让闸门失败
+- [x] 修复：抽出纯函数并由模块导出——`evaluateStuckTrajectory`（loop-guard）、`evaluateHazard`（safety-guard）——插件与 bench 共用；**离线数字完全不变**（36 条 / 34 正确 / 2 knownMiss / 误报 0）即为忠实抽取的证据
+- [x] 顺带查清闸门分工：loop 阈值由 **bench** 拦下（改前不会）；安全阈值由**单测**拦下——原因是 bench 的四个语义用例全部经 `risk_score` 判定（2 / 1.2 / 1.48 / 1.37），危害概率均 ≈0，模型把危害与风险高度耦合。**这是分工而非缺口**：bench 覆盖模型真实走的路径，单测覆盖阈值区间
+- [x] 演练修正两处自身问题：bench 会重写受跟踪的 `docs/calibration/bench-*.json` 使演练残留脏树 → 新增 `--no-artifacts`；安全阈值演练的归属改为覆盖它的那道闸门
+- [x] 演练现状 **14/14**，跑完工作树干净；`docs/calibration.md` 新增 §13
