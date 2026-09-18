@@ -225,3 +225,62 @@ test('the test run is isolated from the operator state by the preloaded env', ()
   assert.ok(process.env.DSH_JEV_DECISIONS_PATH, 'decision log path must be redirected for tests')
   assert.doesNotMatch(resolveMetricsPath(), /\.dsh[\\/]jev-stats\.json$/)
 })
+
+test('applySuite registers the DSH fetch route and serves the same payload there', async () => {
+  // The webServer route above was the only one exercised; the connection.fetch
+  // registration DSH actually uses was never invoked, so its payload, its reset
+  // and its cache headers had no gate.
+  let registeredFetch: any
+
+  const fakeCtx: any = {
+    on: () => () => {},
+    provide: () => () => {},
+    tools: { register: () => () => {} },
+    connection: {
+      fetch: {
+        register: (route: any) => {
+          registeredFetch = route
+          return () => {
+            registeredFetch = undefined
+          }
+        },
+      },
+    },
+  }
+
+  const dispose = applySuite(fakeCtx, { client: { mockHandler: () => ({}) } })
+
+  assert.ok(registeredFetch, 'the fetch route must be registered')
+  assert.equal(registeredFetch.path, '/api/dsh-jev/stats')
+  assert.deepEqual(registeredFetch.methods, ['GET', 'POST'])
+
+  const getResponse = await registeredFetch.fetch({ method: 'GET' })
+  assert.equal(getResponse.headers.get('cache-control'), 'no-store', 'the panel must never read a cached copy')
+  assert.match(getResponse.headers.get('content-type') ?? '', /application\/json/)
+
+  const payload = await getResponse.json()
+  assert.equal(payload.version, 2)
+  assert.ok(Object.hasOwn(payload, 'bench'), 'the fetch payload carries the last bench summary too')
+  assert.ok(payload.systemOne && typeof payload.systemOne.totalCalls === 'number')
+
+  // A POST with reset clears the counters instead of only reporting them.
+  defaultMetrics.recordCall(120, true)
+  assert.ok(defaultMetrics.getSnapshot().systemOne.totalCalls > 0)
+  const resetResponse = await registeredFetch.fetch({
+    method: 'POST',
+    json: async () => ({ reset: true }),
+  })
+  assert.equal((await resetResponse.json()).systemOne.totalCalls, 0)
+
+  // A malformed body must not throw out of the handler.
+  const junk = await registeredFetch.fetch({
+    method: 'POST',
+    json: async () => {
+      throw new Error('not json')
+    },
+  })
+  assert.equal(junk.status, 200)
+
+  dispose()
+  assert.equal(registeredFetch, undefined)
+})

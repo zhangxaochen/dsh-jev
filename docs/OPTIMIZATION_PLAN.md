@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **119** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **123** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -535,3 +535,13 @@
 - [x] 全库复扫确认无其他副本：`tests/`、`bench/` 中其余 `0.85`/`1.7` 字样均为测试夹具里的同数字（分数、版本号、置信度），非规则副本
 - [x] 新增演练条目（改 `DEFAULT_P_LOOP_THRESHOLD` → `verify:live` 必须失败）并引入 `needsKey` 标记：无 Key 的机器记为 **SKIPPED**，避免把网络失败误算成拦下回归
 - [x] 演练 **15/15**，工作树干净；`docs/calibration.md` §13.4 记录
+
+## Phase 5 补充记录（覆盖率审计，Round 53）
+
+用 Node 内置覆盖率把「闸门是否真跑发布路径」量化，而不是靠推理。
+
+- [x] **缺口 1**：`index.js` 的 `connection.fetch.register` 路由处理器**从未被任何用例调用**——既有用例只测 webServer 形态与路径字符串，而 DSH 实际走 fetch 注册；其载荷、POST reset、`no-store` 头均无闸门。新增用例驱动该处理器并断言四项行为
+- [x] **缺口 2**：客户端真实 `fetch` 与缓存**从未执行**（其余用例全走 `mockHandler` 短路）。新增 fetch stub 用例覆盖：序列化、同载荷不重复往返、TTL 过期重取、返回副本不污染缓存、非 2xx 错误文案
+- [x] 覆盖率（`lib/*.js` 口径）：整体 **91.33% → 93.89% 行**；`index.js` **68.91% → 81.65%**；`typesafe-client.js` **79.78% → 92.78%**；测试数 119 → 123
+- [x] 顺带清理死代码：按「导出符号是否被任何闸门引用」扫描 17 处候选，逐一定性后仅 `topBucketIndex` 为真死代码（src 内 0 使用、无引用、README 未提及）→ 删除；其余为常量/内部辅助，其中 `measureRemovedTools` 的**回退分支**本轮补了用例
+- [x] 记录剩余未覆盖部分的归属（插件接线由 `verify:dsh` 覆盖），并写入 `docs/calibration.md` §14；README 增补覆盖率命令

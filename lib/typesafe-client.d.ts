@@ -67,8 +67,6 @@ export declare function noulProbability(result: unknown): number | undefined;
 export declare function topBucketProbability(result: unknown): number | undefined;
 /** Score answer confidence, or `undefined` when the answer is unusable. */
 export declare function scoreConfidence(result: unknown): number | undefined;
-/** Highest criteria index for a rubric of `criteriaCount` items. */
-export declare function topBucketIndex(criteriaCount: number): number;
 /**
  * Resolve the shared client from a context.
  *

@@ -86,3 +86,64 @@ test('Cordis plugin mounting and teardown', () => {
   dispose()
   assert.equal(fakeContext.typesafe, undefined)
 })
+
+test('TypeSafeClient fetches for real, caches identical payloads and reports failures', async () => {
+  // Every other test here takes the mockHandler shortcut, so the fetch path, the
+  // cache write and the error message had no gate at all.
+  const realFetch = globalThis.fetch
+  const calls: Array<{ body: string }> = []
+  let behaviour: 'ok' | 'http-error' = 'ok'
+
+  globalThis.fetch = (async (_url: string, init: any) => {
+    calls.push({ body: String(init?.body ?? '') })
+    if (behaviour === 'http-error') {
+      return { ok: false, status: 429, text: async () => 'rate limited' }
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ answers: { q1: { type: 'noul', noul: 0.77 } } }),
+    }
+  }) as any
+
+  try {
+    const client = new TypeSafeClient({ apiKey: 'test-key' })
+    const request = () => client.systemOne({ state: { a: 1 }, questions: { q1: noul('is it true?') } })
+
+    const first = await request()
+    assert.equal((first.q1 as any).noul, 0.77)
+    assert.match(calls[0].body, /is it true\?/, 'the question must be serialized into the body')
+
+    // Identical payload within the TTL is served from memory.
+    const second = await request()
+    assert.equal((second.q1 as any).noul, 0.77)
+    assert.equal(calls.length, 1, 'an identical payload must not round trip twice')
+
+    // A different payload does go out.
+    await client.systemOne({ state: { a: 2 }, questions: { q1: noul('is it true?') } })
+    assert.equal(calls.length, 2)
+
+    // The same key after the TTL expires goes out again.
+    const expiring = new TypeSafeClient({ apiKey: 'test-key', cacheTtlMs: 1 })
+    await expiring.systemOne({ state: { a: 3 }, questions: { q1: noul('ttl?') } })
+    const before = calls.length
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await expiring.systemOne({ state: { a: 3 }, questions: { q1: noul('ttl?') } })
+    assert.equal(calls.length, before + 1, 'an expired entry must be refetched')
+
+    // A caching client hands out copies, so one caller cannot corrupt another.
+    const shared = await request()
+    ;(shared.q1 as any).noul = 0
+    const again = await request()
+    assert.equal((again.q1 as any).noul, 0.77, 'the cached answer must not be mutated through a returned object')
+
+    behaviour = 'http-error'
+    await assert.rejects(
+      () => client.systemOne({ state: { a: 4 }, questions: { q1: noul('fail?') } }),
+      /status 429: rate limited/,
+      'the status and body belong in the error'
+    )
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})

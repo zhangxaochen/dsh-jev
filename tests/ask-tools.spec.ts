@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { MAX_RANK_CANDIDATES, registerJevTools } from '../lib/ask-tools.js'
+import { MAX_RANK_CANDIDATES, projectAnswer, registerJevTools } from '../lib/ask-tools.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { CordisContext } from '../lib/types.js'
 
@@ -133,4 +133,40 @@ test('registerJevTools returns disposers and tolerates a host without tools', ()
 
   const bare: CordisContext = { on: () => () => {} }
   assert.deepEqual(registerJevTools(bare, () => new TypeSafeClient({ mockHandler: async () => ({}) })), [])
+})
+
+test('projectAnswer keeps the primitive shape the model consumes', () => {
+  // This projection is the contract callers read: the tool result must say which
+  // kind of answer it is, and an unusable one must say so rather than look like a
+  // confident zero.
+  assert.deepEqual(projectAnswer('q1', undefined), { id: 'q1', unknown: true })
+  assert.deepEqual(projectAnswer('q1', { type: 'noul', unknown: true } as any), { id: 'q1', unknown: true })
+
+  assert.deepEqual(projectAnswer('q2', { type: 'noul', noul: 0.83 } as any), {
+    id: 'q2',
+    kind: 'noul',
+    probability: 0.83,
+  })
+
+  // The harness has carried the value under either name.
+  assert.deepEqual(projectAnswer('q3', { type: 'noul', probability: 0.41 } as any), {
+    id: 'q3',
+    kind: 'noul',
+    probability: 0.41,
+  })
+
+  assert.deepEqual(
+    projectAnswer('q4', { type: 'score', score: 1.6, confidence: 0.9, probabilities: { '0': 0, '1': 0.4, '2': 0.6 } } as any),
+    { id: 'q4', kind: 'score', score: 1.6, confidence: 0.9, probabilities: { '0': 0, '1': 0.4, '2': 0.6 } }
+  )
+
+  const choice = projectAnswer('q5', {
+    type: 'choice',
+    choice: 'deny',
+    confidence: 0.88,
+    probabilities: { allow: 0.12, deny: 0.88 },
+  } as any)
+  assert.equal(choice.kind, 'choice')
+  assert.equal(choice.choice, 'deny')
+  assert.deepEqual(choice.probabilities, { allow: 0.12, deny: 0.88 })
 })

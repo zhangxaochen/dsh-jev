@@ -314,8 +314,11 @@ pnpm run verify:router
 # 线上验证：整轮演练（全部模块 + 真实模型 + 真实装配，给出单轮语义开销）
 pnpm run verify:turn
 
-# 守卫网自检：对 12 条承诺注入对应回归，确认至少有一道闸门拦下（需干净工作树；无 DSH 时 2 条自动跳过）
+# 守卫网自检：对 15 条承诺注入对应回归，确认至少有一道闸门拦下（需干净工作树；无 DSH/Key 时相应条目跳过）
 pnpm run drill
+
+# 覆盖率审计：查看哪些发布代码没有被任何离线用例执行（Node 内置，无额外依赖）
+node --experimental-test-coverage --test-coverage-include='lib/*.js' --test --import ./tests/isolate.mjs tests/*.spec.ts
 
 # A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
 pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json

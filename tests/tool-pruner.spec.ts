@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ToolPrunerService } from '../lib/tool-pruner.js'
+import { measureRemovedTools, ToolPrunerService } from '../lib/tool-pruner.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { ToolDefinitionMinimal } from '../lib/types.js'
 
@@ -231,4 +231,46 @@ test('ToolPrunerService leaves the surface alone without a usable goal', async (
   const kept = await pruner.pruneTools('commit and push the staged changes', candidates)
   assert.deepEqual(kept.map((tool) => tool.name), ['git_commit'], 'a real goal still prunes')
   assert.equal(calls, 1)
+})
+
+test('measureRemovedTools prices through the meter and falls back when it refuses', () => {
+  const pruned = [
+    { name: 'a', description: 'first tool' },
+    { name: 'b', description: 'second tool' },
+  ]
+  const expectedChars = pruned.reduce((total, tool) => total + Array.from(JSON.stringify(tool)).length, 0)
+
+  // No meter: the documented local heuristic, reported as such.
+  const heuristic = measureRemovedTools(undefined, pruned)
+  assert.equal(heuristic.removedChars, expectedChars)
+  assert.equal(heuristic.tokenSource, 'heuristic')
+  assert.ok(heuristic.estimatedTokens > 0, 'a fallback estimate is still reported')
+
+  // A working meter is preferred, and its numbers are the ones reported.
+  const priced = measureRemovedTools({ estimateMessage: () => 42 }, pruned)
+  assert.equal(priced.tokenSource, 'tokenMeter')
+  assert.equal(priced.estimatedTokens, 42 * pruned.length)
+  assert.equal(priced.removedChars, expectedChars, 'characters are counted locally either way')
+
+  // A meter that throws, or returns something unusable, must not break the
+  // accounting: the fallback covers it and the source says so.
+  const refusing = measureRemovedTools(
+    {
+      estimateMessage: () => {
+        throw new Error('unsupported shape')
+      },
+    },
+    pruned
+  )
+  assert.equal(refusing.tokenSource, 'heuristic')
+  assert.ok(refusing.estimatedTokens > 0)
+
+  const nonsense = measureRemovedTools({ estimateMessage: () => Number.NaN }, pruned)
+  assert.equal(nonsense.tokenSource, 'heuristic', 'a non-finite estimate is not a price')
+
+  assert.deepEqual(measureRemovedTools(undefined, []), {
+    removedChars: 0,
+    estimatedTokens: 0,
+    tokenSource: 'heuristic',
+  })
 })

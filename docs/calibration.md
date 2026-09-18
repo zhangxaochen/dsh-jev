@@ -407,3 +407,39 @@ const fires = !unknown && progressProb < 0.3 && pLoop >= 0.6 && confidence >= 0.
 新增演练条目：把 `DEFAULT_P_LOOP_THRESHOLD` 改为 0.99 后该脚本必须失败（修前不会）。该条目需要 API Key，故演练新增 `needsKey` 标记——无 Key 的机器上记为 **SKIPPED**，避免把「连不上网络」误算成「成功拦下回归」。
 
 演练现状：**15/15**。
+
+## 14. 覆盖率审计：哪些发布代码没有任何闸门执行（2026-09-19）
+
+第 50–52 轮的问题是「闸门没跑发布路径」。这次用**覆盖率**把它量化，而不是靠推理。
+
+命令（Node 内置，无需额外依赖）：
+
+```bash
+node --experimental-test-coverage --test-coverage-include='lib/*.js' \
+     --test --import ./tests/isolate.mjs tests/*.spec.ts
+```
+
+### 14.1 审计发现的两处真实缺口
+
+| 缺口 | 证据 | 修复后 |
+|---|---|---|
+| `index.js` 的 **`connection.fetch.register` 路由处理器从未被调用**：既有用例只断言了 `handler`（webServer 形态）与路径字符串，而 DSH 实际走的是 fetch 注册；其载荷、POST reset 与 `no-store` 头都无闸门 | `index.js` 行覆盖 68.91%，未覆盖 147-178 | 新增用例驱动注册的 `fetch`：GET 载荷含 `bench`、`cache-control: no-store`、POST `{reset:true}` 清零、畸形 body 不抛 |
+| **客户端的真实 `fetch` 路径与缓存从未执行**：其余用例都走 `mockHandler` 短路；`fetch` 调用、非 2xx 错误文案、缓存写入/TTL/上限都无闸门 | `typesafe-client.js` 行覆盖 79.78%，未覆盖 136-171 | 新增用例以 fetch stub 覆盖：序列化正确、同载荷不重复往返、TTL 过期重取、返回副本不可污染缓存、`status 429: rate limited` |
+
+覆盖变化（`lib/*.js` 口径）：整体 **91.33% → 93.89% 行**；`index.js` **68.91% → 81.65%**；`typesafe-client.js` **79.78% → 92.78%**。测试数 119 → 123。
+
+### 14.2 同时清掉的死代码
+
+按「导出的符号在任何闸门里是否被引用」扫描全部 `src/*.ts`（17 处未被按名引用），逐一定性后只有一处是**真死代码**：`topBucketIndex`（`src` 内部 0 处使用、无闸门引用、README 未提及）→ 删除。其余为常量或内部辅助，均在发布路径中被间接执行（例如 `measureRemovedTools` 的**回退分支**本轮补上了用例）。
+
+### 14.3 剩余未覆盖部分的归属
+
+按同一口径，剩余未覆盖集中在**插件接线**而非业务规则：
+
+| 未覆盖区域 | 由谁覆盖 |
+|---|---|
+| `tool-pruner.js` 183-216、`loop-guard.js` / `safety-guard.js` 的 `apply()` 段 | `pnpm run verify:dsh`（真实 Cordis 运行时挂载插件并驱动 waterfall） |
+| `index.js` 238-256（webServer 形态的第二条注册路径） | `tests/metrics.spec.ts` 的 `handler` 用例覆盖了行为，但该分支本身的**注册**仅在宿主中发生 |
+| 各模块的 catch/降级分支 | 单测的部分错误路径（如「决策调用失败仍返回原文」） |
+
+单测行覆盖率高不等于行为被验证——本轮的价值恰恰在于：**两段覆盖率数字看着不低的模块，各藏着一整条从未执行过的用户可见路径**。

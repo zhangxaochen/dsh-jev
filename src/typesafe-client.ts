@@ -280,10 +280,6 @@ export function scoreConfidence(result: unknown): number | undefined {
   return typeof r.confidence === 'number' ? r.confidence : undefined
 }
 
-/** Highest criteria index for a rubric of `criteriaCount` items. */
-export function topBucketIndex(criteriaCount: number): number {
-  return Math.max(0, criteriaCount - 1)
-}
 
 function cloneAnswers(answers: Record<string, QuestionResult>): Record<string, QuestionResult> {
   return JSON.parse(JSON.stringify(answers)) as Record<string, QuestionResult>
