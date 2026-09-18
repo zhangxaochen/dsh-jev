@@ -94,12 +94,26 @@ export function runDoctor({ repoRoot, dshHome }) {
     } catch {
       installedVersion = undefined
     }
-    return { profile: entry.profile, dir: entry.dir, installedVersion, ...builds }
+    // The profile manifest names an exact version, and the installed copy is
+    // replaced in place, so the two drift. The declaration is what the next
+    // `pnpm install` in that profile resolves - which any `dsh plugin add` runs -
+    // so a stale one would silently replace the synced build with the old version.
+    let declaredVersion
+    try {
+      const manifest = JSON.parse(readFileSync(join(dirname(dirname(entry.dir)), 'package.json'), 'utf8'))
+      declaredVersion = manifest?.dependencies?.['dsh-jev']
+    } catch {
+      declaredVersion = undefined
+    }
+    return { profile: entry.profile, dir: entry.dir, installedVersion, declaredVersion, ...builds }
   })
 
   const running = readRunningState(dshHome)
   const copiesMatch = profiles.length > 0 && profiles.every((entry) => entry.ok)
   const versionsMatch = profiles.every((entry) => entry.installedVersion === repoVersion)
+  const declaredMatch = profiles.every(
+    (entry) => entry.declaredVersion === undefined || entry.declaredVersion === entry.installedVersion
+  )
 
   return {
     repoVersion,
@@ -108,6 +122,7 @@ export function runDoctor({ repoRoot, dshHome }) {
     verdict: {
       copiesMatch,
       versionsMatch,
+      declaredMatch,
       restartRequired: copiesMatch && !running.loadedMeasuredBuild,
       ready: copiesMatch && versionsMatch && running.loadedMeasuredBuild,
     },
@@ -123,7 +138,11 @@ function render(report) {
   }
   for (const entry of report.profiles) {
     const state = entry.ok ? 'build in sync' : `MISMATCH (${entry.mismatched.length} changed, ${entry.missing.length} missing)`
-    lines.push(`profile ${entry.profile}: version ${entry.installedVersion ?? 'unknown'} · ${state}`)
+    const declared =
+      entry.declaredVersion !== undefined && entry.declaredVersion !== entry.installedVersion
+        ? ` (manifest declares ${entry.declaredVersion})`
+        : ''
+    lines.push(`profile ${entry.profile}: version ${entry.installedVersion ?? 'unknown'}${declared} · ${state}`)
     for (const name of [...entry.mismatched, ...entry.missing]) lines.push(`  - ${name}`)
   }
 

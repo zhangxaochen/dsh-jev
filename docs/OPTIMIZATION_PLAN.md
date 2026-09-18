@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **155** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **160** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -784,3 +784,12 @@
 原 Phase 0–5 的实现提交均为**代码 + 计划同提交**（66 条中的主体），协议对「phase」这一级是照做的。
 
 **不重写历史**：内容正确，重写 12 个提交只会带来风险而无收益；此表即为如实记录。
+
+## Phase 5 补充记录（部署声明漂移，Round 84）
+
+- [x] 检查「重启能否生效」时发现**操作性风险**：profile 清单用精确版本声明插件（`dsh-jev: 0.1.0`），而 `sync` 是原地替换安装副本（实际 **0.2.0**）→ 该 profile 里**任何一次 `pnpm install`**（任何 `dsh plugin add` 都会跑）都会把同步进去的 0.2.0 **静默换回 0.1.0**
+- [x] 同时确认挂载无误：`dsh.profile.bundles` 含 `dsh-jev`，故重启会加载它（只是加载的代码与声明不一致）
+- [x] 修复 1：`sync-profiles.js` 同步后**对齐声明版本**——只改该依赖、其他不动；已一致/无清单/未声明时**不写入**；`--dry-run` 不写。实测本机 profile 由 `0.1.0` 对齐为 `0.2.0`，其余依赖保持原值
+- [x] 修复 2：`doctor` 新增 `declaredVersion` 与 `verdict.declaredMatch`，报告以 `(manifest declares 0.1.0)` 点出漂移
+- [x] 自查修正：首版路径少了一层（`<profile>/node_modules/dsh-jev` 的清单在上两级），对齐未生效；修正后实测生效
+- [x] 测试数 155 → 160（sync +4、doctor +1）；README 增补该行为的说明；`docs/calibration.md` §19

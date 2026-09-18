@@ -15,7 +15,7 @@
  * only picked up after the host restarts. The script says so when it finishes.
  */
 
-import { copyFileSync, cpSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -58,6 +58,33 @@ export function installPayload(repoRoot) {
 }
 
 /**
+ * Align the profile's declared dependency with the version it was just given.
+ *
+ * The profile manifest names an exact version (`"dsh-jev": "0.1.0"`), and the
+ * installed copy is replaced in place, so the two drift apart: the deployment
+ * declares 0.1.0 while running 0.2.0 code. The next `pnpm install` in that profile
+ * - which any `dsh plugin add` performs - would then resolve the declared version
+ * and silently replace the synced build with the old one.
+ *
+ * @returns the version it was changed from, or undefined when nothing changed
+ */
+export function alignDeclaredVersion(profileDir, version) {
+  const manifest = join(profileDir, 'package.json')
+  if (!existsSync(manifest)) return undefined
+  let parsed
+  try {
+    parsed = JSON.parse(readFileSync(manifest, 'utf8'))
+  } catch {
+    return undefined
+  }
+  const declared = parsed?.dependencies?.[PLUGIN_NAME]
+  if (declared === undefined || declared === version) return undefined
+  parsed.dependencies[PLUGIN_NAME] = version
+  writeFileSync(manifest, JSON.stringify(parsed, null, 2) + '\n', 'utf8')
+  return declared
+}
+
+/**
  * Sync the repo build into the selected profiles.
  * @returns a per-profile report of what was written
  */
@@ -66,9 +93,11 @@ export function syncProfiles({ repoRoot, dshHome, profile, dryRun = false }) {
   const targets = profile ? all.filter((entry) => entry.profile === profile) : all
   const payload = installPayload(repoRoot)
   const report = []
+  const version = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version
 
   for (const target of targets) {
     const written = []
+    let realigned
     if (!dryRun) {
       for (const dir of payload.dirs) {
         cpSync(dir.from, join(target.dir, dir.to), { recursive: true, force: true })
@@ -80,8 +109,10 @@ export function syncProfiles({ repoRoot, dshHome, profile, dryRun = false }) {
         copyFileSync(from, join(target.dir, file))
         written.push(file)
       }
+      // <profile>/node_modules/dsh-jev -> the manifest lives two levels up.
+      realigned = alignDeclaredVersion(dirname(dirname(target.dir)), version)
     }
-    report.push({ profile: target.profile, dir: target.dir, written, dryRun })
+    report.push({ profile: target.profile, dir: target.dir, written, dryRun, version, realigned })
   }
 
   return {
@@ -110,7 +141,8 @@ function main() {
   }
 
   for (const entry of result.report) {
-    console.log(`${dryRun ? '[dry-run] ' : ''}${entry.profile}: ${entry.dir}`)
+    const realigned = entry.realigned ? ` (declared version ${entry.realigned} -> ${entry.version})` : ''
+    console.log(`${dryRun ? '[dry-run] ' : ''}${entry.profile}: ${entry.dir}${realigned}`)
   }
   if (result.skipped.length > 0) {
     console.log(`Skipped (not selected): ${result.skipped.join(', ')}`)

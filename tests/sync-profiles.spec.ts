@@ -3,7 +3,13 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { findInstalledPluginDirs, PLUGIN_NAME, resolveDshHome, syncProfiles } from '../scripts/sync-profiles.js'
+import {
+  alignDeclaredVersion,
+  findInstalledPluginDirs,
+  PLUGIN_NAME,
+  resolveDshHome,
+  syncProfiles,
+} from '../scripts/sync-profiles.js'
 
 function tempRoot() {
   const root = join(tmpdir(), 'jev-sync-' + Date.now() + '-' + Math.random().toString(36).slice(2))
@@ -86,4 +92,67 @@ test('syncProfiles with dryRun touches nothing but still reports targets', () =>
 
   rmSync(dshHome, { recursive: true, force: true })
   rmSync(repoRoot, { recursive: true, force: true })
+})
+
+test('syncProfiles realigns the version the profile manifest declares', () => {
+  // The profile names an exact version and the installed copy is replaced in place,
+  // so they drift: the deployment declared 0.1.0 while running 0.2.0 code, and the
+  // next `pnpm install` in that profile - which any `dsh plugin add` runs - would
+  // have resolved the declaration and replaced the synced build with the old one.
+  const dshHome = tempRoot()
+  const repo = makeRepo(tempRoot())
+  makeProfile(dshHome, 'desktop')
+
+  const manifestPath = join(dshHome, 'profiles', 'desktop', 'package.json')
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({ name: 'runtime', dependencies: { 'dsh-jev': '0.1.0', other: '1.0.0' } }, null, 2),
+    'utf8'
+  )
+
+  const result = syncProfiles({ repoRoot: repo, dshHome })
+  assert.equal(result.report[0].realigned, '0.1.0', 'the old declaration is reported')
+  assert.equal(result.report[0].version, '0.2.0')
+
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  assert.equal(manifest.dependencies['dsh-jev'], '0.2.0', 'the declaration follows the installed version')
+  assert.equal(manifest.dependencies.other, '1.0.0', 'no other dependency is touched')
+})
+
+test('syncProfiles leaves an already-aligned manifest alone', () => {
+  const dshHome = tempRoot()
+  const repo = makeRepo(tempRoot())
+  makeProfile(dshHome, 'web')
+
+  const manifestPath = join(dshHome, 'profiles', 'web', 'package.json')
+  const original = JSON.stringify({ dependencies: { 'dsh-jev': '0.2.0' } }, null, 2) + '\n'
+  writeFileSync(manifestPath, original, 'utf8')
+
+  const result = syncProfiles({ repoRoot: repo, dshHome })
+  assert.equal(result.report[0].realigned, undefined)
+  assert.equal(readFileSync(manifestPath, 'utf8'), original, 'the manifest is untouched')
+})
+
+test('alignDeclaredVersion tolerates a profile without a manifest or the dependency', () => {
+  const dir = tempRoot()
+  assert.equal(alignDeclaredVersion(dir, '0.2.0'), undefined, 'no manifest, nothing to align')
+
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: {} }), 'utf8')
+  assert.equal(alignDeclaredVersion(dir, '0.2.0'), undefined, 'the dependency is not declared')
+})
+
+test('syncProfiles does not rewrite the manifest during a dry run', () => {
+  const dshHome = tempRoot()
+  const repo = makeRepo(tempRoot())
+  makeProfile(dshHome, 'tui')
+
+  const manifestPath = join(dshHome, 'profiles', 'tui', 'package.json')
+  writeFileSync(manifestPath, JSON.stringify({ dependencies: { 'dsh-jev': '0.1.0' } }), 'utf8')
+
+  syncProfiles({ repoRoot: repo, dshHome, dryRun: true })
+  assert.equal(
+    JSON.parse(readFileSync(manifestPath, 'utf8')).dependencies['dsh-jev'],
+    '0.1.0',
+    'a dry run must not modify the deployment'
+  )
 })

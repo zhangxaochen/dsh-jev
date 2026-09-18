@@ -711,3 +711,24 @@ ok   the live numbers postdate the build they claim to measure
 **未发现缺陷。** 这是连续第二个空结果。首次探测时 7 条全不触发，原因是**我的探针 harness 写错了**——`resolveClientFrom` 要求注入真正的 `TypeSafeClient` 实例，我传了普通对象，于是回退到无 key 客户端、抛错被 catch 吞掉。修正后 7/7 符合预期。
 
 **结论（覆盖审计到此为止）**：本仓库的纯判定表面——确定性拒止外壳（92 例）、整形前置检查（16 例）、精确重复让位（7 例）——现均有语料/边界用例覆盖。余下的风险不在代码，而在**尚未重启的宿主进程**，其判据是 `pnpm run verify:host`。
+
+## 19. 部署清单的版本声明漂移（2026-09-20）
+
+检查「重启能否生效」时发现一处**操作性风险**，与代码正确性无关但与交付有效性直接相关。
+
+宿主 profile 的 `package.json` 用**精确版本**声明插件，而 `pnpm run sync` 是**原地替换** `node_modules/dsh-jev` 的副本——两者因此会漂移。本机实测：
+
+| 项 | 值 |
+|---|---|
+| profile 清单声明 | `"dsh-jev": "0.1.0"` |
+| 实际安装副本 | **0.2.0**（`doctor` 报 `installedVersion 0.2.0`） |
+| `dsh.profile.bundles` | 含 `dsh-jev` ✓（故重启会挂载，只是加载的代码与声明不一致） |
+
+后果：该 profile 里**任何一次 `pnpm install`**（任何 `dsh plugin add` 都会执行）都会按声明解析 `dsh-jev@0.1.0`，从而把同步进去的 0.2.0 **静默替换回旧版**——用户会以为在跑新构建。
+
+修复（两处）：
+
+1. **`sync-profiles.js` 在同步后对齐声明版本**：只改 `dependencies['dsh-jev']`，其他依赖不动；已是目标版本或清单缺失/未声明该依赖时**不做任何写入**（避免无意义的文件改动）；`--dry-run` 不写。实测把本机 profile 从 `0.1.0` 对齐到 `0.2.0`，其余依赖保持原值。
+2. **`doctor` 报出该类漂移**：新增 `declaredVersion`（读取profile清单）与 `verdict.declaredMatch`，报告里以 `(manifest declares 0.1.0)` 形式点出。
+
+测试：`sync-profiles.spec.ts` +4（对齐、已一致时不写、无清单/无声明时容忍、dry-run 不写）、`doctor.spec.ts` +1（声明落后时 `declaredMatch=false`）。

@@ -388,6 +388,7 @@ pnpm run bench:offline    # 回放录制答案，零成本复现
 CI（`.github/workflows/ci.yml`）在 Node 22 与 24 上跑 `build → typecheck:scripts → test → bench:offline → verify:dsh（跳过）→ 打包校验`：基准是离线回放的且带**输入指纹校验**，因此不需要 API Key；**任何未标记为已知漏报的用例行为不符都会让 CI 失败**（不再只看总体准确率）。
 
 ### 让改动在本机生效
+> **`pnpm run sync` 同时会把 profile 清单里声明的 `dsh-jev` 版本对齐到本仓库版本。** profile 声明的是精确版本，而安装副本是**原地替换**的，两者会漂移：本机实测曾出现「声明 `0.1.0`、实际运行 `0.2.0`」，此时该 profile 里任何一次 `pnpm install`（任何 `dsh plugin add` 都会跑）都会按声明解析并把 0.2.0 **静默换回 0.1.0**。对齐后声明与实际一致；`pnpm run doctor` 会报出这类漂移（`declaredMatch`）。
 
 profile 里的插件是**构建产物的副本**，改完源码必须同步过去：
 

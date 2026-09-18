@@ -125,3 +125,26 @@ test('runDoctor flags a version drift between the repo and an installed copy', (
   rmSync(dshHome, { recursive: true, force: true })
   rmSync(repo, { recursive: true, force: true })
 })
+
+test('runDoctor reports a manifest that declares a different version than is installed', () => {
+  // The declaration is what the next install resolves, so a stale one can replace
+  // the synced build. The installed copy and the build can both be correct while the
+  // deployment still declares the old version.
+  const dshHome = tempRoot()
+  const repo = tempRoot()
+  writeBuild(join(repo, 'lib'), { 'index.js': 'export const build = "new"\n' })
+  installProfile(dshHome, 'desktop', { 'index.js': 'export const build = "new"\n' })
+
+  const manifestPath = join(dshHome, 'profiles', 'desktop', 'package.json')
+  writeFileSync(manifestPath, JSON.stringify({ dependencies: { 'dsh-jev': '0.1.0' } }), 'utf8')
+  writeFileSync(join(dshHome, 'jev-stats.json'), JSON.stringify({ version: METRICS_SCHEMA_VERSION }), 'utf8')
+
+  const drifted = runDoctor({ repoRoot: repo, dshHome })
+  assert.equal(drifted.verdict.declaredMatch, false, 'a stale declaration is reported')
+  assert.equal(drifted.profiles[0].declaredVersion, '0.1.0')
+  assert.equal(drifted.profiles[0].installedVersion, '0.2.0')
+
+  writeFileSync(manifestPath, JSON.stringify({ dependencies: { 'dsh-jev': '0.2.0' } }), 'utf8')
+  const aligned = runDoctor({ repoRoot: repo, dshHome })
+  assert.equal(aligned.verdict.declaredMatch, true)
+})
