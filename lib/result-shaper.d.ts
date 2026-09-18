@@ -43,9 +43,27 @@ export declare const DEFAULT_MAX_PER_TURN = 2;
 export declare const DEFAULT_LINES_PER_SEGMENT = 40;
 export declare const DEFAULT_MAX_SEGMENTS = 24;
 export declare const DEFAULT_KEEP_THRESHOLD = 0.5;
+/** Characters of each block sent for judgement; the model judges, it does not read. */
+export declare const DEFAULT_BLOCK_PREVIEW_CHARS = 600;
+/** The shaping request is the plugin's largest, so it gets its own budget. */
+export declare const DEFAULT_REQUEST_TIMEOUT_MS = 4000;
+/**
+ * Minimum separation between the highest and lowest keep-probability for the
+ * shaper to act. Below it the model is not discriminating and dropping blocks
+ * would be arbitrary.
+ */
+export declare const DEFAULT_SPREAD_THRESHOLD = 0.15;
 /** Group lines into contiguous segments so one question covers a coherent block. */
 export declare function segmentText(text: string, linesPerSegment: number, maxSegments: number): string[];
-/** Cheap pre-check: is this output repetitive enough that shaping can pay off? */
+/**
+ * Cheap pre-check: is this output dominated by low-information bulk?
+ *
+ * Byte-identical repetition alone is too narrow: build logs, dependency trees
+ * and file listings vary on every line (a counter, a path, a version) and are
+ * exactly the output that fills a context window. Volume and structural
+ * repetition both count, and everything still passes the model's per-block
+ * judgement before anything is dropped.
+ */
 export declare function looksRepetitive(text: string): boolean;
 export declare class ResultShaperService {
     private readonly getClient;

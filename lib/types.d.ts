@@ -234,6 +234,12 @@ export interface ResultShaperConfig {
     maxSegments?: number;
     /** Keep-probability at or above which a block survives (default 0.5). */
     keepThreshold?: number;
+    /** Characters of each block sent for judgement (default 600). */
+    blockPreviewChars?: number;
+    /** Timeout for the shaping request, which carries the most blocks (default 4000ms). */
+    requestTimeoutMs?: number;
+    /** Minimum separation between the highest and lowest keep-probability to act (default 0.15). */
+    spreadThreshold?: number;
 }
 export interface ToolPrunerConfig {
     /** Max tools to keep in active context (default: 5) */

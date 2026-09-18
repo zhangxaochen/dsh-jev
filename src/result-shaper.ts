@@ -84,6 +84,16 @@ export const DEFAULT_MAX_PER_TURN = 2
 export const DEFAULT_LINES_PER_SEGMENT = 40
 export const DEFAULT_MAX_SEGMENTS = 24
 export const DEFAULT_KEEP_THRESHOLD = 0.5
+/** Characters of each block sent for judgement; the model judges, it does not read. */
+export const DEFAULT_BLOCK_PREVIEW_CHARS = 600
+/** The shaping request is the plugin's largest, so it gets its own budget. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 4000
+/**
+ * Minimum separation between the highest and lowest keep-probability for the
+ * shaper to act. Below it the model is not discriminating and dropping blocks
+ * would be arbitrary.
+ */
+export const DEFAULT_SPREAD_THRESHOLD = 0.15
 
 /** Group lines into contiguous segments so one question covers a coherent block. */
 export function segmentText(text: string, linesPerSegment: number, maxSegments: number): string[] {
@@ -103,18 +113,39 @@ export function segmentText(text: string, linesPerSegment: number, maxSegments: 
   return merged
 }
 
-/** Cheap pre-check: is this output repetitive enough that shaping can pay off? */
+/**
+ * Cheap pre-check: is this output dominated by low-information bulk?
+ *
+ * Byte-identical repetition alone is too narrow: build logs, dependency trees
+ * and file listings vary on every line (a counter, a path, a version) and are
+ * exactly the output that fills a context window. Volume and structural
+ * repetition both count, and everything still passes the model's per-block
+ * judgement before anything is dropped.
+ */
 export function looksRepetitive(text: string): boolean {
   const lines = text
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
+
   // A few very long lines (a minified bundle, a base64 blob) qualify on their own.
   const longest = lines.reduce((max, line) => Math.max(max, line.length), 0)
   if (longest > 4000) return true
+
+  // Bulk by volume: a long listing is worth one bounded decision even when every
+  // line differs.
+  if (lines.length >= 120) return true
+
   if (lines.length < 40) return false
-  const unique = new Set(lines)
-  return 1 - unique.size / lines.length >= 0.25
+  if (uniqueRatio(lines) >= 0.25) return true
+  // Structurally identical lines that only differ in numbers, hashes or paths.
+  const shapes = lines.map((line) => line.replace(/[0-9a-f]{6,}|\d+/gi, '#'))
+  return uniqueRatio(shapes) >= 0.5
+}
+
+/** Share of lines that repeat an earlier line verbatim. */
+function uniqueRatio(lines: string[]): number {
+  return 1 - new Set(lines).size / lines.length
 }
 
 export class ResultShaperService {
@@ -161,11 +192,13 @@ export class ResultShaperService {
         state: {
           tool: toolName,
           note: 'Output is split into ordered blocks; decide per block whether to keep it.',
-          blocks: segments.map((segment, index) => ({ index, text: segment.slice(0, 1500) })),
+          // Enough of each block to judge whether it informs; sending it whole
+          // made a 24-block request tens of kilobytes.
+          blocks: segments.map((segment, index) => ({ index, text: segment.slice(0, this.config.blockPreviewChars ?? DEFAULT_BLOCK_PREVIEW_CHARS) })),
         },
         questions: questions as any,
       },
-      { timeoutMs: client.pathTimeoutMs }
+      { timeoutMs: this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS }
     )
     const latencyMs = Date.now() - started
 
@@ -175,6 +208,23 @@ export class ResultShaperService {
       const probability = typeof answer.noul === 'number' ? answer.noul : answer.probability
       return typeof probability !== 'number' ? true : probability >= (this.config.keepThreshold ?? DEFAULT_KEEP_THRESHOLD)
     })
+
+    // Measured 2026-09-18 (docs/calibration.md §9): on build-log output the model
+    // returns a flat distribution — every block near-identical, the one block
+    // carrying the actual error included. Acting on that would drop blocks at
+    // random, error block included, so a distribution that does not separate is
+    // treated as "cannot decide" and the original content survives.
+    const scored = segments
+      .map((_segment, index) => {
+        const answer = results['keep_' + index] as any
+        if (!answer || answer.unknown) return undefined
+        const probability = typeof answer.noul === 'number' ? answer.noul : answer.probability
+        return typeof probability === 'number' ? probability : undefined
+      })
+      .filter((value): value is number => value !== undefined)
+    if (scored.length < segments.length) return undefined
+    const spread = Math.max(...scored) - Math.min(...scored)
+    if (spread < (this.config.spreadThreshold ?? DEFAULT_SPREAD_THRESHOLD)) return undefined
 
     const keptSegments = keep.filter(Boolean).length
     const droppedSegments = keep.length - keptSegments

@@ -239,6 +239,10 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `linesPerSegment?: number`: 每个评估块包含的行数（默认 `40`）。
 - `maxSegments?: number`: 单次请求最多评估的块数，超出会均匀合并以保住尾部（默认 `24`）。
 - `keepThreshold?: number`: 保留某块所需的最低概率（默认 `0.5`；缺失答案一律保留）。
+- `blockPreviewChars?: number`: 每块发给模型判断的字符数（默认 `600`）。
+- `requestTimeoutMs?: number`: 整形请求自身的超时，它是插件里最大的请求（默认 `4000`）。
+- `spreadThreshold?: number`: 最高与最低 keep 概率之差低于该值时**视为模型无法区分并放弃整形**，内容原样保留（默认 `0.15`）。
+- ⚠️ **实验性**：实测在构建日志这类输入上，模型对含报错的块与噪声块给出几乎相同的概率（见 `docs/calibration.md` §9），因此本模块当前会**拒绝动作**而保持默认关闭。宁可不用，也不随机丢内容。
 
 ### `TypeSafeSuiteConfig` 开关
 - `askTools?: boolean`: 是否注册 `jev_ask` / `jev_rank` / `jev_check`（默认 `true`）。

@@ -51,13 +51,57 @@ test('segmentText groups lines and honours the segment cap', () => {
   assert.match(capped[capped.length - 1] ?? '', /^l1990/m, 'the tail must survive coalescing')
 })
 
-test('looksRepetitive only fires on genuinely repetitive or huge output', () => {
+test('looksRepetitive fires on bulk, whether or not the lines repeat verbatim', () => {
+  // Below every threshold.
   assert.equal(looksRepetitive('short output'), false)
-  assert.equal(looksRepetitive(Array.from({ length: 60 }, (_, i) => 'unique line ' + i).join('\n')), false)
-  assert.equal(looksRepetitive(repetitiveOutput(3)), true)
-  assert.equal(looksRepetitive(['x'.repeat(5000)].join('\n')), true)
+  assert.equal(looksRepetitive(Array.from({ length: 20 }, (_, i) => 'varied line ' + i + ' of 20').join('\n')), false)
+
+  // Verbatim repetition.
+  assert.equal(looksRepetitive(Array.from({ length: 60 }, () => 'downloading... 100%').join('\n')), true)
+  // Structurally identical lines that differ only in numbers or hashes: the shape
+  // of a build log, a numbered listing or a dependency tree listing.
+  assert.equal(looksRepetitive(Array.from({ length: 60 }, (_, i) => 'unique line ' + i).join('\n')), true)
+  // Bulk by volume even when every line is genuinely different.
+  assert.equal(
+    looksRepetitive(Array.from({ length: 130 }, (_, i) => 'line ' + i + ' with distinct words ' + 'x'.repeat(i % 5)).join('\n')),
+    true
+  )
+  // A single enormous line (minified bundle, base64 blob).
+  assert.equal(looksRepetitive('x'.repeat(5000)), true)
 })
 
+test('shape declines when the model does not separate the blocks', async () => {
+  // Measured behaviour on build-log output: every block near-identical, the one
+  // carrying the error included. Dropping on that basis would be arbitrary.
+  const flat = new ResultShaperService(
+    () =>
+      new TypeSafeClient({
+        mockHandler: async () => ({
+          keep_0: { type: 'noul', noul: 0.35 },
+          keep_1: { type: 'noul', noul: 0.36 },
+          keep_2: { type: 'noul', noul: 0.34 },
+        }),
+      }),
+    {}
+  )
+  assert.equal(await flat.shape(repetitiveOutput(3), 'pwsh'), undefined, 'a flat distribution must decline')
+
+  // A separated distribution still shapes.
+  const separated = new ResultShaperService(
+    () =>
+      new TypeSafeClient({
+        mockHandler: async () => ({
+          keep_0: { type: 'noul', noul: 0.02 },
+          keep_1: { type: 'noul', noul: 0.95 },
+          keep_2: { type: 'noul', noul: 0.03 },
+        }),
+      }),
+    {}
+  )
+  const shaped = await separated.shape(repetitiveOutput(3), 'pwsh')
+  assert.ok(shaped, 'a separated distribution must shape')
+  assert.ok(shaped!.text.length < repetitiveOutput(3).length)
+})
 test('shape keeps informative blocks and drops repetitive ones', async () => {
   const service = new ResultShaperService(
     () => new TypeSafeClient({ mockHandler: async () => ({ keep_1: { type: 'noul', noul: 0.9 }, keep_0: { type: 'noul', noul: 0.05 }, keep_2: { type: 'noul', noul: 0.04 } }) }),
