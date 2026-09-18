@@ -81,10 +81,13 @@ test('ToolPrunerService emits survivors in their original order', async () => {
   const pruner = new ToolPrunerService(
     () =>
       new TypeSafeClient({
+        // The late candidate scores highest, so score order and input order differ
+        // among the survivors. With a tie the two orders coincide and the case
+        // cannot tell them apart.
         mockHandler: async () => ({
-          score_alpha: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+          score_alpha: { type: 'score', score: 2, confidence: 0.5, probabilities: {} },
           score_mid: { type: 'score', score: 0.5, confidence: 0.9, probabilities: {} },
-          score_zeta: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+          score_zeta: { type: 'score', score: 2, confidence: 0.95, probabilities: {} },
           score_omega: { type: 'score', score: 0.5, confidence: 0.9, probabilities: {} },
         }),
       }),

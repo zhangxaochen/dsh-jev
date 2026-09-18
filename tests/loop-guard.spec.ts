@@ -190,3 +190,30 @@ test('LoopGuard carries one notice under both accepted context keys', async () =
   assert.equal(legacy.length, 1)
   assert.equal(additional[0].id, legacy[0].id)
 })
+
+test('LoopGuard ignores a stuck verdict that the model is not sure about', async () => {
+  // Isolates the confidence gate: the dead-loop mass is high and progress is
+  // absent, so only `minConfidence` can keep this quiet. The earlier
+  // low-confidence case also failed the pLoop gate and therefore never exercised
+  // the confidence check at all.
+  const unsure = {
+    has_progress: { type: 'noul', noul: 0.1 },
+    stuck_severity: { type: 'score', score: 1.6, confidence: 0.3, probabilities: { '0': 0, '1': 0.2, '2': 0.8 } },
+  }
+  const h = harness(async () => unsure)
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+
+  await h.step(exec, 'a')
+  const decision = await h.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
+  assert.equal(decision.additionalContexts, undefined, 'confidence 0.3 must not trigger a notice')
+
+  // The same trajectory with a confident answer does fire, so the only difference
+  // is the confidence value.
+  const sure = harness(async () => ({
+    has_progress: { type: 'noul', noul: 0.1 },
+    stuck_severity: { type: 'score', score: 1.9, confidence: 0.9, probabilities: { '0': 0, '1': 0.05, '2': 0.95 } },
+  }))
+  await sure.step(exec, 'a')
+  const fired = await sure.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
+  assert.ok(fired.additionalContexts, 'the same trajectory with confidence 0.9 must fire')
+})
