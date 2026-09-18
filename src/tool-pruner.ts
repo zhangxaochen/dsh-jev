@@ -14,7 +14,23 @@ import type {
 
 export const name = 'typesafe-tool-pruner'
 
-export const DEFAULT_ALWAYS_RETAIN = ['read_file', 'write_to_file', 'bash', 'run_command']
+export const DEFAULT_ALWAYS_RETAIN = [
+  'read_file',
+  'write_to_file',
+  'write_file',
+  'edit_file',
+  'str_replace_editor',
+  'bash',
+  'terminal',
+  'pwsh',
+  'run_command',
+  'execute_command',
+  'grep',
+  'glob',
+  'find_by_name',
+  'view_file',
+  'replace_file_content',
+]
 
 export class ToolPrunerService {
   constructor(

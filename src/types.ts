@@ -149,12 +149,17 @@ export interface LoopGuardConfig {
 }
 
 export interface SafetyGuardConfig {
-  /** Risk probability threshold to block execution (0.0 - 1.0, default: 0.7) */
+  /** Risk probability threshold to block execution (0.0 - 1.0, default: 0.85) */
   blockThreshold?: number
-  /** Risk probability threshold to ask for user approval (0.0 - 1.0, default: 0.4) */
+  /** Risk probability threshold to ask for user approval (0.0 - 1.0, default: 0.5) */
   askApprovalThreshold?: number
   /** Tools considered sensitive that must be inspected (e.g. bash, terminal, run_code, write_to_file) */
   guardedTools?: string[]
+  /**
+   * Explicitly declare headless environment mode.
+   * In headless mode, approval requests ('ask') are automatically bypassed to prevent DSH from converting them into hard execution denials.
+   */
+  headless?: boolean
 }
 
 export interface ToolPrunerConfig {
