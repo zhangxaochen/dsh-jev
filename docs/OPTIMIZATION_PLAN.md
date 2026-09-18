@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **123** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **124** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -545,3 +545,13 @@
 - [x] 覆盖率（`lib/*.js` 口径）：整体 **91.33% → 93.89% 行**；`index.js` **68.91% → 81.65%**；`typesafe-client.js` **79.78% → 92.78%**；测试数 119 → 123
 - [x] 顺带清理死代码：按「导出符号是否被任何闸门引用」扫描 17 处候选，逐一定性后仅 `topBucketIndex` 为真死代码（src 内 0 使用、无引用、README 未提及）→ 删除；其余为常量/内部辅助，其中 `measureRemovedTools` 的**回退分支**本轮补了用例
 - [x] 记录剩余未覆盖部分的归属（插件接线由 `verify:dsh` 覆盖），并写入 `docs/calibration.md` §14；README 增补覆盖率命令
+
+## Phase 5 补充记录（钩子形状与规则 ask 模式，Round 54）
+
+- [x] 从宿主源码确认唯一形状：`post-execute` = `(exec, result, next)`、`pre-execute` = `(exec, next)`；据此删除三个模块里 6–15 行**从未执行**的参数嗅探分支
+- [x] 删除理由不止行数：旧嗅探以 `hookArgs[0].kind || .action` 判断对象类型，而执行对象**可以**带这些字段，一旦命中会把 `exec` 与 `result` **静默对调**且无闸门可查；现在形状变化会由集成校验响亮报错
+- [x] 自证：`safety-guard.spec.ts` 的 harness 原按不可达的三参形状调用，改为真实形状后 **7 个既有用例立即失败**并暴露了「测试在验证没有运行时使用的形状」，修复后全绿
+- [x] 补上真实功能缺口：`SafetyGuard` 用户规则的 **ask 模式**（默认动作）从未执行 → 新增用例覆盖「命中可询问 → ask、headless → deny、低于阈值 → 不介入」
+- [x] 覆盖率：`safety-guard` 94.82→**98.04%**、`loop-guard` 93.08→**95.68%**、`result-shaper` 95.03→**97.54%**、整体 93.89→**94.91%**（部分来自删除不可达分支）
+- [x] 新增演练条目：把 pre-execute 改回三参嗅探 → `safety-guard.spec.ts` 必须失败
+- [x] 测试数 123 → 124；`docs/calibration.md` 新增 §15

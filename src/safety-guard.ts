@@ -286,19 +286,10 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
   /** Layer 2: semantic verdict. */
   const unsubscribe = ctx.on(
     'tools/pre-execute',
-    async (...hookArgs: any[]): Promise<PreToolDecision> => {
-      let exec: ToolExecution
-      let next: () => Promise<PreToolDecision>
-
-      if (hookArgs.length >= 3 && typeof hookArgs[2] === 'function') {
-        // Compatibility mode for 3-argument legacy test harnesses: (decision, exec, next)
-        exec = hookArgs[1]
-        next = () => Promise.resolve(hookArgs[2](hookArgs[0]))
-      } else {
-        // Standard DSH waterfall signature: (exec, next)
-        exec = hookArgs[0]
-        next = typeof hookArgs[1] === 'function' ? hookArgs[1] : async () => ({ kind: 'allow', action: 'allow' })
-      }
+    async (exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision> => {
+      // The host dispatches this waterfall as `(exec, next)`: dsh-tools calls
+      // `waterfall(carrier, 'tools/pre-execute', exec, next)`. An earlier version
+      // also accepted a three-argument shape, which no host uses.
 
       if (!isGuarded(exec?.name)) {
         return next()

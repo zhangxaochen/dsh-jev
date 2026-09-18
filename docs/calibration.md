@@ -443,3 +443,52 @@ node --experimental-test-coverage --test-coverage-include='lib/*.js' \
 | 各模块的 catch/降级分支 | 单测的部分错误路径（如「决策调用失败仍返回原文」） |
 
 单测行覆盖率高不等于行为被验证——本轮的价值恰恰在于：**两段覆盖率数字看着不低的模块，各藏着一整条从未执行过的用户可见路径**。
+
+## 15. 钩子参数形状：从宿主源码确认，并删除猜测分支（2026-09-19）
+
+覆盖率审计（§14）显示 `loop-guard` / `result-shaper` / `safety-guard` 里各有 6–15 行**分发参数形状嗅探**从未被执行。这些分支来自早期不确定宿主签名时的防御性写法。
+
+### 15.1 宿主源码给出唯一答案
+
+```js
+// dsh-tools/lib/index.js
+async postExecute(exec, result) {
+  const decision = await this.ctx.waterfall(scopeTarget(this, exec.agent), "tools/post-execute", exec, result,
+                                            () => Promise.resolve({ kind: "accept" }));
+}
+// 以及
+const gate = await this.ctx.waterfall(carrier, "tools/pre-execute", exec,
+                                      () => Promise.resolve({ kind: "allow" }));
+```
+
+即：`tools/post-execute` 恒为 `(exec, result, next)`，`tools/pre-execute` 恒为 `(exec, next)`。
+
+### 15.2 删除猜测分支，并让签名本身成为断言
+
+三个监听器改为显式签名。删除的收益不只是行数：
+
+- 旧嗅探用 `hookArgs[0].kind || hookArgs[0].action` 判断「这是决策还是执行」——而执行对象**可以**带 `kind`/`action` 字段，一旦命中就会把 `exec` 与 `result` **静默对调**，且没有任何闸门能发现。
+- 形状若真变化，现在会**响亮地失败**（集成校验驱动真实 waterfall），而不是静默容错。
+
+`tests/safety-guard.spec.ts` 的 harness 原本按 `(decision, exec, next)` 三参调用——即测试在验证一条**没有运行时使用**的形状；改为真实形状后，7 个既有用例立即失败并暴露了这一点（修复后全绿），这也证明它们此前测的不是生产路径。
+
+### 15.3 顺带补上的真实功能缺口
+
+`SafetyGuard` 的**用户自定义规则**只测了 `action: 'deny'`；其默认动作 `ask`（含 headless 时的失败关闭、以及阈值未达成时不介入）从未执行。新增用例覆盖三条路径：
+
+| 场景 | 期望 |
+|---|---|
+| 规则命中、可询问 | `ask`，`reason` 为该规则的问题文本 |
+| 规则命中、`headless: true` | `deny`（无法询问即失败关闭） |
+| 规则概率低于其阈值 | 不介入，由良性裁决决定（`allow`） |
+
+### 15.4 覆盖率变化
+
+| 模块 | 行覆盖前 | 行覆盖后 |
+|---|---|---|
+| `safety-guard.js` | 94.82% | **98.04%** |
+| `loop-guard.js` | 93.08% | **95.68%** |
+| `result-shaper.js` | 95.03% | **97.54%** |
+| `lib/*.js` 整体 | 93.89% | **94.91%** |
+
+部分提升来自**删除不可达分支**——这也是诚实的读法：分子没变，分母变小了，同时风险降低。

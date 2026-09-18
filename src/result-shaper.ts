@@ -304,30 +304,15 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
     return typeof next === 'function' ? next() : undefined
   })
 
-  const unsubscribe = ctx.on('tools/post-execute', async (...hookArgs: any[]): Promise<PostToolDecision> => {
-    let exec: ToolExecution
-    let result: any
-    let next: () => Promise<PostToolDecision>
+  const unsubscribe = ctx.on(
+    'tools/post-execute',
+    async (exec: ToolExecution, result: any, next: () => Promise<PostToolDecision>): Promise<PostToolDecision> => {
+      // The host dispatches this waterfall as `(exec, result, next)`; an earlier
+      // version sniffed for other shapes, which is unverifiable speculation and
+      // could misroute the arguments.
+      const baseDecision = await next()
 
-    if (hookArgs.length >= 3 && typeof hookArgs[2] === 'function') {
-      if (hookArgs[0] && (hookArgs[0].action || hookArgs[0].kind) && hookArgs[1]?.name) {
-        exec = hookArgs[1]
-        result = hookArgs[0]
-        next = () => Promise.resolve(hookArgs[2](hookArgs[0]))
-      } else {
-        exec = hookArgs[0]
-        result = hookArgs[1]
-        next = hookArgs[2]
-      }
-    } else {
-      exec = hookArgs[0]
-      result = hookArgs[1]
-      next = typeof hookArgs[2] === 'function' ? hookArgs[2] : async () => ({ kind: 'accept', action: 'accept' })
-    }
-
-    const baseDecision = await next()
-
-    try {
+      try {
       if (!result || result.isError) return baseDecision
       // The real service carries content as a block array; a string-only check
       // made this module inert in the pipeline while its unit tests passed.

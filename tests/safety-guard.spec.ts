@@ -27,7 +27,9 @@ function harness(mock: () => Promise<Record<string, unknown>>) {
   }
   return {
     fakeContext,
-    invoke: (exec: ToolExecution) => preExecuteHandler({ action: 'allow' }, exec, (d: PreToolDecision) => d),
+    // The host calls this waterfall as `(exec, next)`, so the harness does too:
+    // a three-argument call would only exercise a shape no runtime uses.
+    invoke: (exec: ToolExecution) => preExecuteHandler(exec, async () => ({ kind: 'allow', action: 'allow' })),
     guard: () => registeredGuard,
   }
 }
@@ -202,4 +204,42 @@ test('SafetyGuard skips non-guarded tools', async () => {
 
   const decision = await invoke({ name: 'fetch_web', args: { url: 'https://example.com' } })
   assert.equal(decision.action, 'allow')
+})
+
+test('SafetyGuard asks on a user rule, and fails closed when it cannot prompt', async () => {
+  // The deny mode of a user rule had a case; the ask mode — the default action —
+  // was never executed.
+  const answers = async () => ({
+    ...BENIGN_ANSWER,
+    rule_touch_infra: { type: 'noul', noul: 0.91 },
+  })
+  const rule = {
+    id: 'touch_infra',
+    question: 'Does this change infrastructure?',
+    threshold: 0.8,
+    action: 'ask' as const,
+  }
+
+  const prompting = harness(answers)
+  apply(prompting.fakeContext, { headless: false, rules: [rule] })
+  const asked = await prompting.invoke({ name: 'bash', args: { command: 'terraform apply' } })
+  assert.equal(asked.action, 'ask')
+  assert.match(asked.reason ?? '', /Does this change infrastructure\?/, 'the rule question is the reason shown')
+  assert.match(asked.prompt ?? '', /Rule "touch_infra" wants confirmation/)
+
+  const headless = harness(answers)
+  apply(headless.fakeContext, { headless: true, rules: [rule] })
+  const denied = await headless.invoke({ name: 'bash', args: { command: 'terraform apply' } })
+  assert.equal(denied.action, 'deny', 'a session that cannot prompt fails closed')
+  assert.match(denied.reason ?? '', /cannot prompt/)
+
+  // Below the rule threshold the rule stays out of the way, and the benign
+  // verdict is what decides.
+  const quiet = harness(async () => ({
+    ...BENIGN_ANSWER,
+    rule_touch_infra: { type: 'noul', noul: 0.2 },
+  }))
+  apply(quiet.fakeContext, { headless: false, rules: [rule] })
+  const untouched = await quiet.invoke({ name: 'bash', args: { command: 'terraform plan' } })
+  assert.equal(untouched.action, 'allow', 'a rule below its threshold must not fire')
 })
