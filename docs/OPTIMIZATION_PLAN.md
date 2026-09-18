@@ -226,3 +226,12 @@
 - [x] **真实 `systemPrompt.assemble()`**：挂载真实 `dsh-system-prompt` + `dsh-tools` 并注册 4 个工具，调用真实装配流程——不抛不变量错误，工具面被剪到 2（`read_file,write_file`）。此前剪枝只在假 assembly 上验证过，而 `dsh-system-prompt` 自带不变量校验（非空名称、text 必须为字符串等）
 - [x] 自查并删除一条**恒真检查**（断言体写成 `prepared => prepared`，函数对象恒为真）；同一属性由下一条 `executed === 0` 断言覆盖
 - [x] 集成校验 11 → **14/14**
+
+## Phase 5 补充记录（单调守卫属性，Round 23）
+
+验证「后续监听者无法强制放行」这条设计承诺——此前只验证了「决策是 deny」，未验证它在链路中的**优先级**。
+
+- [x] 探明 cordis 服务可见性：**根 ctx 能看到子插件提供的服务**（`ctx.get('typesafe')` 为真），但**兄弟插件之间看不到**（各自需向根查找）。据此确认我的集成 harness（守卫挂在根、服务由子插件提供）与 DSH 加载器的组合方式一致，此前的 harness 假设成立
+- [x] 新增集成校验：在守卫之后注册一个「一律放行」的 `tools/pre-execute` 监听器，再对 `rm -rf /` 发起调用 —— 结果 `prepared.kind=post-result`、`executed=0`，且该放行监听器**运行次数为 0**
+- [x] 结论：`ctx.tools.guard()` 的单调拒止发生在可扩展 waterfall **之前**并短路链路，因此不止「无法覆盖」，而是「根本不会执行到」——设计承诺成立且更强
+- [x] 集成校验 14 → **15/15**

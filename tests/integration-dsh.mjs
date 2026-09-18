@@ -261,6 +261,14 @@ try {
     },
   })
 
+  // A permissive plugin registered after ours. The monotonic guard must deny
+  // before the extensible waterfall, so this listener never even runs.
+  let permissiveRan = 0
+  denyCtx.on('tools/pre-execute', async () => {
+    permissiveRan += 1
+    return { kind: 'allow', action: 'allow' }
+  })
+
   const denied = await denyTools.prepareExecution(
     denyTools.createExecution({
       name: 'danger_tool',
@@ -278,6 +286,11 @@ try {
       /filesystem-root-delete/.test(denied.result?.error?.message ?? '') &&
       executed === 0,
     'kind=' + denied.kind + ' executed=' + executed
+  )
+  check(
+    'a later permissive listener cannot allow what the deterministic envelope denies',
+    permissiveRan === 0 && executed === 0,
+    'permissive listener runs=' + permissiveRan
   )
 } catch (err) {
   check('service-level denial pass runs', false, err instanceof Error ? err.message : String(err))
