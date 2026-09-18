@@ -379,3 +379,11 @@
 - [x] 压缩比约 130×–190×，四类场景的保留/丢弃目标全部命中
 - [x] 该脚本纳入 `tests/isolation.spec.ts` 的守卫名单（会记录调用，必须重定向实机状态）
 - [x] README 验证命令清单加入 `pnpm run verify:shaper`；`docs/calibration.md` 新增 §9.6 记录实现级结果
+
+## Phase 2 补充记录（工具剪枝的线上排序验证，Round 39）
+
+- [x] 补充覆盖缺口：`tool-pruner` 默认开启且会移除模型可见的工具，此前只有不含断言的 `live-e2e.ts`
+- [x] 新增 `tests/live-pruner.ts` + `pnpm run verify:pruner`：6 个标注用例（14 个候选工具、`maxTools: 4`、纯排序），每个用例断言「必须留下的」全部留下、「必须剔除的」全部剔除
+- [x] 实测 6/6 通过，必需工具**零遗漏**；保留数常少于 `maxTools`（不相关项被阈值滤掉而非凑数）；延迟 253–700ms
+- [x] 纳入 `tests/isolation.spec.ts` 守卫名单与 README 命令清单；`docs/calibration.md` 新增 §10
+- [x] 覆盖缺口仅剩 `skill-router` 的线上（真实模型 + 真实 112 项目录）路由质量

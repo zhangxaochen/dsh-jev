@@ -37,6 +37,7 @@ const METRICS_RECORDING_SCRIPTS = [
   'tests/live-tools.ts',
   'tests/live-verify.ts',
   'tests/live-shaper.ts',
+  'tests/live-pruner.ts',
   'bench/run.ts',
 ]
 

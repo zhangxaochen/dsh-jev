@@ -300,6 +300,9 @@ pnpm run verify:dsh
 # 线上验证：结果整形（重写后的行形状分类）对四类真实输出是否按预期保留/丢弃
 pnpm run verify:shaper
 
+# 线上验证：工具剪枝的排序质量（带标注用例：哪些工具必须留下、哪些必须剔除）
+pnpm run verify:pruner
+
 # A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
 pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
 pnpm run bench:offline    # 回放录制答案，零成本复现

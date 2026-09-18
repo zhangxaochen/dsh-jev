@@ -260,3 +260,20 @@ CI 等价流程在**干净 clone**（无 `node_modules`、无本机缓存）中�
 | 纯噪声 | 9.5KB | **拒绝整形**（单簇，未发起请求） | 0ms |
 
 压缩比约 130×–190×，且四类场景的保留/丢弃目标全部命中。该脚本纳入隔离守卫（`DSH_JEV_METRICS_PATH` / `DSH_JEV_DECISIONS_PATH`），不触碰实机状态。
+
+## 10. 工具剪枝的排序质量（线上，`pnpm run verify:pruner`）
+
+`tool-pruner` 默认开启、且会**从模型可见的工具面里移除条目**——排序失误会让 agent 无法行动，因此它比整形器更需要带标注的线上验证。此前只有一个打印结果、不含断言的 `live-e2e.ts`。
+
+6 个标注用例（14 个候选工具，`maxTools: 4`、`minScoreThreshold: 1`、`alwaysRetain: []`，即纯排序）：
+
+| 用例意图 | 必须留下 | 必须剔除 | 实际保留 | 结果 |
+|---|---|---|---|---|
+| 搜索 TypeSafe 发布说明 | `search_web` | Slack / 生图 / 日历 | `search_web, fetch_url` | PASS |
+| 提交并推送 | `git_commit`, `git_push` | 生图 / 日历 / PDF | `git_commit, git_push` | PASS |
+| 跑测试并修断言 | `run_tests`, `edit_file` | 邮件 / 生图 / 部署 | `run_tests, read_file, edit_file` | PASS |
+| 查昨日注册数 | `sql_query` | 部署 / 日历 / 生图 | `sql_query` | PASS |
+| 提取 PDF 发票明细 | `pdf_extract` | 部署 / 推送 / 生图 | `read_file, pdf_extract` | PASS |
+| Slack 通知团队 | `send_slack_message` | 生图 / PDF / SQL | `send_slack_message` | PASS |
+
+延迟 253–700ms。两点观察：必需工具**零遗漏**（最重要的安全属性）；保留数量常少于 `maxTools`，因为「不相关」的工具被阈值滤掉而不是凑数。
