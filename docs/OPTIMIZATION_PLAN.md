@@ -455,3 +455,11 @@
 - [x] 实测：线上记录一次后，`bench:offline` 对 6 条新用例**全部可确定复现**（shaper-build-log 保留 2 簇/丢弃 160 行、pure-noise 拒绝、两条剪枝排序正确、两条路由选对）；总计 36 条、准确率 **94.4%**、误报 0
 - [x] **发现并修复工具链盲区**：`bench/`、`tests/`、`scripts/` 不在 `tsconfig.json` 的 include 里，因此**我自己的验证脚本从未被类型检查过**（Node 只做类型剥离）。新增 `tsconfig.scripts.json` 后立刻抓到 2 处类型错误（离线回放的 mock 返回 `Record<string, unknown>` 而非 `QuestionResult`；`state` 未断言为 `SystemOneInput` 允许的形状）
 - [x] 新增 `pnpm run typecheck:scripts`，接入 `pretest`（因此 CI 的 `pnpm test` 已覆盖），CI 中另立显式步骤便于定位失败
+
+## Phase 2 补充记录（录制指纹，Round 46）
+
+- [x] 修掉录制-回放体系的一个**静默腐化**风险：`bench:offline` 靠录制的答案支撑 CI，但若某用例的输入被改动而答案未重录，**CI 会拿陈旧答案一路绿灯**（回放与输入无关）
+- [x] 录制格式升级为 v2：每条记录保存 `{ fingerprint, answers }`，fingerprint 是**实际请求体**的 sha256 前 16 位；离线回放时用当前用例生成的请求重算指纹并比对，不一致即报「case input changed since it was recorded … re-run `pnpm run bench` to re-record」
+- [x] 已验证守卫有牙齿：改动用例里的报错文本后，离线运行确实拒绝该用例（`request e8247c0e49e1674c vs recorded d1e4f9f966c348a6`）
+- [x] 顺带修掉两个自身缺陷：① 旧格式条目会被合并进新文件（现改为 live 运行**重写**整份文件）；② 「不发请求的用例」（纯噪声整形）在离线时被无谓判定为缺录制——改为**按需校验**，不调用模型就不需要录制
+- [x] 实测：live 记录 36 条交换、34/36 正确（94.4%、误报 0）；离线回放得到**完全相同的数字**

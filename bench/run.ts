@@ -8,6 +8,7 @@
  * Run: node --experimental-strip-types bench/run.ts [--offline]
  *   --offline replays the recorded answers in the case file (no API, no cost).
  */
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -45,39 +46,74 @@ interface BenchCase {
   mustDrop?: string[]
 }
 
+/** One recorded exchange: the answers plus a fingerprint of the request that produced them. */
+interface RecordedExchange {
+  /** Hash of the request the answers belong to. */
+  fingerprint: string
+  answers: Record<string, unknown>
+}
+
+/**
+ * Fingerprint of the exact payload a decision was asked for. Offline replay
+ * compares it against the request the current case produces, so editing a case
+ * without re-recording fails loudly instead of validating the new input against
+ * the old answers.
+ */
+function fingerprintRequest(request: unknown): string {
+  return createHash('sha256').update(JSON.stringify(request)).digest('hex').slice(0, 16)
+}
+
+/**
+ * A client that replays recorded answers and refuses a request the recording was
+ * not made for.
+ */
+function replayClient(exchange: RecordedExchange | undefined, caseId: string): TypeSafeClient {
+  return new TypeSafeClient({
+    mockHandler: async (req) => {
+      // Checked on use, not construction: a case that decides without asking the
+      // model (pure noise has a single line shape) needs no recording at all.
+      if (!exchange || typeof exchange !== 'object' || typeof exchange.fingerprint !== 'string' || !exchange.answers) {
+        throw new Error(
+          'no usable recording for ' + caseId + '; run `pnpm run bench` once to record it (format v2 stores a request fingerprint)'
+        )
+      }
+      const actual = fingerprintRequest(req)
+      if (actual !== exchange.fingerprint) {
+        throw new Error(
+          caseId + ': the case input changed since it was recorded (request ' + actual + ' vs recorded ' +
+            exchange.fingerprint + '); re-run `pnpm run bench` to re-record'
+        )
+      }
+      return exchange.answers as any
+    },
+  })
+}
+
+/**
+ * A client that records what it asked and what came back, so a live run can be
+ * replayed offline.
+ */
+function withRecorder(client: TypeSafeClient): { client: TypeSafeClient; last: () => RecordedExchange | undefined } {
+  let last: RecordedExchange | undefined
+  const original = client.systemOne.bind(client)
+  ;(client as any).systemOne = async (req: any, options: any) => {
+    const answers = await original(req, options)
+    last = { fingerprint: fingerprintRequest(req), answers: JSON.parse(JSON.stringify(answers)) }
+    return answers
+  }
+  return { client, last: () => last }
+}
+
 /**
  * Run one of the service-backed cases through its shipped code path.
  *
  * The shaper, pruner and router own their question sets, so they are driven as
- * services rather than by re-deriving their rules here; offline runs replay the
- * answers recorded for the case.
+ * services rather than by re-deriving their rules here.
  */
 async function serviceVerdict(
   benchCase: BenchCase,
-  liveClient: TypeSafeClient,
-  recorded: Record<string, Record<string, unknown>>
-): Promise<{ actual: string; note: string; answers?: Record<string, unknown> }> {
-  let captured: Record<string, unknown> | undefined
-  const client = OFFLINE
-    ? new TypeSafeClient({
-        mockHandler: async () => {
-          const answers = recorded[benchCase.id]
-          if (!answers) throw new Error('no recorded answers for ' + benchCase.id)
-          return answers as any
-        },
-      })
-    : liveClient
-
-  if (!OFFLINE) {
-    // Wrap the live client so the raw answers can be recorded for replay.
-    const original = client.systemOne.bind(client)
-    ;(client as any).systemOne = async (req: any, options: any) => {
-      const answers = await original(req, options)
-      captured = JSON.parse(JSON.stringify(answers))
-      return answers
-    }
-  }
-
+  client: TypeSafeClient
+): Promise<{ actual: string; note: string }> {
   if (benchCase.module === 'shaper') {
     const shaper = new ResultShaperService(() => client, {
       thresholdChars: 1000,
@@ -85,7 +121,7 @@ async function serviceVerdict(
       keepKinds: ['warning', 'failure'],
     })
     const shaped = await shaper.shape(String(benchCase.content ?? ''), 'pwsh')
-    if (!shaped) return { actual: 'passthrough', note: 'declined', answers: captured }
+    if (!shaped) return { actual: 'passthrough', note: 'declined' }
     const kept = (benchCase.mustKeep ?? []).every((needle) => shaped.text.includes(needle))
     const dropped = (benchCase.mustDrop ?? []).every((needle) => !shaped.text.includes(needle))
     return {
@@ -93,7 +129,6 @@ async function serviceVerdict(
       note:
         'kept ' + shaped.keptClusters + ' cluster(s), dropped ' + shaped.droppedLines + ' line(s), ' +
         shaped.text.length + ' chars',
-      answers: captured,
     }
   }
 
@@ -103,7 +138,7 @@ async function serviceVerdict(
     const names = selected.map((tool) => tool.name)
     const kept = (benchCase.mustKeep ?? []).every((name) => names.includes(name))
     const dropped = (benchCase.mustDrop ?? []).every((name) => !names.includes(name))
-    return { actual: kept && dropped ? 'ranked' : 'bad-rank', note: 'kept ' + names.join(','), answers: captured }
+    return { actual: kept && dropped ? 'ranked' : 'bad-rank', note: 'kept ' + names.join(',') }
   }
 
   const router = new SkillRouterService(() => client, {})
@@ -113,7 +148,6 @@ async function serviceVerdict(
   return {
     actual: kept && dropped ? 'routed' : 'bad-route',
     note: 'picked ' + (best?.name ?? '(none)') + ' (score ' + best?.score + ')',
-    answers: captured,
   }
 }
 
@@ -128,12 +162,6 @@ function loadKey(): string {
 }
 
 async function answersFor(benchCase: BenchCase, client: TypeSafeClient): Promise<Record<string, any>> {
-  if (OFFLINE) {
-    if (!benchCase.recorded) {
-      throw new Error('case ' + benchCase.id + ' has no recorded answers for --offline')
-    }
-    return benchCase.recorded as Record<string, any>
-  }
   const questions: Record<string, QuestionDefinition> = {}
   let state: unknown
 
@@ -223,15 +251,18 @@ async function main(): Promise<void> {
     .map((line) => JSON.parse(line) as BenchCase)
 
   const recordedFile = join(process.cwd(), 'bench', 'recorded.json')
-  const recorded: Record<string, Record<string, unknown>> = existsSync(recordedFile)
-    ? (JSON.parse(readFileSync(recordedFile, 'utf8')) as Record<string, Record<string, unknown>>)
+  const recorded: Record<string, RecordedExchange> = existsSync(recordedFile)
+    ? (JSON.parse(readFileSync(recordedFile, 'utf8')) as Record<string, RecordedExchange>)
     : {}
   if (OFFLINE && Object.keys(recorded).length === 0) {
     throw new Error('bench/recorded.json is missing; run once without --offline to record answers')
   }
 
-  const client = new TypeSafeClient(OFFLINE ? {} : { apiKey: loadKey() })
-  const captured: Record<string, Record<string, unknown>> = { ...recorded }
+  const live = new TypeSafeClient({ apiKey: OFFLINE ? undefined : loadKey() })
+  const recorder = withRecorder(live)
+  // A live run writes a fresh file: merging into a legacy one would leave entries
+  // without fingerprints behind, and those fail replay with a confusing error.
+  const captured: Record<string, RecordedExchange> = OFFLINE ? { ...recorded } : {}
   const rows: Array<Record<string, unknown>> = []
   let falsePositives = 0
   let falseNegatives = 0
@@ -245,19 +276,16 @@ async function main(): Promise<void> {
     let actual: string
     let note = ''
     try {
-      // The service-backed modules own their question sets, so they run their
-      // shipped code path with either the live client or a replay of the answers
-      // recorded for this case.
+      // Both paths go through a client that either replays the recording for this
+      // case (verifying it still matches the request) or records a fresh one.
+      const caseClient = OFFLINE ? replayClient(recorded[benchCase.id], benchCase.id) : recorder.client
+
       if (benchCase.module === 'shaper' || benchCase.module === 'pruner' || benchCase.module === 'router') {
-        const result = await serviceVerdict(benchCase, client, recorded)
+        const result = await serviceVerdict(benchCase, caseClient)
         actual = result.actual
         note = result.note
-        if (!OFFLINE && result.answers) captured[benchCase.id] = result.answers
       } else {
-        const answers = OFFLINE
-          ? (recorded[benchCase.id] ?? (() => { throw new Error('no recorded answers for ' + benchCase.id) })())
-          : await answersFor(benchCase, client)
-        if (!OFFLINE) captured[benchCase.id] = answers
+        const answers = await answersFor(benchCase, caseClient)
         actual = benchCase.module === 'loop' ? loopVerdict(answers) : safetyVerdict(benchCase, answers)
 
         if (benchCase.module === 'loop') {
@@ -274,6 +302,13 @@ async function main(): Promise<void> {
             ? 'deterministic envelope'
             : 'hazard=' + hazard.toFixed(2) + ' risk=' + (answers.risk_score?.score ?? 'n/a')
         }
+      }
+
+      // Record what was actually asked, so a later change to the case input is
+      // detected rather than replayed against stale answers.
+      if (!OFFLINE) {
+        const exchange = recorder.last()
+        if (exchange) captured[benchCase.id] = exchange
       }
     } catch (err) {
       actual = 'error'
