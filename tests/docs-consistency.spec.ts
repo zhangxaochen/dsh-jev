@@ -197,3 +197,45 @@ test('every config field the code accepts is documented', () => {
 
   assert.deepEqual(missing, [], 'these config fields are accepted by the code but absent from README')
 })
+
+test('the changelog does not repeat a bullet inside one release section', () => {
+  // A release note is read once, while upgrading; a bullet pasted twice makes the
+  // section look like two changes where there is one. The 0.2.0 Changed section had
+  // grown a duplicated pair.
+  const changelog = readFileSync(join(cwd(), 'CHANGELOG.md'), 'utf8')
+  const lines = changelog.split('\n')
+
+  const duplicates = []
+  let section = 'preamble'
+  const seen = new Map()
+  for (const line of lines) {
+    const heading = line.match(/^#{2,3}\s+(.*)$/)
+    if (heading) {
+      section = heading[1].trim()
+      seen.clear()
+      continue
+    }
+    const bullet = line.match(/^-\s+(.*)$/)
+    if (!bullet) continue
+    // Compare the first line of the bullet; continuation lines follow it.
+    const key = bullet[1].trim()
+    if (seen.has(key)) duplicates.push(section + ': ' + key.slice(0, 60))
+    else seen.set(key, true)
+  }
+
+  assert.deepEqual(duplicates, [], 'the changelog repeats these bullets')
+})
+
+test('every breaking change the README lists is announced in the changelog', () => {
+  // The changelog is what people read while upgrading, so a breaking change that
+  // only exists in the README's migration table is easy to miss. The markers are
+  // deliberately the concepts, not the wording.
+  const changelog = readFileSync(join(cwd(), 'CHANGELOG.md'), 'utf8')
+  const markers = [
+    ['removed stuckSeverityThreshold', /stuckSeverityThreshold/],
+    ['the fail-closed default', /fail-closed/],
+    ['the metrics schema change', /schema 升至 v2|version: 2|schema v2/],
+  ]
+  const missing = markers.filter(([, pattern]) => !pattern.test(changelog)).map(([label]) => label)
+  assert.deepEqual(missing, [], 'these breaking changes are documented only in the README')
+})

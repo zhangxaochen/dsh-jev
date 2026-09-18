@@ -49,12 +49,6 @@
 - **决策日志同样可重定向**：`DSH_JEV_DECISIONS_PATH` 覆盖 `~/.dsh/jev-decisions.jsonl` 的位置，路径改为首次使用时解析。
   该文件是阈值复核所用的标定数据集，此前任何导入插件的脚本都会把自己的 mock 判决追加进去
   （实测一次集成校验追加 6 条），后续复核将读到植入的数据。
-- **测试套件与实机状态隔离**：`pnpm test` 会经 `defaultMetrics` / `defaultDecisionLog` 写入实机文件——
-  足够让陈旧宿主看起来「已重载」（v2 指标被测试写到 `~/.dsh/jev-stats.json`），也足以把测试判决混进标定数据集。
-  现由 `tests/isolate.mjs` 经 `node --import` 预载重定向到临时目录，并有单测守卫该预载不被移除。
-- **决策日志同样可重定向**：`DSH_JEV_DECISIONS_PATH` 覆盖 `~/.dsh/jev-decisions.jsonl` 的位置，路径改为首次使用时解析。
-  该文件是阈值复核所用的标定数据集，此前任何导入插件的脚本都会把自己的 mock 判决追加进去
-  （实测一次集成校验追加 6 条），后续复核将读到植入的数据。
 - **指标文件可被环境变量重定向**：`DSH_JEV_METRICS_PATH` 覆盖落盘路径，且路径改为**首次使用时**解析。
   此前任何导入插件的脚本都会在导入瞬间以自身 schema 覆写 `~/.dsh/jev-stats.json`——那正是 `pnpm run doctor`
   用来判断「宿主是否已重载新构建」的信号，于是验证脚本会把部署结论改写成假象。所有验证脚本

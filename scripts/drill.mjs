@@ -128,6 +128,14 @@ const drills = [
   // unreachable rather than wrong and there is no regression to inject. The
   // contract it obscured is pinned by the safety-guard case instead.
   {
+    // A release note read once while upgrading must not list the same change twice.
+    name: 'the changelog repeats a bullet',
+    file: 'CHANGELOG.md',
+    from: '- 测试环境不再回退读取 `~/.dsh/.env`，离线测试因此真正离线（此前会静默打真实 API）。',
+    to: '- 测试环境不再回退读取 `~/.dsh/.env`，离线测试因此真正离线（此前会静默打真实 API）。\n- 测试环境不再回退读取 `~/.dsh/.env`，离线测试因此真正离线（此前会静默打真实 API）。',
+    test: 'tests/docs-consistency.spec.ts',
+  },
+  {
     // A config field the code accepts must be documented; removing one from the
     // README must fail rather than leave an undocumented option.
     name: 'a config field loses its documentation',
