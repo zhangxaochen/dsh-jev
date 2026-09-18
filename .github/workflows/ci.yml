@@ -34,6 +34,11 @@ jobs:
 
       # pnpm test's pretest already runs this; the explicit step keeps the failure
       # attributable and visible in the job summary.
+      # lib/ is committed and the suite imports it, so a source edit without a
+      # rebuild would otherwise pass here while the repository ships old code.
+      - name: Build output matches the committed build
+        run: pnpm run verify:build
+
       - name: Type-check the tooling (bench, tests, scripts)
         run: pnpm run typecheck:scripts
 

@@ -626,3 +626,12 @@
 - [x] **牙齿验证**：复制一条条目 → 报 `the changelog repeats these bullets`；已加演练条目永久化
 - [x] 顺带核实：`package.json` 的 17 处脚本文件引用**全部存在**（无缺口，未加守卫——避免为不存在的风险增加维护面）
 - [x] 测试数 143 → 145
+
+## Phase 5 补充记录（构建产物漂移守卫，Round 63）
+
+- [x] 发现缺口：`lib/` 入库且**单测导入的正是 `lib/`**，但 CI 只做「构建 → 测试」，**从不比较重建后的 `lib/` 与已提交的 `lib/`**。因此「改了 `src` 忘记重建并一起提交」会让单测在**旧构建**上全绿，而仓库发布的是旧代码——CI 的重建恰好把这个漂移隐藏掉
+- [x] 新增 `scripts/verify-build.mjs` + `pnpm run verify:build`：构建后断言 `git status --porcelain -- lib` 为空，非空则列出漂移文件并给出补救命令（`pnpm run build && git add lib && git commit`）；非 git 检出时明确 SKIP
+- [x] CI 在 Build 之后立刻插入该步骤（步骤序：Install → Build → **构建产物一致** → typecheck → test → bench → verify:dsh → 打包校验）
+- [x] 实测两个方向：干净状态 `ok`／exit 0；只改 `lib/` 造成漂移 → 列出 `M lib/tool-pruner.js`／exit 1
+- [x] 新增演练条目：把 `src` 的 `DEFAULT_MIN_KEEP` 改成 99（重建后与已提交产物不一致）→ `verify-build` 必须失败
+- [x] README 验证命令清单补入 `pnpm run build && pnpm run verify:build`

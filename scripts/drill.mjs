@@ -128,6 +128,15 @@ const drills = [
   // unreachable rather than wrong and there is no regression to inject. The
   // contract it obscured is pinned by the safety-guard case instead.
   {
+    // lib/ is committed and the suite imports it; a source edit whose rebuild is
+    // not committed must fail rather than ship old code behind a green suite.
+    name: 'a source change was never rebuilt into the committed output',
+    file: 'src/tool-pruner.ts',
+    from: 'export const DEFAULT_MIN_KEEP = 3',
+    to: 'export const DEFAULT_MIN_KEEP = 99',
+    command: ['scripts/verify-build.mjs'],
+  },
+  {
     // A release note read once while upgrading must not list the same change twice.
     name: 'the changelog repeats a bullet',
     file: 'CHANGELOG.md',

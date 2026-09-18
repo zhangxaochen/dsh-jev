@@ -333,6 +333,9 @@ pnpm run drill
 # 重启后验收：确认**运行中的宿主进程**确实在跑当前构建（其余闸门都无法覆盖这一点）
 pnpm run verify:host
 
+# 构建产物一致性：lib/ 入库且单测导入的是它，改了 src 忘记重建必须报错
+pnpm run build && pnpm run verify:build
+
 # 覆盖率审计：查看哪些发布代码没有被任何离线用例执行（Node 内置，无额外依赖）
 node --experimental-test-coverage --test-coverage-include='lib/*.js' --test --import ./tests/isolate.mjs tests/*.spec.ts
 
