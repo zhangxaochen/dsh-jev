@@ -128,6 +128,15 @@ const drills = [
   // unreachable rather than wrong and there is no regression to inject. The
   // contract it obscured is pinned by the safety-guard case instead.
   {
+    // The research record points at the sections and files holding its evidence;
+    // a stale citation must fail rather than send a reader nowhere.
+    name: 'the research record cites a section that does not exist',
+    file: 'docs/research.md',
+    from: '（§9.4）',
+    to: '（§99.4）',
+    test: 'tests/docs-consistency.spec.ts',
+  },
+  {
     // The published engine range is a claim about the host; raising it above the
     // installed version must fail the contract gate.
     name: 'published engine range stops matching the host',

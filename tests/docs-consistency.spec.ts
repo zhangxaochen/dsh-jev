@@ -8,7 +8,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_PATH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS } from '../lib/typesafe-client.js'
 import { cwd } from 'node:process'
@@ -152,4 +152,25 @@ test('the integration script reports its own check count', () => {
   assert.match(script, /checks passed: /, 'the integration script must print its check count')
   const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
   assert.match(report, /pnpm run verify:dsh/, 'the report names the command that prints the count')
+})
+
+test('the research record cites sections and files that exist', () => {
+  // The record maps borrowed practices onto evidence, so a stale citation would
+  // point a reader at a section or file that no longer exists.
+  const research = readFileSync(join(cwd(), 'docs', 'research.md'), 'utf8')
+  const calibration = readFileSync(join(cwd(), 'docs', 'calibration.md'), 'utf8')
+
+  const sections = [...research.matchAll(/§(\d+(?:\.\d+)?)/g)].map((match) => match[1])
+  const uniqueSections = [...new Set(sections)]
+  assert.ok(uniqueSections.length > 0, 'the record should cite the calibration sections it leans on')
+  for (const section of uniqueSections) {
+    const heading = new RegExp('(?:^|\\n)#+ *' + section.replace('.', '\\.') + '(?:\\.|\\s|$)')
+    assert.ok(heading.test(calibration), 'research.md cites calibration §' + section + ', which has no such heading')
+  }
+
+  const files = [...research.matchAll(/`((?:tests|scripts|src|docs|bench)\/[A-Za-z0-9._/-]+)`/g)].map((match) => match[1])
+  assert.ok(files.length > 0, 'the record should point at the files holding the evidence')
+  for (const file of [...new Set(files)]) {
+    assert.ok(existsSync(join(cwd(), file)), 'research.md points at ' + file + ', which does not exist')
+  }
 })
