@@ -398,3 +398,12 @@
 - [x] 单测 +3：字面点名压过更高分对手、连字符片段算点名而无关词不算、候选上限默认关闭且仅在设置时启用
 - [x] 新增配置项 `requestTimeoutMs` / `nameMatchBoost` / `maxCandidates` 并写入 README（含实测依据）；`docs/calibration.md` 新增 §11
 - [x] 测试数 111 → 114
+
+## Phase 5 补充记录（全模块共存，Round 41）
+
+此前每个模块都是单独挂载验证的；`tool-pruner` 与 `skill-router` 同挂 `system-prompt/assemble`，`loop-guard` 与 `result-shaper` 同挂 `tools/post-execute` —— **共存从未验证**。
+
+- [x] 新增集成校验（4 项）：把 client / loop-guard / safety-guard / tool-pruner / result-shaper / skill-router **全部挂在同一个真实 Context 上**，注册 4 个工具与真实 112 项技能目录，然后断言四件事同时成立：剪枝仍生效（4 → 2）、路由仍给建议（1 条）、整形仍替换内容、死循环提示仍搭在同一条决策上
+- [x] 结论：**共存无冲突**（结果 22/22 通过）
+- [x] 排查过程中的一次自我纠错：首轮 `advice=0` 看似共存缺陷，实为我的集成 mock 缺少 `skill_*` 分支（返回了安全答案 → 无 score → 无建议）。用最小复现脚本确认「剪枝真正发生 + 路由」本身正常后，修正的是 mock 而非产品代码
+- [x] 集成校验 18 → 22 项

@@ -63,6 +63,12 @@ function check(name, condition, detail) {
 /** Answer the two question sets the guards ask, based on the question ids. */
 async function answersFor(req) {
   const ids = Object.keys(req.questions ?? {})
+  if (ids.every((id) => id.startsWith('skill_'))) {
+    // Skill router: score every candidate, so the router can pick one.
+    const answers = {}
+    for (const id of ids) answers[id] = { type: 'score', score: 2, confidence: 0.9, probabilities: {} }
+    return answers
+  }
   if (ids.every((id) => id.startsWith('kind_'))) {
     // Result shaper: classify each line shape. The sample travels inside the
     // question, so the mock reads it from there - exactly as the live model does.
@@ -448,6 +454,82 @@ try {
   check('assembling again does not stack a second advice entry', stacked.length <= 1, 'entries=' + stacked.length)
 } catch (err) {
   check('service-level skill-routing pass runs', false, err instanceof Error ? err.message : String(err))
+}
+
+// 10. Every module mounted together: the pruner and the router both hook
+//     system-prompt/assemble, and the loop guard and the shaper both hook
+//     tools/post-execute. Each effect must survive the presence of the others.
+try {
+  const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+  const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)
+  const SystemPrompt = await loadPkg('@deepseek-ai/dsh-system-prompt')
+  const Tools = await loadPkg('@deepseek-ai/dsh-tools')
+  const Skills = await loadPkg('@deepseek-ai/dsh-skill')
+  const SkillFs = await loadPkg('@deepseek-ai/dsh-skill-filesystem')
+
+  const allCtx = new Context()
+  allCtx.plugin(SystemPrompt.default ?? SystemPrompt)
+  allCtx.plugin(Tools.default ?? Tools, { mode: 'native' })
+  allCtx.plugin(Skills.default ?? Skills)
+  allCtx.plugin(SkillFs.default ?? SkillFs)
+  ClientPlugin.apply(allCtx, { mockHandler: answersFor })
+  LoopGuard.apply(allCtx, { triggerThreshold: 1 })
+  SafetyGuard.apply(allCtx, { headless: false })
+  ToolPruner.apply(allCtx, { maxTools: 2 })
+  ResultShaper.apply(allCtx, { thresholdChars: 10, shapeTools: ['noisy_tool'], linesPerSegment: 3 })
+  SkillRouter.apply(allCtx, { minCandidates: 3 })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+
+  const allTools = allCtx.get('tools')
+  for (const name of ['search_web', 'send_slack', 'read_file', 'write_file']) {
+    allTools.register({
+      name,
+      description: 'tool ' + name,
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+      async execute() {
+        return { ok: true }
+      },
+    })
+  }
+
+  const toolsBefore = 4
+  const allAssembly = await allCtx.systemPrompt.assemble({})
+  const routerAdvice = (allAssembly.contexts ?? []).filter((entry) => entry.name === 'typesafe-skill-router')
+  check(
+    'with every module mounted the pruner still prunes',
+    Array.isArray(allAssembly.tools) && allAssembly.tools.length < toolsBefore,
+    'tools ' + toolsBefore + ' -> ' + allAssembly.tools.length
+  )
+  check(
+    'with every module mounted the router still advises',
+    routerAdvice.length === 1,
+    'advice entries=' + routerAdvice.length
+  )
+
+  // Both post-execute plugins must contribute to the same decision.
+  const allExec = { name: 'noisy_tool', args: {}, agent: { id: 'all-modules' } }
+  const noisy = [
+    ...Array.from({ length: 60 }, () => 'progress: chunk ok'),
+    'IMPORTANT error at src/a.ts',
+    ...Array.from({ length: 60 }, () => 'progress: chunk ok'),
+  ].join('\n')
+  const allResults = await allTools.postExecute(
+    { ...allExec, token: 'x', callId: 'c1', signal: new AbortController().signal },
+    { content: [{ type: 'text', text: noisy }] }
+  )
+  check(
+    'with every module mounted the shaper still replaces the content',
+    Boolean(allResults.content) && !JSON.stringify(allResults.content).includes('progress: chunk ok'),
+    'chars=' + JSON.stringify(allResults.content ?? '').length
+  )
+  check(
+    'with every module mounted the loop notice still rides the same decision',
+    (allResults.additionalContexts ?? []).some((entry) => entry?.source?.plugin === 'typesafe-loop-guard'),
+    'contexts=' + (allResults.additionalContexts ?? []).length
+  )
+} catch (err) {
+  check('all-modules pass runs', false, err instanceof Error ? err.message : String(err))
 }
 
 const failed = results.filter((entry) => !entry.ok)
