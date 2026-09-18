@@ -296,7 +296,61 @@ try {
   check('service-level denial pass runs', false, err instanceof Error ? err.message : String(err))
 }
 
-// 7. The real system prompt service must accept the pruned assembly.
+// 7. The loop notice must reach the caller through the real service, not only
+//    through a bare waterfall.
+try {
+  const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+  const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)
+  const SystemPrompt = await loadPkg('@deepseek-ai/dsh-system-prompt')
+  const Tools = await loadPkg('@deepseek-ai/dsh-tools')
+
+  const loopCtx = new Context()
+  loopCtx.plugin(SystemPrompt.default ?? SystemPrompt)
+  loopCtx.plugin(Tools.default ?? Tools, { mode: 'native' })
+  ClientPlugin.apply(loopCtx, {
+    mockHandler: async (req) =>
+      Object.keys(req.questions ?? {}).includes('stuck_severity')
+        ? {
+            has_progress: { type: 'noul', noul: 0.1 },
+            stuck_severity: { type: 'score', score: 1.85, confidence: 0.8, probabilities: { '0': 0, '1': 0.14, '2': 0.86 } },
+          }
+        : answersFor(req),
+  })
+  LoopGuard.apply(loopCtx, { triggerThreshold: 1 })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  const loopTools = loopCtx.get('tools')
+  loopTools.register({
+    name: 'looping_tool',
+    description: 'integration probe',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+    async execute() {
+      return { ok: true }
+    },
+  })
+
+  const loopCreated = loopTools.createExecution({
+    name: 'looping_tool',
+    arguments: {},
+    agent: { id: 'integration-agent' },
+    signal: new AbortController().signal,
+  })
+  const loopPrepared = await loopTools.prepareExecution(loopCreated.exec, (p) => p)
+  const loopResult = await loopTools.postExecute(loopPrepared.exec ?? loopPrepared, {
+    content: [{ type: 'text', text: 'error: cannot find module' }],
+  })
+  const loopContexts = loopResult?.additionalContexts ?? []
+  check(
+    'the loop notice reaches the caller through the real service',
+    loopContexts.length === 1 && loopContexts[0]?.source?.plugin === 'typesafe-loop-guard',
+    'contexts=' + loopContexts.length
+  )
+} catch (err) {
+  check('service-level loop-notice pass runs', false, err instanceof Error ? err.message : String(err))
+}
+
+// 8. The real system prompt service must accept the pruned assembly.
 try {
   const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
   const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)

@@ -235,3 +235,9 @@
 - [x] 新增集成校验：在守卫之后注册一个「一律放行」的 `tools/pre-execute` 监听器，再对 `rm -rf /` 发起调用 —— 结果 `prepared.kind=post-result`、`executed=0`，且该放行监听器**运行次数为 0**
 - [x] 结论：`ctx.tools.guard()` 的单调拒止发生在可扩展 waterfall **之前**并短路链路，因此不止「无法覆盖」，而是「根本不会执行到」——设计承诺成立且更强
 - [x] 集成校验 14 → **15/15**
+
+## Phase 5 补充记录（四个插件的服务级覆盖闭环，Round 24）
+
+- [x] **loop-guard 提示经真实服务送达**：`createExecution` 接受普通对象作为 agent，`postExecute` 返回的 `additionalContexts` 长度 1 且 `source.plugin === 'typesafe-loop-guard'`——此前该项只在裸 waterfall 上验证
+- [x] 至此四个插件**全部**具备服务级（真实 `dsh-tools` + `dsh-system-prompt`）覆盖：safety-guard 的拒止与单调性、tool-pruner 的真实装配、result-shaper 的块内容整形、loop-guard 的提示送达
+- [x] 集成校验 15 → **16/16**；无 DSH 时整体跳过并退出 0
