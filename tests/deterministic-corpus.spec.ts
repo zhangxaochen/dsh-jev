@@ -18,13 +18,19 @@ import assert from 'node:assert/strict'
 import { deterministicVerdict } from '../lib/safety-guard.js'
 import type { ToolExecution } from '../lib/types.js'
 
-/** Every case runs through the guarded shell tool, where the envelope applies. */
+/** Every case runs through a guarded tool, where the envelope applies. */
 function call(command: string, name = 'bash'): ToolExecution {
   return { name, args: { command } }
 }
 
+/** A case carrying a whole arguments object, for shapes a bare command cannot express. */
+function callArgs(args: unknown, name = 'bash'): ToolExecution {
+  return { name, args }
+}
+
 interface Case {
-  command: string
+  command?: string
+  args?: unknown
   expect: 'deny' | 'pass'
   note: string
   tool?: string
@@ -108,6 +114,18 @@ const CASES: Case[] = [
   { command: 'while true; do ./worker.sh; sleep 1; done', expect: 'pass', note: 'a bounded polling loop' },
   { command: 'dd if=image.iso of=usb.img', expect: 'pass', note: 'file to file' },
 
+  // --- where in the arguments the envelope looks ----------------------------
+  // Command-shaped keys are followed at any depth, because some tool schemas nest
+  // them; data keys are not, because a file body may contain the same text without
+  // anything running it.
+  { args: { options: { command: 'rm -rf /' } }, expect: 'deny', note: 'a command nested one level' },
+  { args: { steps: [{ command: 'rm -rf /' }] }, expect: 'deny', note: 'a command inside an array of steps' },
+  { args: { nested: { deeper: { script: 'rm -rf /' } } }, expect: 'deny', note: 'a script three levels down' },
+  { args: { content: 'rm -rf /' }, expect: 'pass', note: 'a file body that merely contains the text' },
+  { args: { edits: [{ newText: 'rm -rf /' }] }, expect: 'pass', note: 'replacement text for a file edit' },
+  { args: { command: 'echo safe', nested: { x: 'rm -rf /' } }, expect: 'pass', note: 'a non-command key' },
+  { args: { steps: ['echo hi', 'rm -rf /'] }, expect: 'pass', note: 'bare strings under a non-command key' },
+
   // --- other tools the envelope inspects ------------------------------------
   { command: 'bash -c "rm -rf /"', expect: 'deny', note: 'the payload inside a shell wrapper' },
   { command: 'sh -c "Remove-Item -Recurse -Force C:\\"', expect: 'deny', note: 'a wrapped windows wipe' },
@@ -117,7 +135,9 @@ const CASES: Case[] = [
 test('the deterministic envelope classifies the destructive-command corpus', () => {
   const wrong = []
   for (const entry of CASES) {
-    const verdict = deterministicVerdict(call(entry.command, entry.tool))
+    const exec =
+      entry.args !== undefined ? callArgs(entry.args, entry.tool) : call(entry.command!, entry.tool)
+    const verdict = deterministicVerdict(exec)
     const actual = verdict ? 'deny' : 'pass'
     if (actual !== entry.expect) {
       wrong.push(entry.expect + ' expected, got ' + actual + ': ' + entry.command + '  (' + entry.note + ')')
@@ -129,8 +149,10 @@ test('the deterministic envelope classifies the destructive-command corpus', () 
 test('every deny the envelope raises names a rule', () => {
   for (const entry of CASES) {
     if (entry.expect !== 'deny') continue
-    const verdict = deterministicVerdict(call(entry.command, entry.tool))
-    assert.ok(verdict, entry.command + ' must be denied')
+    const exec =
+      entry.args !== undefined ? callArgs(entry.args, entry.tool) : call(entry.command!, entry.tool)
+    const verdict = deterministicVerdict(exec)
+    assert.ok(verdict, (entry.command ?? entry.note) + ' must be denied')
     assert.ok(verdict!.id.length > 0, entry.command + ' was denied without naming a rule')
     assert.ok(verdict!.reason.length > 0, entry.command + ' was denied without a reason')
   }

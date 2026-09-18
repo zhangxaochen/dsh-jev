@@ -26,11 +26,6 @@ interface HardDenyRule {
     reason: string;
     test: RegExp;
 }
-/**
- * Strings worth inspecting for one tool call. Patterns must never be matched
- * against a JSON envelope alone: quoting hides the end of a command, so a
- * `$`-anchored pattern silently stops matching `rm -rf /`.
- */
 export declare function inspectableText(exec: ToolExecution): string[];
 /**
  * Deterministic hard denies. Each entry is a shape with no legitimate agent use;

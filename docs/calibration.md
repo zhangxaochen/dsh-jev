@@ -634,3 +634,23 @@ ok   the live numbers postdate the build they claim to measure
 - 我一度加入「`while true; do … & done`」作为 fork bomb 形态，复查时判定**这是我臆测的形态、没有证据**，且可能命中正当的后台循环 → **删除**（与第 54 轮「不留未经证实的猜测代码」一致）。
 
 语料库扩到 **69 条**（47 硬拒 / 22 放行）。全部单测与 36 条基准在改动后不变：**误报仍为 0**。
+
+### 18.6 第三遍探测：外壳在参数里「看哪里」（同日）
+
+前两遍都在换命令形态；这一遍固定命令、改**参数形状**，探测 `inspectableText` 的检视面。结果：
+
+| 参数形状 | 修复前 | 修复后 |
+|---|---|---|
+| `{command}`（顶层） | deny | deny |
+| `{options:{command}}`（嵌套一层） | **pass（逃逸）** | **deny** |
+| `{nested:{deeper:{script}}}`（三层） | **pass** | **deny** |
+| `{steps:[{command}]}`（数组对象内） | **pass** | **deny** |
+| `{content:'rm -rf /'}`（文件正文） | **deny（误报）** | **pass** |
+| `{edits:[{newText:'rm -rf /'}]}`（编辑内容） | pass | pass |
+
+两个方向都修：
+
+1. **漏判**：部分工具 schema 把命令嵌在 `{options:{command}}` 这类结构里，而外壳只读顶层字符串 → 现在**递归收集「命令键」下的字符串值**（深度上限 6）：`command`/`cmd`/`script`/`code`/`shell`/`exec`/`entrypoint`。
+2. **误报（本次最重要的发现）**：外壳把 `content` 也当命令匹配，因此 `write_to_file {path, content}` 只要正文里出现 `rm -rf /` 就被硬拒——**编写「危险命令文档」这一常见正当工作会被阻断**。而 `content` 对受保护的文件工具而言是**数据**，不是被执行的东西。移除数据键的检视（`content`/`body`/`text`/`input`/`url`/`path`），命令只认命令键。
+
+边界写进语料库：`{content:'rm -rf /'}` 与 `{edits:[{newText:'rm -rf /'}]}` 必须**放行**；非命令键下的裸字符串数组同样放行（交由语义层）。语料库现为 **76 条**（50 硬拒 / 26 放行）；基准 36 条与 22 项集成校验均不变，误报仍为 0。

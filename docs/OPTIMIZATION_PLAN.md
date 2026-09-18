@@ -651,3 +651,11 @@
 - [x] **同时检查误报面并据此收紧两处**：`mke2fs disk.img`（嵌入式镜像）是正当用法 → 仅当目标是 `/dev/…` 才硬拒；`.env.example`/`.env.sample` 是分享用模板却被误拒（属既有缺陷）→ 加负向断言，模板放行而 `.env`/`.env.local` 仍拒
 - [x] **自我纠正**：我一度臆测加入「`while true; do … & done`」为 fork bomb 形态，复查判定无证据且可能命中正当后台循环 → 删除（延续第 54 轮原则）
 - [x] 语料库扩到 **69 条**（47 硬拒 / 22 放行）；全部单测与 36 条基准不变，**误报仍 0**
+
+## Phase 1 补充记录（外壳的检视面，Round 66）
+
+- [x] 第三遍探测固定命令、改**参数形状**，刻画 `inspectableText` 的检视面，两个方向各抓一处：
+- [x] **漏判**：命令嵌在 `{options:{command}}`、`{nested:{deeper:{script}}}`、`{steps:[{command}]}` 里时全部逃逸（只读顶层字符串）→ 改为**递归收集命令键下的字符串值**（深度上限 6，键集 `command`/`cmd`/`script`/`code`/`shell`/`exec`/`entrypoint`）
+- [x] **误报（本轮最重要的发现）**：外壳把 `content` 也当命令匹配，于是 `write_to_file {path, content}` 只要正文含 `rm -rf /` 就被硬拒——**「编写危险命令文档」这一常见正当工作会被阻断**；而 `content` 对受保护的文件工具是数据而非被执行物。移除数据键检视（`content`/`body`/`text`/`input`/`url`/`path`）
+- [x] 边界写进语料库：`{content:'rm -rf /'}`、`{edits:[{newText:'rm -rf /'}]}`、非命令键下的裸字符串数组**必须放行**
+- [x] 语料库 69 → **76 条**（50 硬拒 / 26 放行）；单测 148、基准 36 条（误报 0）、集成 22 项**均不变**

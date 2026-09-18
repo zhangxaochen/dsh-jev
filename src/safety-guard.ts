@@ -66,6 +66,41 @@ interface HardDenyRule {
  * against a JSON envelope alone: quoting hides the end of a command, so a
  * `$`-anchored pattern silently stops matching `rm -rf /`.
  */
+/** Argument keys whose string value is a command to be run, wherever it sits. */
+const COMMAND_KEYS = ['command', 'cmd', 'script', 'code', 'shell', 'exec', 'entrypoint']
+
+/**
+ * Keys deliberately **not** inspected as commands.
+ *
+ * `content`, `body`, `text`, `input`, `url` and `path` carry data for the tools that
+ * are guarded: `write_to_file {path, content}` writes a file whose body may legitimately
+ * contain `rm -rf /` (documentation about dangerous commands is the obvious case),
+ * and matching it there denies ordinary work. Commands live under the keys above, at
+ * whatever depth a tool schema nests them; anything else is the semantic layer's call.
+ */
+const DATA_KEYS: string[] = []
+
+/**
+ * Collect string values under `keys`, at any depth.
+ *
+ * Commands arrive nested in some tool schemas (`{options: {command}}`,
+ * `{steps: [{command}]}`), and inspecting only the top level let those reach the
+ * shell unexamined. The recursion is limited to command-shaped keys on purpose: a
+ * file body under `content` may contain the text `rm -rf /` without anything
+ * running it, so descending into data keys would deny ordinary writes.
+ */
+function collectValuesByKey(value: unknown, keys: string[], seen: string[], depth = 0): void {
+  if (depth > 6 || value === null || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    for (const entry of value) collectValuesByKey(entry, keys, seen, depth + 1)
+    return
+  }
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === 'string' && entry.length > 0 && keys.includes(key)) seen.push(entry)
+    else collectValuesByKey(entry, keys, seen, depth + 1)
+  }
+}
+
 export function inspectableText(exec: ToolExecution): string[] {
   const args = exec?.arguments ?? exec?.args
   const out: string[] = []
@@ -74,10 +109,11 @@ export function inspectableText(exec: ToolExecution): string[] {
     return out
   }
   if (args && typeof args === 'object') {
-    for (const key of ['command', 'cmd', 'script', 'code', 'input', 'content', 'url', 'path']) {
+    for (const key of [...COMMAND_KEYS, ...DATA_KEYS]) {
       const value = (args as Record<string, unknown>)[key]
       if (typeof value === 'string' && value.length > 0) out.push(value)
     }
+    collectValuesByKey(args, COMMAND_KEYS, out)
     try {
       out.push(JSON.stringify(args))
     } catch {
