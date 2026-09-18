@@ -527,3 +527,11 @@
 - [x] 顺带查清闸门分工：loop 阈值由 **bench** 拦下（改前不会）；安全阈值由**单测**拦下——原因是 bench 的四个语义用例全部经 `risk_score` 判定（2 / 1.2 / 1.48 / 1.37），危害概率均 ≈0，模型把危害与风险高度耦合。**这是分工而非缺口**：bench 覆盖模型真实走的路径，单测覆盖阈值区间
 - [x] 演练修正两处自身问题：bench 会重写受跟踪的 `docs/calibration/bench-*.json` 使演练残留脏树 → 新增 `--no-artifacts`；安全阈值演练的归属改为覆盖它的那道闸门
 - [x] 演练现状 **14/14**，跑完工作树干净；`docs/calibration.md` 新增 §13
+
+## Phase 5 补充记录（近似实现的第二处，Round 52）
+
+- [x] 沿用第 51 轮的审计线索全库搜索规则副本，发现 `tests/live-verify.ts` 同样**硬编码** `progress<0.3 && pLoop>=0.6 && confidence>=0.5`——而验证报告正是把该脚本列为「历史误报已修」的证据来源
+- [x] 修复：改调 `evaluateStuckTrajectory` + 发布默认阈值；三场景仍全过且**测量值逐项一致**（0.72/0.70/0.10、pLoop 0/0/0.87、confidence 0.94/0.98/0.79）
+- [x] 全库复扫确认无其他副本：`tests/`、`bench/` 中其余 `0.85`/`1.7` 字样均为测试夹具里的同数字（分数、版本号、置信度），非规则副本
+- [x] 新增演练条目（改 `DEFAULT_P_LOOP_THRESHOLD` → `verify:live` 必须失败）并引入 `needsKey` 标记：无 Key 的机器记为 **SKIPPED**，避免把网络失败误算成拦下回归
+- [x] 演练 **15/15**，工作树干净；`docs/calibration.md` §13.4 记录
