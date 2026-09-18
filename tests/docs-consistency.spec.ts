@@ -239,3 +239,31 @@ test('every breaking change the README lists is announced in the changelog', () 
   const missing = markers.filter(([, pattern]) => !pattern.test(changelog)).map(([label]) => label)
   assert.deepEqual(missing, [], 'these breaking changes are documented only in the README')
 })
+
+test('the evidence index names every gate the package exposes', () => {
+  // The index is what a reviewer reads first, and it had drifted: two commands were
+  // missing from the reproduce list, the drill count was three revisions old, and
+  // neither corpus was mentioned at all - the strongest evidence for the pure
+  // decision surfaces. Naming them here means a new gate has to be indexed.
+  const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
+  const scripts = JSON.parse(readFileSync(join(cwd(), 'package.json'), 'utf8')).scripts
+
+  const missing = []
+
+  for (const name of Object.keys(scripts)) {
+    const isGate = name.startsWith('verify:') || ['test', 'drill', 'bench:offline', 'typecheck:scripts'].includes(name)
+    if (isGate && !report.includes(name)) missing.push('script ' + name)
+  }
+
+  for (const file of readdirSync(join(cwd(), 'tests')).filter((name) => name.includes('corpus') && name.endsWith('.spec.ts'))) {
+    if (!report.includes(file)) missing.push('corpus ' + file)
+  }
+
+  for (const file of readdirSync(join(cwd(), 'scripts')).filter((name) => name.endsWith('.mjs'))) {
+    // `verify-build.mjs` is exposed as `verify:build`.
+    const command = file.replace(/\.mjs$/, '').replace(/^verify-/, 'verify:')
+    if (!report.includes(file) && !report.includes(command)) missing.push('script file ' + file)
+  }
+
+  assert.deepEqual(missing, [], 'the evidence index does not mention these gates')
+})

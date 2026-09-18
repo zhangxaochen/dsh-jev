@@ -11,9 +11,12 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **151/151**（`pnpm test`；其中 6 项在无 DSH 时跳过） |
+| 离线单测 | **152/152**（`pnpm test`；其中 6 项在无 DSH 时跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
-| 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** |
+| 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 4/4（单轮语义开销 2.7–3.1s） |
+| 守卫网自检 | `pnpm run drill` **21/21**（对 21 条承诺注入对应回退，全部被某道闸门拦下） |
+| 构建产物一致 | `pnpm run verify:build` → `ok`（`lib/` 入库，单测导入的是它） |
+| 宿主验收 | `pnpm run verify:host` → **exit 1**（宿主未重载，正是应有的结果；重启后期望 6/6） |
 | A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
 | 干净 clone 复现 | `install --frozen-lockfile` → `build` → `test` → `bench`，且重建后 `lib/` 零漂移 |
 | 布局状态 | `doctor` 报告 `ACTION: restart DSH`（文件已同步，宿主进程未重载） |
@@ -39,8 +42,16 @@
 | 发布配置不弱化保护 | 单测（解析 `cordis.patch.yml`） | `guardedTools` ⊇ 库默认且含文件写入；`alwaysRetain` ⊇ 库默认 |
 | 文档默认值不说谎 | 单测（从 README/calibration 反解数字比对代码常量） | 全部一致（曾抓到 1 处不符） |
 | 验证脚本不写实机状态 | 单测（`tests/isolation.spec.ts`）+ 实测前后对比 | 连跑单测/集成/基准后，实机指标与决策日志均不变 |
-| **每条承诺都有闸门拦得住回退** | 回归演练（`pnpm run drill`，15 条注入） | **15/15**：每条承诺的对应回退都能被某个闸门拦下，其中 2 条（崩溃级、模块失效）只有真实运行时能抓到，无 DSH 时标记为 SKIPPED |
+| **每条承诺都有闸门拦得住回退** | 回归演练（`pnpm run drill`，21 条注入） | **21/21**：每条承诺的对应回退都能被某个闸门拦下，其中 2 条（崩溃级、模块失效）只有真实运行时能抓到，无 DSH 时标记为 SKIPPED |
 | bench 跑的是发布规则而非其副本 | 回归演练（改 `DEFAULT_P_LOOP_THRESHOLD` / `DEFAULT_BLOCK_THRESHOLD` 必须失败）+ 抽取前后离线数字一致 | loop 阈值改为由 bench 拦下；安全阈值由单测拦下（bench 语义用例全走 `risk_score`） |
+| 拒止规则覆盖真实命令形态 | 语料库（`tests/deterministic-corpus.spec.ts`，**92 例**：58 硬拒 / 34 放行） | 系统目录、`erase`/`ri` 别名、花括号展开、`find … -delete`、凭据文件、设备格式化均硬拒；工作区内的 `rm -rf ./build`、`chmod -R 777 .`、`.env.example` 上传均放行 |
+| 整形前置检查不误判真实输出 | 语料库（`tests/repetition-corpus.spec.ts`，16 例） | 构建日志/依赖树/目录列表/时间戳日志触发；短结果与内容各异的输出放行；并断言该检查保持纯字符串操作 |
+| 重复让位范围不越界 | 单测（`tests/loop-guard.spec.ts`，7 条边界） | 输出不同/参数不同/工具不同/仅空白不同 → 交语义层；参数**键序不同仍视为同一次重复** |
+| 随包补丁与代码默认一致 | 单测（`tests/packaging.spec.ts`） | 补丁钉住的每个标量等于代码默认；未登记的钉住项即失败；实验性 shaper 不得出现在补丁里 |
+| 代码接受的配置项都有文档 | 单测（`tests/docs-consistency.spec.ts`） | 7 个 `*Config` 接口 50 个字段全部在 README 有说明（曾漏 `headless` 等 5 项） |
+| 破坏性变更在变更日志里有公告 | 单测（`tests/docs-consistency.spec.ts`） | 迁移表的三处破坏性变更均在 CHANGELOG；同一小节不得重复条目 |
+| 宿主契约仍成立 | 单测（`tests/dsh-contract.spec.ts`，无 DSH 时跳过） | 内置包已安装、阈值仍为 `[3,5,8]`、`engines.dsh` 满足、钩子实参形态未变、补丁整行替换语义未变 |
+| 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 
 ## 抓到的真实缺陷（按严重度）
 
@@ -78,14 +89,18 @@
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm test                 # 离线用例，不联网、不需要 Key
+pnpm run build && pnpm run verify:build   # 构建产物必须与已提交的一致（lib/ 入库）
+pnpm run typecheck:scripts                # bench/tests/scripts 的类型检查
+pnpm test                 # 离线用例，不联网、不需要 Key（含三个语料库）
 pnpm run verify:dsh       # 真实 DSH 服务集成（无 DSH 时跳过）
-pnpm run verify:live      # 历史误报形态回放
+pnpm run verify:live      # 历史误报形态回放（调用发布规则）
 pnpm run verify:tools     # 三个决策原语
 pnpm run verify:shaper    # 结果整形对四类真实输出
 pnpm run verify:pruner    # 工具剪枝的排序质量
 pnpm run verify:router    # skill 路由（真实目录）
-pnpm run bench:offline    # 30 条基准，零成本
+pnpm run verify:turn      # 整轮演练：全部模块 + 真实模型 + 真实装配
+pnpm run drill            # 守卫网自检：注入回退，确认闸门拦得住
+pnpm run bench:offline    # 36 条基准，零成本
 pnpm run doctor           # 本机是否真的在跑当前构建
 ```
 

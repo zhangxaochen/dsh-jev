@@ -163,6 +163,15 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
+    // The evidence index is the first thing a reviewer reads; dropping a gate from it
+    // must fail rather than hide that gate.
+    name: 'the evidence index stops naming a gate',
+    file: 'docs/verification-report.md',
+    from: 'pnpm run drill            # 守卫网自检：注入回退，确认闸门拦得住\n',
+    to: '',
+    test: 'tests/docs-consistency.spec.ts',
+  },
+  {
     // The research record points at the sections and files holding its evidence;
     // a stale citation must fail rather than send a reader nowhere.
     name: 'the research record cites a section that does not exist',
