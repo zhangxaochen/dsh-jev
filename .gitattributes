@@ -1,0 +1,18 @@
+# Normalize text to LF in the repository and in every worktree.
+#
+# The build artifacts under lib/ are committed so the plugin installs from git
+# without a build step. Without this file, a Windows checkout with
+# core.autocrlf=true reports those files as modified even when their content
+# matches the index, which turns into accidental churn in later commits.
+* text=auto eol=lf
+
+# Binary or generated assets that must never be newline-converted.
+*.png binary
+*.jpg binary
+*.gif binary
+*.mp4 binary
+*.tgz binary
+
+# Keep the lockfile and YAML byte-stable across platforms.
+pnpm-lock.yaml text eol=lf
+*.yml text eol=lf

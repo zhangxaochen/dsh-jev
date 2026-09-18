@@ -164,3 +164,16 @@ node --experimental-strip-types bench/run.ts --offline  # 回放录制答案，�
 - 设置面板底部
 
 未跑过基准时明确显示「暂无记录（运行 `pnpm run bench` 后写入）」，不编造数字。这解决了 §4.2 遗留的第 1 条：看板上的每个数字要么来自会话实测指标，要么可回溯到一次带标注的基准运行。
+
+## 8. 可复现性验证（全新 clone）
+
+CI 等价流程在**干净 clone**（无 `node_modules`、无本机缓存）中执行：
+
+| 步骤 | 结果 |
+|---|---|
+| `pnpm install --frozen-lockfile` | 通过（修复前失败，见 `docs/OPTIMIZATION_PLAN.md` Round 12） |
+| `pnpm run build` | 通过；重新构建的 `lib/` 与提交内容一致，无陈旧产物 |
+| `pnpm test` | 70/70 |
+| `pnpm run bench:offline` | 准确率 93.3%、误报 0、退出码 0 |
+
+结论：交付物不依赖本机残留状态，`git clone` + 上述四步即可得到与本文档一致的结论。

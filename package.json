@@ -112,8 +112,8 @@
   "author": "zhangxaochen",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^22.13.0",
-    "typescript": "^5.7.0"
+    "@types/node": "^22.20.3",
+    "typescript": "^7.0.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0"
