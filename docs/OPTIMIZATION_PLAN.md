@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **132** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **137** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -573,3 +573,12 @@
 - [x] 覆盖率：`index.js` 81.65→**89.51%**（函数 52.94→**88.24%**）、`typesafe-client` 92.78→**94.22%**、`ask-tools` 97.74→**98.50%**、整体 94.91→**95.91%**；测试数 129 → 132
 - [x] 核实并闭环一条旧线索：剪枝的**发布默认配置**已由 `verify:turn` 覆盖（只覆盖 `maxTools`，`minScoreThreshold` 与 `alwaysRetain` 取发布默认），第 50 轮的一次性测量无需再补
 - [x] 在 `docs/calibration.md` §16.4 留档剩余未覆盖部分的**性质**（不可达输入、防御分支、或由 `verify:dsh` 覆盖的接线），避免后人重复审计
+
+## Phase 5 补充记录（重启后验收脚本，Round 57）
+
+- [x] 新增 `scripts/verify-host.mjs` + `pnpm run verify:host`：把「重启后应该好了」变成 6 条可判定检查——各 profile 携带当前构建、发行版与安装版一致、**运行中的宿主在执行本构建**、**实机指标为 v2 schema**、载荷含全部 v2 段、实机数字晚于它所测量的构建；每条失败附具体补救动作
+- [x] 重启前实测：4 项通过、**3 项精确失败**（`restart still required` / `live file reports v1` / 缺 `resultShaper`），退出码 1——文件已就绪、进程未重载，正是应有的结果
+- [x] 判定逻辑抽为纯函数 `buildAcceptance`，新增 `tests/verify-host.spec.ts`（5 项合成报告用例）：v2 宿主全通过、v1 宿主恰好三项失败、profile 漂移、版本不一致、载荷缺失 → 该脚本不依赖操作者机器状态也能被回归保护
+- [x] 结构问题当场暴露并修掉：首次写成时测试导入该模块即执行 CLI（含 `process.exit`），改为「仅直接运行时执行」守卫
+- [x] README 增补命令；验证报告的「待人工动作」改为「重启 → `pnpm run verify:host`（期望 exit 0）→ `pnpm run doctor`」
+- [x] 测试数 132 → 137；`docs/calibration.md` 新增 §17

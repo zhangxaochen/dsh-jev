@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **132/132**（`pnpm test`；其中 4 项在无 DSH 时跳过） |
+| 离线单测 | **137/137**（`pnpm test`；其中 4 项在无 DSH 时跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** |
 | A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
@@ -91,9 +91,11 @@ pnpm run doctor           # 本机是否真的在跑当前构建
 
 ## 待人工动作
 
-重启 DSH 桌面端。重启后：
+重启 DSH 桌面端。重启后运行验收脚本（逐条列出判定与补救动作）：
 
 ```bash
+pnpm run verify:host
+# 期望：exit 0，且 6 条检查全为 ok
 pnpm run doctor
 # 期望：OK: the running host is using the current build
 ```

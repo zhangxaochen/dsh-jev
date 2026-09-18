@@ -547,3 +547,37 @@ const gate = await this.ctx.waterfall(carrier, "tools/pre-execute", exec,
 | `tool-pruner.js` 183-216 | `apply` 接线（由 `verify:dsh` 覆盖，非单测职责） |
 
 这些分支的共同点是**输入不可达或已被别处覆盖**；把它们计入单测覆盖率只会稀释信号。
+
+## 17. 重启后验收：把「应该好了」变成可判定（2026-09-20）
+
+本仓库其余闸门要么离线、要么在进程内启动服务；**唯一无法覆盖的是已经在跑的宿主进程**——它保留启动时加载的构建，因此改动只有重启后才生效，而「现在应该好了」不是证据。
+
+`pnpm run verify:host` 把重启这一动作变成 6 条可判定检查：
+
+| 检查 | 判据 |
+|---|---|
+| 各 profile 携带当前构建 | `runDoctor` 的逐模块哈希比对（`ok`，无 mismatched/missing） |
+| 发行版与安装版一致 | `verdict.versionsMatch` |
+| **运行中的宿主在执行本构建** | `verdict.ready`（等价于 `restartRequired === false`） |
+| **实机指标为 v2 schema** | `~/.dsh/jev-stats.json` 的 `version === 2` |
+| 实机载荷含全部 v2 段 | `systemOne` / `toolPruner` / `loopGuard` / `safetyGuard` / `resultShaper` |
+| 实机数字**晚于**它所测量的构建 | 载荷 `lastUpdatedAt` ≥ 已安装 `lib/index.js` 的 mtime |
+
+每条失败都附带**具体补救动作**（多数情况是「重启桌面端」）。
+
+### 17.1 重启前的实测（当前状态）
+
+```
+ok   profile desktop carries the current build  (desktop: 0.2.0, 13 modules, 0 off)
+ok   the shipped and installed versions agree  (0.2.0)
+FAIL the running host is executing this build  (restart still required)
+FAIL the live metrics use schema v2  (live file reports v1)
+FAIL the live payload carries every v2 section  (systemOne,toolPruner,loopGuard,safetyGuard)
+ok   the live numbers postdate the build they claim to measure
+```
+
+退出码 1——这正是应有的结果：文件已就绪，进程尚未重载。
+
+### 17.2 判定逻辑本身也被闸门覆盖
+
+脚本的 CLI 与判定逻辑分离为 `buildAcceptance(report, payload, statsFile)`（纯函数），并由 `tests/verify-host.spec.ts` 用**合成报告**覆盖 5 种情形：v2 宿主全通过、v1 宿主恰好三项失败、profile 漂移单独失败、版本不一致单独失败、载荷缺失报 `no payload`。这样该脚本不依赖操作者机器的当前状态也能被回归保护（首次写成时它直接把 CLI 也导入了测试进程，`process.exit` 立刻暴露了这个结构问题）。

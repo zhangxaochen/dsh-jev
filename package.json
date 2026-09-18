@@ -98,6 +98,7 @@
     "verify:pruner": "node --experimental-strip-types tests/live-pruner.ts",
     "verify:router": "node --experimental-strip-types tests/live-router.ts",
     "verify:turn": "node --experimental-strip-types tests/live-turn.ts",
+    "verify:host": "node scripts/verify-host.mjs",
     "verify:shaper": "node --experimental-strip-types tests/live-shaper.ts",
     "verify:dsh": "node tests/integration-dsh.mjs",
     "bench": "node --experimental-strip-types bench/run.ts",
