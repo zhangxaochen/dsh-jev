@@ -114,6 +114,22 @@ const drills = [
     to: '      if (typeof result.content !== \'string\') return baseDecision\n      const originalText = result.content',
     command: ['tests/integration-dsh.mjs'],
   },
+  {
+    // The bench used to reimplement these two rules, so a changed shipped threshold
+    // left the CI gate green. It now calls the shipped functions.
+    name: 'loop guard threshold change reaches the bench',
+    file: 'src/loop-guard.ts',
+    from: 'export const DEFAULT_P_LOOP_THRESHOLD = 0.6',
+    to: 'export const DEFAULT_P_LOOP_THRESHOLD = 0.99',
+    command: ['--experimental-strip-types', 'bench/run.ts', '--offline'],
+  },
+  {
+    name: 'safety guard threshold change reaches the bench',
+    file: 'src/safety-guard.ts',
+    from: 'export const DEFAULT_BLOCK_THRESHOLD = 0.85',
+    to: 'export const DEFAULT_BLOCK_THRESHOLD = 0.99',
+    command: ['--experimental-strip-types', 'bench/run.ts', '--offline'],
+  },
 ]
 
 /** Whether this machine has a DSH runtime to drive the integration checks. */

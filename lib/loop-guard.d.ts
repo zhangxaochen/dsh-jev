@@ -20,5 +20,24 @@ export declare const DEFAULT_P_LOOP_THRESHOLD = 0.6;
 export declare const DEFAULT_MIN_CONFIDENCE = 0.5;
 export declare const DEFAULT_COOLDOWN_STEPS = 3;
 export declare const DEFAULT_MAX_HISTORY = 8;
+/** Thresholds that decide whether a trajectory counts as stuck. */
+export interface LoopGuardThresholds {
+    noProgressThreshold: number;
+    pLoopThreshold: number;
+    minConfidence: number;
+}
+/**
+ * The shipped stuck-trajectory rule, as a pure function.
+ *
+ * Exported so the benchmark drives this rule instead of a copy of it: the bench is
+ * the CI gate for the loop guard, and while it reimplemented the thresholds a
+ * change here would not have failed it (docs/calibration.md §13).
+ */
+export declare function evaluateStuckTrajectory(answers: Record<string, any>, thresholds: LoopGuardThresholds): {
+    action: 'interrupt' | 'warn' | 'pass' | 'unknown';
+    progress?: number;
+    pLoop?: number;
+    confidence?: number;
+};
 export declare function apply(ctx: CordisContext, config?: LoopGuardConfig): () => void;
 //# sourceMappingURL=loop-guard.d.ts.map

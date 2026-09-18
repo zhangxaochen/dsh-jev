@@ -14,7 +14,7 @@
  * @module dsh-jev/safety-guard
  */
 
-import { choice, noul, resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
+import { choice, noul, noulProbability, resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type {
@@ -148,6 +148,54 @@ export function deterministicVerdict(exec: ToolExecution): { id: string; reason:
     }
   }
   return undefined
+}
+
+/** Thresholds that turn hazard probabilities into an action. */
+export interface SafetyThresholds {
+  blockThreshold: number
+  askApprovalThreshold: number
+}
+
+/**
+ * The shipped semantic rule, as a pure function: hazard probabilities in, an
+ * action out.
+ *
+ * Exported so the benchmark drives this rule rather than a copy of it. The bench
+ * is the CI gate for the safety guard, and while it reimplemented these
+ * thresholds a change here would not have failed it (docs/calibration.md §13).
+ */
+export function evaluateHazard(
+  answers: Record<string, any>,
+  thresholds: SafetyThresholds
+): { action: 'deny' | 'ask' | 'pass' | 'unknown'; maxHazard?: number; riskScore?: number } {
+  const hazards = ['is_destructive', 'is_exfiltration', 'is_jailbreak']
+    .map((key) => noulProbability(answers[key]))
+    .filter((value): value is number => typeof value === 'number')
+
+  const credential = answers.credential_kind
+  const credentialHazard =
+    credential && !credential.unknown && typeof credential.probabilities === 'object'
+      ? CREDENTIAL_HAZARD_BUCKETS.reduce(
+          (acc, bucket) => Math.max(acc, credential.probabilities?.[bucket] ?? 0),
+          0
+        )
+      : undefined
+
+  const riskScore = answers.risk_score && !answers.risk_score.unknown ? answers.risk_score.score : undefined
+
+  // No usable probability at all: the answer is unknown, not safe.
+  if (hazards.length === 0 && credentialHazard === undefined && riskScore === undefined) {
+    return { action: 'unknown' }
+  }
+
+  const maxHazard = Math.max(hazards.length > 0 ? Math.max(...hazards) : 0, credentialHazard ?? 0)
+  if (maxHazard >= thresholds.blockThreshold || (typeof riskScore === 'number' && riskScore >= 1.7)) {
+    return { action: 'deny', maxHazard, riskScore }
+  }
+  if (maxHazard >= thresholds.askApprovalThreshold || (typeof riskScore === 'number' && riskScore >= 0.7)) {
+    return { action: 'ask', maxHazard, riskScore }
+  }
+  return { action: 'pass', maxHazard, riskScore }
 }
 
 export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
@@ -309,26 +357,10 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
           return typeof r.probability === 'number' ? r.probability : undefined
         }
 
-        const hazards = [
-          probabilityOf('is_destructive'),
-          probabilityOf('is_exfiltration'),
-          probabilityOf('is_jailbreak'),
-        ].filter((value): value is number => typeof value === 'number')
-
-        const credential = evalResults.credential_kind as ChoiceResult | undefined
-        const credentialHazard =
-          credential && !credential.unknown && typeof credential.probabilities === 'object'
-            ? CREDENTIAL_HAZARD_BUCKETS.reduce(
-                (acc, bucket) => Math.max(acc, credential.probabilities?.[bucket] ?? 0),
-                0
-              )
-            : undefined
-
-        const risk = evalResults.risk_score as ScoreResult | undefined
-        const riskScore = risk && !risk.unknown && typeof risk.score === 'number' ? risk.score : undefined
+        const verdict = evaluateHazard(evalResults, { blockThreshold, askApprovalThreshold })
 
         // No usable probability at all: the answer is unknown, not safe.
-        if (hazards.length === 0 && credentialHazard === undefined && riskScore === undefined) {
+        if (verdict.action === 'unknown') {
           defaultMetrics.recordDecisionError()
           return failPolicy(
             onUncertain,
@@ -338,10 +370,8 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
           )
         }
 
-        const maxHazard = Math.max(
-          hazards.length > 0 ? Math.max(...hazards) : 0,
-          credentialHazard ?? 0
-        )
+        const maxHazard = verdict.maxHazard ?? 0
+        const riskScore = verdict.riskScore
 
         // User-declared rules are evaluated on the same answer set.
         for (const rule of rules) {
@@ -370,7 +400,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         }
 
         // 1. Critical hazard -> DENY
-        if (maxHazard >= blockThreshold || (riskScore !== undefined && riskScore >= 1.7)) {
+        if (verdict.action === 'deny') {
           return denyWithFacts(
             `[TypeSafe SafetyGuard] Execution blocked: hazard probability ${(maxHazard * 100).toFixed(0)}%` +
               (riskScore !== undefined ? `, risk ${riskScore.toFixed(2)}/2` : '') +
@@ -378,7 +408,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
             {
               tool: exec.name,
               probability: maxHazard,
-              credentialHazard,
+              credentialHazard: verdict.action === 'deny' ? maxHazard : undefined,
               riskScore,
               latencyMs: decisionLatencyMs,
             }
@@ -386,7 +416,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         }
 
         // 2. Moderate hazard -> ask, or fail closed when no prompt is possible.
-        if (maxHazard >= askApprovalThreshold || (riskScore !== undefined && riskScore >= 0.7)) {
+        if (verdict.action === 'ask') {
           if (isHeadless) {
             return deny(
               `[TypeSafe SafetyGuard] Approval required (hazard ${(maxHazard * 100).toFixed(0)}%) and this session cannot prompt; failing closed.`
@@ -410,7 +440,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
           action: 'pass',
           probability: maxHazard,
           latencyMs: decisionLatencyMs,
-          detail: { tool: exec.name, credentialHazard, riskScore },
+          detail: { tool: exec.name, riskScore },
         })
         return next()
       } catch (err) {

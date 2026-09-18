@@ -11,7 +11,15 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { noul, resolveClientFrom, score, scoreConfidence, topBucketProbability, TypeSafeClient } from './typesafe-client.js'
+import {
+  noul,
+  noulProbability,
+  resolveClientFrom,
+  score,
+  scoreConfidence,
+  topBucketProbability,
+  TypeSafeClient,
+} from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type {
@@ -81,6 +89,42 @@ function canonicalArgs(args: unknown): string {
   } catch {
     return String(args)
   }
+}
+
+/** Thresholds that decide whether a trajectory counts as stuck. */
+export interface LoopGuardThresholds {
+  noProgressThreshold: number
+  pLoopThreshold: number
+  minConfidence: number
+}
+
+/**
+ * The shipped stuck-trajectory rule, as a pure function.
+ *
+ * Exported so the benchmark drives this rule instead of a copy of it: the bench is
+ * the CI gate for the loop guard, and while it reimplemented the thresholds a
+ * change here would not have failed it (docs/calibration.md §13).
+ */
+export function evaluateStuckTrajectory(
+  answers: Record<string, any>,
+  thresholds: LoopGuardThresholds
+): { action: 'interrupt' | 'warn' | 'pass' | 'unknown'; progress?: number; pLoop?: number; confidence?: number } {
+  const progress = noulProbability(answers.has_progress)
+  const pLoop = topBucketProbability(answers.stuck_severity)
+  const confidence = scoreConfidence(answers.stuck_severity)
+
+  // An unusable answer is not evidence of a loop.
+  if (progress === undefined || pLoop === undefined || confidence === undefined) {
+    return { action: 'unknown' }
+  }
+
+  const madeNoProgress = progress < thresholds.noProgressThreshold
+  const definitivelyStuck = pLoop >= thresholds.pLoopThreshold
+  const confident = confidence >= thresholds.minConfidence
+  if (!madeNoProgress || !definitivelyStuck || !confident) {
+    return { action: 'pass', progress, pLoop, confidence }
+  }
+  return { action: pLoop >= 0.85 ? 'interrupt' : 'warn', progress, pLoop, confidence }
 }
 
 export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
@@ -247,17 +291,13 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         const progressResult = evalResults.has_progress as NoulResult | undefined
         const stuckResult = evalResults.stuck_severity as ScoreResult | undefined
 
-        const progressProb = progressResult?.unknown
-          ? undefined
-          : typeof progressResult?.probability === 'number'
-            ? progressResult.probability
-            : typeof progressResult?.noul === 'number'
-              ? progressResult.noul
-              : undefined
-        const pLoop = topBucketProbability(stuckResult)
-        const confidence = scoreConfidence(stuckResult)
+        const verdict = evaluateStuckTrajectory(evalResults, { noProgressThreshold, pLoopThreshold, minConfidence })
+        // The unknown branch above already returned, so these are present here.
+        const progressProb = verdict.progress!
+        const pLoop = verdict.pLoop!
+        const confidence = verdict.confidence!
 
-        if (progressProb === undefined || pLoop === undefined || confidence === undefined) {
+        if (verdict.action === 'unknown') {
           // Unknown answer is not evidence of a loop; stay silent and record it.
           defaultMetrics.recordDecisionError()
           defaultMetrics.recordLoopCheck('uncertain')
@@ -271,14 +311,10 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           return next()
         }
 
-        const madeNoProgress = progressProb < noProgressThreshold
-        const confident = confidence >= minConfidence
-        const definitivelyStuck = pLoop >= pLoopThreshold
-
-        if (madeNoProgress && definitivelyStuck && confident) {
+        if (verdict.action === 'interrupt' || verdict.action === 'warn') {
           chain.noProgressStreak = 0
           chain.cooldown = cooldownSteps
-          const outcome = pLoop >= 0.85 ? 'interrupt' : 'warn'
+          const outcome = verdict.action
           defaultMetrics.recordLoopCheck(outcome)
           defaultDecisionLog.append({
             module: 'loop-guard',
@@ -338,7 +374,9 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           return decisionResult
         }
 
-        chain.noProgressStreak = madeNoProgress ? chain.noProgressStreak + 1 : 0
+        chain.noProgressStreak = verdict.action === 'pass' && (progressProb ?? 1) < noProgressThreshold
+          ? chain.noProgressStreak + 1
+          : 0
         defaultMetrics.recordLoopCheck('normal')
         // Negative examples matter as much as positive ones for calibration.
         defaultDecisionLog.append({

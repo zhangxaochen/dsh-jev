@@ -42,6 +42,24 @@ export declare function deterministicVerdict(exec: ToolExecution): {
     id: string;
     reason: string;
 } | undefined;
+/** Thresholds that turn hazard probabilities into an action. */
+export interface SafetyThresholds {
+    blockThreshold: number;
+    askApprovalThreshold: number;
+}
+/**
+ * The shipped semantic rule, as a pure function: hazard probabilities in, an
+ * action out.
+ *
+ * Exported so the benchmark drives this rule rather than a copy of it. The bench
+ * is the CI gate for the safety guard, and while it reimplemented these
+ * thresholds a change here would not have failed it (docs/calibration.md §13).
+ */
+export declare function evaluateHazard(answers: Record<string, any>, thresholds: SafetyThresholds): {
+    action: 'deny' | 'ask' | 'pass' | 'unknown';
+    maxHazard?: number;
+    riskScore?: number;
+};
 export declare function apply(ctx: CordisContext, config?: SafetyGuardConfig): () => void;
 export {};
 //# sourceMappingURL=safety-guard.d.ts.map
