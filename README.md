@@ -264,7 +264,7 @@ Jev 只做 DSH 自己没有的那一层，避免重复与相互抵消：
 # 编译 TypeScript
 pnpm run build
 
-# 离线单元测试（57 个用例，不联网、不需要 Key）
+# 离线单元测试（不联网、不需要 Key；用例数随版本增长，以输出为准）
 pnpm test
 
 # 探针：确认 System One 三种原语的真实返回结构（score 是 [0, n-1] 的连续期望值）

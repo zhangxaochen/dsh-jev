@@ -173,7 +173,7 @@ CI 等价流程在**干净 clone**（无 `node_modules`、无本机缓存）中�
 |---|---|
 | `pnpm install --frozen-lockfile` | 通过（修复前失败，见 `docs/OPTIMIZATION_PLAN.md` Round 12） |
 | `pnpm run build` | 通过；重新构建的 `lib/` 与提交内容一致，无陈旧产物 |
-| `pnpm test` | 70/70 |
+| `pnpm test` | 全绿（当时 70 个用例；用例数随版本增长，以运行输出为准） |
 | `pnpm run bench:offline` | 准确率 93.3%、误报 0、退出码 0 |
 
 结论：交付物不依赖本机残留状态，`git clone` + 上述四步即可得到与本文档一致的结论。
