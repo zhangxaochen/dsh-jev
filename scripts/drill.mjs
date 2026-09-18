@@ -94,6 +94,24 @@ const drills = [
     to: 'const finalTools = [...retainedTools, ...selected]',
     test: 'tests/tool-pruner.spec.ts',
   },
+  {
+    // The two worst defects this work found — a waterfall listener that swallowed
+    // the step decision (crash on restart) and a shaper that required a string
+    // where the service passes blocks (module inert) — were invisible to the unit
+    // suite and only caught by the real runtime. Drill them where they were found.
+    name: 'pre-step listener swallows the downstream decision',
+    file: 'src/loop-guard.ts',
+    from: 'return typeof next === \'function\' ? next() : undefined',
+    to: 'return undefined',
+    command: ['tests/integration-dsh.mjs'],
+  },
+  {
+    name: 'shaper requires a string where the service sends blocks',
+    file: 'src/result-shaper.ts',
+    from: '  if (typeof content === \'string\') return content\n  if (!Array.isArray(content)) return undefined',
+    to: '  if (typeof content === \'string\') return content\n  return undefined',
+    command: ['tests/integration-dsh.mjs'],
+  },
 ]
 
 const results = []
@@ -117,18 +135,26 @@ for (const drill of drills) {
 
     let exitCode = 0
     if (buildCode === 0) {
+      // A drill either names a spec or, for the guarantees only the real runtime
+      // can exercise, a script that drives the real services.
+      const args = drill.command
+        ? [...drill.command]
+        : ['--import', './tests/isolate.mjs', '--test', drill.test]
       try {
-        execFileSync(process.execPath, ['--import', './tests/isolate.mjs', '--test', drill.test], {
-          stdio: 'ignore',
-        })
+        execFileSync(process.execPath, args, { stdio: 'ignore' })
       } catch (err) {
+        // The integration script reports a missing runtime by skipping, which is
+        // not a caught regression.
         exitCode = typeof err.status === 'number' ? err.status : 1
       }
     }
     results.push({
       name: drill.name,
       caught: buildCode !== 0 || exitCode !== 0,
-      why: buildCode !== 0 ? 'build failed' : drill.test + ' exit ' + exitCode,
+      why:
+        buildCode !== 0
+          ? 'build failed'
+          : (drill.command ? drill.command[0] : drill.test) + ' exit ' + exitCode,
     })
   } finally {
     writeFileSync(drill.file, original, 'utf8')
