@@ -309,6 +309,9 @@ pnpm run verify:pruner
 # 线上验证：skill 路由（真实 112 项目录；含 1 条已记录的跨语言漏报）
 pnpm run verify:router
 
+# 守卫网自检：对每条承诺注入对应回归，确认至少有一道闸门拦下（需干净工作树）
+pnpm run drill
+
 # A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
 pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
 pnpm run bench:offline    # 回放录制答案，零成本复现

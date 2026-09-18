@@ -90,6 +90,7 @@
     "build": "tsc && node scripts/bundle-client.js",
     "pretest": "tsc && node scripts/bundle-client.js && tsc --noEmit -p tsconfig.scripts.json",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
+    "drill": "node scripts/drill.mjs",
     "test": "node --import ./tests/isolate.mjs --test tests/*.spec.ts",
     "probe": "node --experimental-strip-types tests/probe.ts",
     "verify:live": "node --experimental-strip-types tests/live-verify.ts",

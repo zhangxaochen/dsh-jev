@@ -1,7 +1,27 @@
-// Regression drill: for each guarantee, inject the regression it exists to catch
+/**
+ * Regression drill for the verification net.
+ *
+ * For each guarantee the repository claims, inject the regression it exists to
+ * catch, rebuild, and run the spec that owns it. A guarantee whose regression
+ * slips through every gate is a hole: the check either does not run or is masked
+ * by another condition (both happened when this was first written).
+ *
+ * Every mutation is restored in a finally block, but a killed process can leave
+ * one file changed, so this refuses to start unless the working tree is clean.
+ *
+ * Usage: pnpm run drill
+ */// Regression drill: for each guarantee, inject the regression it exists to catch
 // and check that a gate fails. Runs in a clone; every mutation is restored.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
+
+// Refuse to run against a dirty tree: a mutation that survives a crash would
+// otherwise be indistinguishable from the operator's own work in progress.
+const status = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' })
+if (status.trim().length > 0) {
+  console.error('refusing to run: commit or stash the working tree first')
+  process.exit(2)
+}
 
 const drills = [
   {
