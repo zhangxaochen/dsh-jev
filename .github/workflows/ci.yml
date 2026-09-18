@@ -40,6 +40,12 @@ jobs:
       - name: Calibration bench (offline)
         run: pnpm run bench:offline
 
+      # No DSH runtime exists on a runner, so this exercises the skip path: it
+      # must report SKIP and exit 0 rather than fail. Behaviour against a real
+      # runtime is covered by running this on a machine with DSH installed.
+      - name: DSH integration checks (skip when no runtime)
+        run: pnpm run verify:dsh
+
       - name: Packed contents include every built module
         run: |
           node -e "

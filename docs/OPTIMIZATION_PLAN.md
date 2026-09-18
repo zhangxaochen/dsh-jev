@@ -317,3 +317,9 @@
 - [x] 报告同时写明 4 项**主动保留的限制**（2 条漏报为设计取舍、基准不报费用、resultShaper 默认关闭、实机端到端待重启）与自行复现命令
 - [x] README 文档索引加入该报告；重启后的确认步骤（`doctor` 期望输出 + `version` 1→2）写在其中
 - [x] 该文件同时回答了一个方法论问题：本轮 15 个缺陷中，**跨层集成校验（真实 cordis / 真实 dsh-tools）抓到 3 个单测结构上无法发现的**（agent loop 崩溃、整形模块失效、服务规范化）
+
+## Phase 5 补充记录（CI 覆盖跳过路径，Round 32）
+
+- [x] CI 新增一步 `pnpm run verify:dsh`：GitHub runner 上无 DSH runtime，因此这一步**专门行使跳过路径**（必须打印 `SKIP` 并退出 0，而不是失败）。此前该路径只在第 16 轮手工验证过一次，任何让「无 DSH 时失败」的改动都不会被发现
+- [x] 与真实 runtime 的行为仍由装有 DSH 的机器运行同一脚本覆盖（18 项检查）
+- [x] 工作流 YAML 复核：6 个 `run` 步骤，顺序为 install → build → test → bench → verify:dsh → 打包校验
