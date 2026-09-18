@@ -4,7 +4,7 @@
  * @module dsh-jev/safety-guard
  */
 
-import { noul, score, TypeSafeClient } from './client.js'
+import { noul, score, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,

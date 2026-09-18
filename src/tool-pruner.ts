@@ -4,7 +4,7 @@
  * @module dsh-jev/tool-pruner
  */
 
-import { score, TypeSafeClient } from './client.js'
+import { score, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,
@@ -109,7 +109,13 @@ export class ToolPrunerService {
         .map((item) => item.tool)
 
       const finalTools = [...retainedTools, ...selected]
-      defaultMetrics.recordPrune(candidates.length, finalTools.length)
+      const prunedTools = evaluateCandidates.filter((item) => !selected.includes(item))
+      const prunedChars = prunedTools.reduce((acc, t) => acc + JSON.stringify(t).length, 0)
+      const exactTokens = Math.max(
+        prunedTools.length * 50,
+        Math.round(prunedChars / 3.5)
+      )
+      defaultMetrics.recordPrune(candidates.length, finalTools.length, exactTokens)
       return finalTools
     } catch (err) {
       console.warn('[TypeSafe ToolPruner] Pruning failed, returning original candidate list:', err)

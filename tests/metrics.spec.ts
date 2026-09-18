@@ -10,7 +10,7 @@ import {
   defaultMetrics,
 } from '../lib/metrics.js'
 import { apply as applySuite } from '../lib/index.js'
-import { TypeSafeClient } from '../lib/client.js'
+import { TypeSafeClient } from '../lib/typesafe-client.js'
 
 test('MetricsCollector tracks pruning, loop checks, safety screens, and calls', () => {
   const testFile = join(tmpdir(), `jev-test-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)

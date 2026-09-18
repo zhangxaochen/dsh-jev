@@ -1,157 +1,511 @@
 /**
- * Client and Cordis service provider for TypeSafe AI (Jev System One model).
+ * Client-side Settings UI contribution for TypeSafe Jev.
+ * Loaded by DeepSeek Harness client-modules into Web and Desktop shells.
  * @module dsh-jev/client
  */
 
-import type {
-  ChoiceQuestion,
-  CordisContext,
-  NoulQuestion,
-  QuestionResult,
-  ScoreQuestion,
-  SystemOneRequest,
-  TypeSafeClientConfig,
-} from './types.js'
-import { defaultMetrics } from './metrics.js'
-
-export const DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1/systemone'
-export const DEFAULT_MODEL = 'jev-latest'
-export const DEFAULT_TIMEOUT_MS = 10000
-
-/**
- * Question helper for boolean verification.
- */
-export function noul(instructions: string): NoulQuestion {
-  return { type: 'noul', instructions }
-}
-
-/**
- * Question helper for categorical selection.
- */
-export function choice(instructions: string, criteria: Record<string, string | null>): ChoiceQuestion {
-  return { type: 'choice', instructions, criteria }
-}
-
-/**
- * Question helper for rubric scoring.
- */
-export function score(
-  instructions: string,
-  criteria: string[] | Record<number | string, string> = ['Low', 'Medium', 'High']
-): ScoreQuestion {
-  const criteriaList = Array.isArray(criteria) ? criteria : Object.values(criteria)
-  return { type: 'score', instructions, criteria: criteriaList }
-}
-
-/**
- * TypeSafe AI Client.
- */
-export class TypeSafeClient {
-  public readonly apiKey?: string
-  public readonly baseUrl: string
-  public readonly model: string
-  public readonly timeoutMs: number
-  private readonly mockHandler?: TypeSafeClientConfig['mockHandler']
-
-  constructor(config: TypeSafeClientConfig = {}) {
-    this.apiKey = config.apiKey || (typeof process !== 'undefined' ? process.env.TYPESAFE_API_KEY : undefined)
-    this.baseUrl = config.baseUrl || DEFAULT_BASE_URL
-    this.model = config.model || DEFAULT_MODEL
-    this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS
-    this.mockHandler = config.mockHandler
+declare const window: {
+  __ModuleLoader__?: {
+    load: (options: {
+      id: string
+      factory: (require: (id: string) => any) => any
+    }) => void
   }
+}
+declare const document: any
+declare const confirm: (msg: string) => boolean
 
-  /**
-   * Execute parallel questions against a single state context.
-   */
-  async systemOne(req: SystemOneRequest): Promise<Record<string, QuestionResult>> {
-    const start = Date.now()
-    // 1. If mock handler is provided, execute mock
-    if (this.mockHandler) {
-      try {
-        const raw = await this.mockHandler(req)
-        defaultMetrics.recordCall(Date.now() - start, true)
-        return this.normalizeAnswers(raw)
-      } catch (err) {
-        defaultMetrics.recordCall(Date.now() - start, false)
-        throw err
+if (typeof window !== 'undefined' && window.__ModuleLoader__) {
+  window.__ModuleLoader__.load({
+    id: 'dsh-jev',
+    factory: (require: (id: string) => any) => {
+      const module = { exports: {} as any }
+      const exports = module.exports
+
+      const React = require('react')
+      const h = React.createElement
+      const useState = React.useState
+      const useEffect = React.useEffect
+
+      const CSS_STYLES = `
+.jev-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 4px 32px;
+  font-family: inherit;
+  color: var(--dsw-alias-label-primary, #ffffff);
+}
+.jev-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
+}
+.jev-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.jev-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.jev-subtitle {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary, #94a3b8);
+  margin: 0;
+}
+.jev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--dsw-alias-bg-module-platform, rgba(34, 197, 94, 0.15));
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.jev-banner {
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
+  background: var(--dsw-alias-bg-layer-2, rgba(255, 255, 255, 0.03));
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.jev-banner-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.jev-banner-title {
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary, #94a3b8);
+}
+.jev-banner-val {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--dsw-alias-brand-primary, #38bdf8);
+  font-variant-numeric: tabular-nums;
+}
+.jev-banner-note {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #64748b);
+  margin-top: 2px;
+}
+.jev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.jev-card {
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08));
+  background: var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.02));
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.jev-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #fff);
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.05));
+  padding-bottom: 8px;
+}
+.jev-card-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+}
+.jev-metric-label {
+  color: var(--dsw-alias-label-secondary, #94a3b8);
+}
+.jev-metric-val {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #fff);
+  font-variant-numeric: tabular-nums;
+}
+.jev-metric-highlight {
+  color: var(--dsw-alias-brand-primary, #38bdf8);
+  font-weight: 600;
+}
+.jev-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary, #64748b);
+}
+.jev-btn-group {
+  display: flex;
+  gap: 8px;
+}
+.jev-btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.15));
+  background: var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.05));
+  color: var(--dsw-alias-label-primary, #fff);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.jev-btn:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.1));
+  border-color: var(--dsw-alias-brand-primary, #38bdf8);
+}
+.jev-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.jev-btn-danger {
+  color: #ef4444;
+}
+.jev-btn-danger:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+`
+
+      function injectPanelCss() {
+        if (typeof document === 'undefined') return () => {}
+        const existing = document.querySelector('style[data-plugin="dsh-jev"]')
+        if (existing) return () => {}
+        const style = document.createElement('style')
+        style.setAttribute('data-plugin', 'dsh-jev')
+        style.textContent = CSS_STYLES
+        document.head.appendChild(style)
+        return () => {
+          style.remove()
+        }
       }
-    }
 
-    // 2. Validate API key
-    if (!this.apiKey) {
-      throw new Error(
-        'TypeSafe API key missing. Provide apiKey in config or set TYPESAFE_API_KEY environment variable.'
-      )
-    }
+      function JevSettingsPage() {
+        const [data, setData] = useState(null)
+        const [loading, setLoading] = useState(true)
+        const [error, setError] = useState(null)
+        const [actionPending, setActionPending] = useState(false)
 
-    const payload = {
-      model: req.model || this.model,
-      state: typeof req.state === 'string' ? req.state : JSON.stringify(req.state),
-      questions: req.questions,
-    }
+        function getEndpoint() {
+          if (typeof document !== 'undefined' && document.baseURI) {
+            return new URL('dsh-jev/stats', document.baseURI).href
+          }
+          return '/dsh-jev/stats'
+        }
 
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs)
+        function loadStats() {
+          setError(null)
+          fetch(getEndpoint(), {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          })
+            .then((res) => {
+              if (!res.ok) throw new Error(`HTTP ${res.status}`)
+              return res.json()
+            })
+            .then((json) => {
+              setData(json)
+              setLoading(false)
+            })
+            .catch((err) => {
+              setError(err.message || '获取指标数据失败')
+              setLoading(false)
+            })
+        }
 
-    try {
-      const res = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      })
+        useEffect(() => {
+          loadStats()
+          const timer = setInterval(loadStats, 4000)
+          return () => clearInterval(timer)
+        }, [])
 
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => 'Unknown error')
-        throw new Error(`TypeSafe API request failed with status ${res.status}: ${errorText}`)
+        function handleReset() {
+          if (!confirm('确定要将 TypeSafe Jev 守护指标归零吗？')) return
+          setActionPending(true)
+          fetch(getEndpoint(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reset: true }),
+          })
+            .then(() => loadStats())
+            .catch((err) => setError(err.message))
+            .finally(() => setActionPending(false))
+        }
+
+        const totalTokens = data
+          ? (data.toolPruner?.estimatedTokensSaved ?? 0) +
+            (data.loopGuard?.estimatedTokensSaved ?? 0)
+          : 0
+
+        const formattedTokens =
+          totalTokens >= 1_000_000
+            ? `${(totalTokens / 1_000_000).toFixed(2)}M`
+            : totalTokens >= 1_000
+              ? `${(totalTokens / 1_000).toFixed(1)}K`
+              : String(totalTokens)
+
+        return h(
+          'div',
+          { className: 'jev-container' },
+          // Header
+          h(
+            'div',
+            { className: 'jev-header' },
+            h(
+              'div',
+              { className: 'jev-title-wrap' },
+              h('h2', { className: 'jev-title' }, '🛡️ TypeSafe Jev 守护与收益看板'),
+              h(
+                'p',
+                { className: 'jev-subtitle' },
+                'System One 毫秒级语义决策 · 工具剪枝 · 死循环止损 · 执行安全门禁'
+              )
+            ),
+            h('span', { className: 'jev-badge' }, '● 守护中')
+          ),
+
+          // Banner
+          h(
+            'div',
+            { className: 'jev-banner' },
+            h(
+              'div',
+              { className: 'jev-banner-left' },
+              h('span', { className: 'jev-banner-title' }, '累计预估节省 Token 运行开销'),
+              h('span', { className: 'jev-banner-val' }, `~${formattedTokens}`),
+              h(
+                'span',
+                { className: 'jev-banner-note' },
+                '💡 工具剪枝按被裁工具 Schema 实际字符精准换算；死循环熔断按避免 3~5 轮空转经验均值折算'
+              )
+            ),
+            h(
+              'div',
+              { className: 'jev-btn-group' },
+              h(
+                'button',
+                {
+                  className: 'jev-btn',
+                  onClick: loadStats,
+                  disabled: loading || actionPending,
+                },
+                loading ? '刷新中…' : '刷新数据'
+              ),
+              h(
+                'button',
+                {
+                  className: 'jev-btn jev-btn-danger',
+                  onClick: handleReset,
+                  disabled: loading || actionPending,
+                },
+                '指标归零'
+              )
+            )
+          ),
+
+          // Error alert
+          error
+            ? h(
+                'div',
+                { style: { color: '#ef4444', fontSize: '12px', padding: '4px 0' } },
+                `⚠️ 提示: ${error}`
+              )
+            : null,
+
+          // 4 Metric Cards Grid
+          h(
+            'div',
+            { className: 'jev-grid' },
+            // Card 1: Tool Pruner
+            h(
+              'div',
+              { className: 'jev-card' },
+              h(
+                'div',
+                { className: 'jev-card-head' },
+                h('span', null, '🛠️ 动态工具剪枝'),
+                h(
+                  'span',
+                  { className: 'jev-metric-highlight' },
+                  `~${(((data?.toolPruner?.estimatedTokensSaved ?? 0) / 1000)).toFixed(1)}K Tokens`
+                )
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '剪枝决策评估'),
+                h('span', { className: 'jev-metric-val' }, `${data?.toolPruner?.evaluations ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '累计裁剪次无关工具'),
+                h('span', { className: 'jev-metric-val' }, `${data?.toolPruner?.toolsPruned ?? 0} 个`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '保留命中核心工具'),
+                h('span', { className: 'jev-metric-val' }, `${data?.toolPruner?.toolsRetained ?? 0} 个`)
+              )
+            ),
+
+            // Card 2: Loop Guard
+            h(
+              'div',
+              { className: 'jev-card' },
+              h(
+                'div',
+                { className: 'jev-card-head' },
+                h('span', null, '🔄 死循环及早熔断'),
+                h(
+                  'span',
+                  { className: 'jev-metric-highlight' },
+                  `~${(((data?.loopGuard?.estimatedTokensSaved ?? 0) / 1000)).toFixed(1)}K Tokens`
+                )
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '循环停滞检测'),
+                h('span', { className: 'jev-metric-val' }, `${data?.loopGuard?.checks ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '阻断死循环空转'),
+                h('span', { className: 'jev-metric-val' }, `${data?.loopGuard?.interrupted ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '注入自愈警示'),
+                h('span', { className: 'jev-metric-val' }, `${data?.loopGuard?.warned ?? 0} 次`)
+              )
+            ),
+
+            // Card 3: Safety Guard
+            h(
+              'div',
+              { className: 'jev-card' },
+              h(
+                'div',
+                { className: 'jev-card-head' },
+                h('span', null, '🔒 执行安全护栏'),
+                h('span', { className: 'jev-metric-highlight' }, '实时门禁')
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '敏感指令审查'),
+                h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.screened ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '阻断高危破坏操作'),
+                h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.blocked ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '降级人工审批提醒'),
+                h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.approvals ?? 0} 次`)
+              )
+            ),
+
+            // Card 4: System One Latency
+            h(
+              'div',
+              { className: 'jev-card' },
+              h(
+                'div',
+                { className: 'jev-card-head' },
+                h('span', null, '⚡ System One 响应'),
+                h(
+                  'span',
+                  { className: 'jev-metric-highlight' },
+                  `${data?.systemOne?.avgLatencyMs ?? 0} ms`
+                )
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '累计决策判定'),
+                h('span', { className: 'jev-metric-val' }, `${data?.systemOne?.totalCalls ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '平均毫秒延迟'),
+                h('span', { className: 'jev-metric-val' }, `${data?.systemOne?.avgLatencyMs ?? 0} ms`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '异常错误数'),
+                h('span', { className: 'jev-metric-val' }, `${data?.systemOne?.errors ?? 0} 次`)
+              )
+            )
+          ),
+
+          // Footer
+          h(
+            'div',
+            { className: 'jev-footer' },
+            h(
+              'span',
+              null,
+              `持久化文件：~/.dsh/jev-stats.json | 起始时间：${(data?.firstRecordedAt || '').replace('T', ' ').slice(0, 19)}`
+            ),
+            h(
+              'span',
+              null,
+              `更新时间：${(data?.lastUpdatedAt || '').replace('T', ' ').slice(0, 19)}`
+            )
+          )
+        )
       }
 
-      const data = (await res.json()) as any
-      const answers: Record<string, QuestionResult> = data.answers || data.results || data
-      defaultMetrics.recordCall(Date.now() - start, true)
-      return this.normalizeAnswers(answers)
-    } catch (err) {
-      defaultMetrics.recordCall(Date.now() - start, false)
-      throw err
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-
-  private normalizeAnswers(answers: Record<string, any>): Record<string, QuestionResult> {
-    const normalized: Record<string, QuestionResult> = {}
-    for (const [k, v] of Object.entries(answers)) {
-      if (v && typeof v === 'object' && v.type === 'noul') {
-        const val = typeof v.noul === 'number' ? v.noul : (typeof v.probability === 'number' ? v.probability : 0)
-        normalized[k] = { type: 'noul', noul: val, probability: val }
-      } else {
-        normalized[k] = v
+      function apply(ctx: any) {
+        if (typeof ctx?.effect === 'function') {
+          ctx.effect(() => injectPanelCss(), 'dsh-jev: settings styles')
+        }
+        if (ctx?.slots && typeof ctx.slots.inject === 'function') {
+          ctx.slots.inject('settings.section', () =>
+            ctx.slots.register(
+              {
+                name: 'settings.section',
+                id: 'jev',
+                order: 25,
+                label: () => 'TypeSafe Jev',
+              },
+              JevSettingsPage
+            )
+          )
+        }
       }
-    }
-    return normalized
-  }
-}
 
-/**
- * Cordis plugin entrypoint for TypeSafe service.
- */
-export const name = 'typesafe-client'
-
-export function apply(ctx: CordisContext, config: TypeSafeClientConfig = {}) {
-  const client = new TypeSafeClient(config)
-
-  if (typeof ctx.provide === 'function') {
-    return ctx.provide('typesafe', client)
-  }
-
-  ctx.typesafe = client
-  return () => {
-    if (ctx.typesafe === client) {
-      delete ctx.typesafe
-    }
-  }
+      exports.apply = apply
+      exports.inject = ['slots']
+      return module.exports
+    },
+  })
 }

@@ -3,7 +3,7 @@
  * Ranks and filters tools to reduce context rot and speed up LLM inference.
  * @module dsh-jev/tool-pruner
  */
-import { TypeSafeClient } from './client.js';
+import { TypeSafeClient } from './typesafe-client.js';
 import type { CordisContext, ToolDefinitionMinimal, ToolPrunerConfig } from './types.js';
 export declare const name = "typesafe-tool-pruner";
 export declare const DEFAULT_ALWAYS_RETAIN: string[];

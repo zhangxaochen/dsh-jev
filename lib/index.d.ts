@@ -4,7 +4,7 @@
  */
 import type { CordisContext, TypeSafeSuiteConfig } from './types.js';
 export * from './types.js';
-export * from './client.js';
+export * from './typesafe-client.js';
 export * from './metrics.js';
 export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js';
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js';

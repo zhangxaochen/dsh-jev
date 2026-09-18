@@ -3,7 +3,7 @@
  * @module dsh-jev
  */
 
-import * as ClientPlugin from './client.js'
+import * as ClientPlugin from './typesafe-client.js'
 import * as LoopGuardPlugin from './loop-guard.js'
 import * as SafetyGuardPlugin from './safety-guard.js'
 import * as ToolPrunerPlugin from './tool-pruner.js'
@@ -11,7 +11,7 @@ import { defaultMetrics } from './metrics.js'
 import type { CordisContext, TypeSafeSuiteConfig } from './types.js'
 
 export * from './types.js'
-export * from './client.js'
+export * from './typesafe-client.js'
 export * from './metrics.js'
 export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js'
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js'
@@ -114,6 +114,28 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
         kind: 'exact',
         path: '/dsh-jev/stats',
         handler: (req: any, res: any) => {
+          if (typeof res?.setHeader === 'function') {
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept')
+          }
+
+          if (req.method === 'OPTIONS') {
+            res.writeHead(204)
+            res.end()
+            return
+          }
+
+          const url = new URL(req.url || '/dsh-jev/stats', 'http://localhost')
+          if (req.method === 'POST' || url.searchParams.get('reset') === '1' || url.searchParams.get('reset') === 'true') {
+            defaultMetrics.reset()
+            if (req.method === 'POST') {
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ ok: true, data: defaultMetrics.getSnapshot() }, null, 2))
+              return
+            }
+          }
+
           const accept = (req.headers && req.headers.accept) || ''
           if (accept.includes('text/html')) {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })

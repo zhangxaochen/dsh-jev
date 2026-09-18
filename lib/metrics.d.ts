@@ -43,8 +43,11 @@ export declare class MetricsCollector {
     private persist;
     /**
      * Record a tool pruning evaluation.
+     * @param candidatesCount Total candidate tools evaluated
+     * @param retainedCount Tools retained after pruning
+     * @param exactTokensSaved Optional exact token count based on pruned schema sizes
      */
-    recordPrune(candidatesCount: number, retainedCount: number): void;
+    recordPrune(candidatesCount: number, retainedCount: number, exactTokensSaved?: number): void;
     /**
      * Record a loop guard check outcome.
      */

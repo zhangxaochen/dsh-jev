@@ -110,13 +110,19 @@ export class MetricsCollector {
 
   /**
    * Record a tool pruning evaluation.
+   * @param candidatesCount Total candidate tools evaluated
+   * @param retainedCount Tools retained after pruning
+   * @param exactTokensSaved Optional exact token count based on pruned schema sizes
    */
-  recordPrune(candidatesCount: number, retainedCount: number): void {
+  recordPrune(candidatesCount: number, retainedCount: number, exactTokensSaved?: number): void {
     const pruned = Math.max(0, candidatesCount - retainedCount)
     this.data.toolPruner.evaluations += 1
     this.data.toolPruner.toolsPruned += pruned
     this.data.toolPruner.toolsRetained += retainedCount
-    this.data.toolPruner.estimatedTokensSaved += pruned * TOKENS_PER_PRUNED_TOOL
+    const tokens = typeof exactTokensSaved === 'number' && exactTokensSaved >= 0
+      ? exactTokensSaved
+      : pruned * TOKENS_PER_PRUNED_TOOL
+    this.data.toolPruner.estimatedTokensSaved += tokens
     this.persist()
   }
 
@@ -201,7 +207,7 @@ export class MetricsCollector {
       `| **🔒 执行安全护栏** | 审查 **${this.data.safetyGuard.screened}** 次敏感指令，阻断 **${this.data.safetyGuard.blocked}** 次高危操作 | 拦截敏感破坏性命令 / 降级审批 **${this.data.safetyGuard.approvals}** 次 |`,
       `| **⚡ System One 响应** | 累计决策 **${this.data.systemOne.totalCalls}** 次，平均延迟 **${this.data.systemOne.avgLatencyMs}ms** | 毫秒级快速裁决，保障会话低延迟零卡顿 |`,
       ``,
-      `> 💡 **累计总收益**：累计预估为当前工作区节省 **~${formattedTokens}** 运行 Token 开销。`,
+      `> 💡 **累计总收益**：累计预估为当前工作区节省 **~${formattedTokens}** 运行 Token 开销（*工具剪枝根据 Schema 体积精确换算，死循环按避免空转经验均值估算*）。`,
       `> ⏱️ 统计起始自：\`${this.data.firstRecordedAt.replace('T', ' ').slice(0, 19)}\`（最新更新：\`${this.data.lastUpdatedAt.replace('T', ' ').slice(0, 19)}\`）`,
     ].join('\n')
   }

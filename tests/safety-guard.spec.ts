@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { apply } from '../lib/safety-guard.js'
-import { TypeSafeClient } from '../lib/client.js'
+import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type {
   CordisContext,
   PreToolDecision,

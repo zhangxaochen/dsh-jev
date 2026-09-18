@@ -6,7 +6,7 @@ import {
   choice,
   score,
   apply,
-} from '../lib/client.js'
+} from '../lib/typesafe-client.js'
 import type { CordisContext } from '../lib/types.js'
 
 test('Question definition helpers', () => {

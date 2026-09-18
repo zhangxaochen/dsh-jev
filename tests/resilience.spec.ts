@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { apply as applyLoopGuard } from '../lib/loop-guard.js'
 import { apply as applySafetyGuard } from '../lib/safety-guard.js'
 import { ToolPrunerService } from '../lib/tool-pruner.js'
-import { TypeSafeClient } from '../lib/client.js'
+import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { CordisContext, ToolExecution, ToolDefinitionMinimal } from '../lib/types.js'
 
 test('Resilience: SafetyGuard fails open to allow on API 429 Too Many Requests', async () => {

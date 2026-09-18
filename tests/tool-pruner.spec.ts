@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ToolPrunerService } from '../lib/tool-pruner.js'
-import { TypeSafeClient } from '../lib/client.js'
+import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { ToolDefinitionMinimal } from '../lib/types.js'
 
 test('ToolPrunerService prunes irrelevant tools and retains essential ones', async () => {
