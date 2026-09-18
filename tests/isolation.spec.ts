@@ -36,6 +36,7 @@ const METRICS_RECORDING_SCRIPTS = [
   'tests/integration-dsh.mjs',
   'tests/live-tools.ts',
   'tests/live-verify.ts',
+  'tests/live-shaper.ts',
   'bench/run.ts',
 ]
 

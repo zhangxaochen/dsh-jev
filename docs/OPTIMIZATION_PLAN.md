@@ -372,3 +372,10 @@
 - [x] 已验证守卫对两种回归形态都有牙齿：① 问题完全相同（旧块设计）→ 被 (a) 捕获；② 只写索引不写内容（第 35 轮的探针）→ 被 (b) 捕获；③ 当前实现 → 两者均通过
 - [x] 四处代码加上指向 `docs/calibration.md §9.3` 的规则注释，避免后来者重新走一遍
 - [x] 测试数 107 → 111
+
+## Phase 4 补充记录（重写后的线上验证，Round 38）
+
+- [x] 新增 `tests/live-shaper.ts` + `pnpm run verify:shaper`：把**重写后的实现**（而非一次性探针）在真实模型上跑四类输出——构建日志 32.7KB → 253 字符（保留 error+stack）、依赖树 27.8KB → 181 字符（保留 WARN）、测试运行 11.9KB → 203 字符（保留 `not ok`+`AssertionError`）、纯噪声 → 拒绝且未发起请求（0ms）
+- [x] 压缩比约 130×–190×，四类场景的保留/丢弃目标全部命中
+- [x] 该脚本纳入 `tests/isolation.spec.ts` 的守卫名单（会记录调用，必须重定向实机状态）
+- [x] README 验证命令清单加入 `pnpm run verify:shaper`；`docs/calibration.md` 新增 §9.6 记录实现级结果
