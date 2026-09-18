@@ -1,0 +1,146 @@
+[
+  {
+    "name": "loop guard ignores its cooldown",
+    "file": "src/loop-guard.ts",
+    "from": "chain.cooldown > 0",
+    "to": "false"
+  },
+  {
+    "name": "exact repeats are always deferred",
+    "file": "src/loop-guard.ts",
+    "from": "if (deferExactRepeats && isExactRepeat) {",
+    "to": "if (isExactRepeat) {"
+  },
+  {
+    "name": "the trajectory history is never bounded",
+    "file": "src/loop-guard.ts",
+    "from": "chain.history.splice(0, chain.history.length - maxHistory)",
+    "to": "chain.history.slice()"
+  },
+  {
+    "name": "onUncertain falls open",
+    "file": "src/safety-guard.ts",
+    "from": "const onUncertain = config.onUncertain ?? 'deny-guarded'",
+    "to": "const onUncertain = config.onUncertain ?? 'allow'"
+  },
+  {
+    "name": "onError falls open",
+    "file": "src/safety-guard.ts",
+    "from": "const onError = config.onError ?? 'deny-guarded'",
+    "to": "const onError = config.onError ?? 'allow'"
+  },
+  {
+    "name": "user rule thresholds are ignored",
+    "file": "src/safety-guard.ts",
+    "from": "prob < (rule.threshold ?? 0.7)",
+    "to": "prob < 0"
+  },
+  {
+    "name": "the credential hazard is ignored",
+    "file": "src/safety-guard.ts",
+    "from": "credentialHazard ?? 0",
+    "to": "0"
+  },
+  {
+    "name": "the safety guard asks on everything",
+    "file": "src/safety-guard.ts",
+    "from": "export const DEFAULT_ASK_APPROVAL_THRESHOLD = 0.5",
+    "to": "export const DEFAULT_ASK_APPROVAL_THRESHOLD = 0"
+  },
+  {
+    "name": "the pruner ignores maxTools",
+    "file": "src/tool-pruner.ts",
+    "from": "candidates.length <= maxTools",
+    "to": "true"
+  },
+  {
+    "name": "the pruner ignores always-retain",
+    "file": "src/tool-pruner.ts",
+    "from": "if (alwaysRetain.includes(tool.name)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "the pruner ignores its floor",
+    "file": "src/tool-pruner.ts",
+    "from": "if (selected.length < Math.min(minKeep, capacity)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "the pruner ignores an unusable goal",
+    "file": "src/tool-pruner.ts",
+    "from": "if (userIntent.trim().length < (this.config.minIntentChars ?? DEFAULT_MIN_INTENT_CHARS)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "the router ignores minScore",
+    "file": "src/skill-router.ts",
+    "from": "this.config.minScore ?? DEFAULT_MIN_SCORE",
+    "to": "0"
+  },
+  {
+    "name": "the router drops the name-match boost",
+    "file": "src/skill-router.ts",
+    "from": "const boost = this.config.nameMatchBoost ?? DEFAULT_NAME_MATCH_BOOST",
+    "to": "const boost = 0"
+  },
+  {
+    "name": "the router advises the same intent twice",
+    "file": "src/skill-router.ts",
+    "from": "if (key === this.lastKey) return false",
+    "to": "if (false) return false"
+  },
+  {
+    "name": "the shaper ignores minKindConfidence",
+    "file": "src/result-shaper.ts",
+    "from": "this.config.minKindConfidence ?? DEFAULT_MIN_KIND_CONFIDENCE",
+    "to": "0"
+  },
+  {
+    "name": "the shaper ignores maxPerTurn",
+    "file": "src/result-shaper.ts",
+    "from": "this.shapedThisTurn >= (this.config.maxPerTurn ?? DEFAULT_MAX_PER_TURN)",
+    "to": "false"
+  },
+  {
+    "name": "the shaper treats every result as repetitive",
+    "file": "src/result-shaper.ts",
+    "from": "if (lines.length >= 120) return true",
+    "to": "return true"
+  },
+  {
+    "name": "the client stops caching identical payloads",
+    "file": "src/typesafe-client.ts",
+    "from": "this.cacheTtlMs = config.cacheTtlMs ?? 30000",
+    "to": "this.cacheTtlMs = 0"
+  },
+  {
+    "name": "unknown answers are coerced to zero",
+    "file": "src/typesafe-client.ts",
+    "from": "normalized[k] = raw === undefined ? { type: 'noul', unknown: true } : { type: 'noul', noul: raw, probability: raw }",
+    "to": "normalized[k] = raw === undefined ? { type: 'noul', noul: 0, probability: 0 } : { type: 'noul', noul: raw, probability: raw }"
+  },
+  {
+    "name": "jev_check always reports that a claim holds",
+    "file": "src/ask-tools.ts",
+    "from": "const holds = !unknown && probability >= threshold",
+    "to": "const holds = true"
+  },
+  {
+    "name": "the decision log stops appending",
+    "file": "src/decisions.ts",
+    "from": "  append(record: DecisionInput): void {",
+    "to": "  append(record: DecisionInput): void { if (true) return"
+  },
+  {
+    "name": "decision errors stop being counted",
+    "file": "src/metrics.ts",
+    "from": "  recordDecisionError(): void {",
+    "to": "  recordDecisionError(): void { if (true) return"
+  },
+  {
+    "name": "metrics.reset() becomes a no-op",
+    "file": "src/metrics.ts",
+    "from": "  reset(): void {",
+    "to": "  reset(): void { if (true) return"
+  }
+]

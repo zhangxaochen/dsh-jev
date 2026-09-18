@@ -53,6 +53,7 @@
 | 宿主契约仍成立 | 单测（`tests/dsh-contract.spec.ts`，无 DSH 时跳过） | 内置包已安装、阈值仍为 `[3,5,8]`、`engines.dsh` 满足、钩子实参形态未变、补丁整行替换语义未变 |
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
+| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 24 处变异） | **24/24** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
 
 ## 抓到的真实缺陷（按严重度）
 
@@ -92,6 +93,7 @@
 pnpm install --frozen-lockfile
 pnpm run build && pnpm run verify:build   # 构建产物必须与已提交的一致（lib/ 入库）
 pnpm run verify:pack                      # 发布物冒烟：打包 → 安装 → 按名导入
+pnpm run verify:mutants                   # 变异扫描：24 处行为改坏后必须被单测发现
 pnpm run typecheck:scripts                # bench/tests/scripts 的类型检查
 pnpm test                 # 离线用例，不联网、不需要 Key（含三个语料库）
 pnpm run verify:dsh       # 真实 DSH 服务集成（无 DSH 时跳过）
