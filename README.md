@@ -83,6 +83,11 @@ dsh plugin --profile headless add github:zhangxaochen/dsh-jev
 
 ### 方式 2：在 profile 或全局 `cordis.patch.yml` 中手动挂载
 
+> ⚠️ **补丁是「整行替换」，不是逐键合并。** DSH 自身的补丁文件写明了这一点：
+> *"A patch replaces the targeted row's whole `config` rather than merging into it … the last write winning per row."*
+> 因此要改某个阈值时，**必须把你想要的整份 `config` 都写出来**——只写要改的那个键会让该行其余配置一起消失（例如只写 `loopGuard.pLoopThreshold` 会连带丢掉 `guardedTools`、`alwaysRetain`、`client.apiKey` 等）。
+> 最省事的做法是复制下面这份完整配置再改；或者改用「方式 1」由 Bundle 提供默认值，再用你自己的补丁覆盖整行。
+
 若需深度定制各项阈值，可在 `$DSH_HOME/cordis.patch.yml` 或 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中添加配置：
 
 ```yaml

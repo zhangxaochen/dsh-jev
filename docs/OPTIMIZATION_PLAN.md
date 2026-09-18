@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **138** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **140** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -591,3 +591,11 @@
 - [x] 计划首行与 README、验证报告的文档索引均改为指向该文件
 - [x] 新增守卫 `docs-consistency.spec.ts`：断言 `research.md` 引用的每个 `§N` 在 calibration 中有对应标题、每个 `path` 真实存在；**两半都做了牙齿验证**（`§99.4` → 报「no such heading」；`tests/nonexistent.spec.ts` → 报「does not exist」）
 - [x] 新增演练条目使该验证永久化；测试数 137 → 138
+
+## Phase 5 补充记录（部署链的整行替换语义，Round 59）
+
+- [x] 追问部署链上**唯一未被验证的一环**：`cordis.patch.yml` 是否真会被宿主应用。查得宿主补丁分层为「bundle 层（`dsh.profile.bundles` 顺序）→ profile 自身的 `cordis.patch.yml` → `--patch` 覆盖」；`dsh --profile desktop --dump-config` 被拒（desktop 由 Electron 独占，与 Round 12 记录一致）
+- [x] 改用**对照宿主自带补丁文件**验证形状：`- insert:` + 行键 `{id, name, disabled, inject, config}` 与我们的文件一致；新增断言「我们只使用宿主自己也在用的操作与行键」
+- [x] **发现用户会踩的坑**（来自 `dsh-base/cordis.patch.yml` 原文）：*"A patch replaces the targeted row's whole `config` rather than merging into it … the last write winning per row."* —— 即补丁是**整行替换**，用户若只写要改的那个键，会连带丢掉该行其余配置（如 `guardedTools`、`alwaysRetain`、`client.apiKey`）。README「方式 2」此前**没有这个警告**，已补上并引用宿主原文
+- [x] 按 §16 的做法把该语义也变成闸门：断言宿主文件仍声明同一语义（跨行注释先归一化再匹配）且 README 保留该警告 —— 若 DSH 将来改为深度合并，警告会失效并由该断言暴露
+- [x] 测试数 138 → 140（`dsh-contract` 6 项，无 DSH 时跳过）

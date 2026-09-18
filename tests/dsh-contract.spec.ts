@@ -151,3 +151,43 @@ test('the host dispatches the hooks with the argument counts the guards assume',
   assert.ok(Array.isArray((args[1] as any)?.content), 'the second argument is the result')
   assert.equal(typeof args[2], 'function', 'the third argument is the continuation')
 })
+test('the patch semantics the README warns about are still the host ones', { skip: !nodeModules }, () => {
+  // The README tells users a patch replaces the targeted row's whole config, which
+  // it quotes from the host's own bundle patch. If DSH ever switches to a deep
+  // merge, that warning becomes wrong advice, so the quote is checked against the
+  // installed file.
+  const base = join(nodeModules!, '@deepseek-ai', 'dsh-base', 'cordis.patch.yml')
+  assert.ok(existsSync(base), 'the dsh-base bundle patch should be installed')
+  // The statement is wrapped across several comment lines, so strip the comment
+  // markers and join before matching.
+  const hostText = readFileSync(base, 'utf8')
+    .replace(/^#\s?/gm, '')
+    .replace(/\s+/g, ' ')
+
+  assert.match(
+    hostText,
+    /replaces the targeted row's whole `config` rather than merging into it/,
+    'the host no longer states the patch semantics the README quotes; re-verify the warning'
+  )
+  assert.match(hostText, /last write winning per row/, 'the host no longer states the per-row precedence')
+
+  const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8')
+  assert.match(readme, /补丁是「整行替换」，不是逐键合并/, 'the README must keep the warning it quotes')
+})
+
+test('our shipped patch uses only the operations the host itself uses', { skip: !nodeModules }, () => {
+  // A patch file with an operation the host does not implement would be ignored,
+  // leaving the defaults unapplied with nothing to show for it.
+  const ours = readFileSync(join(process.cwd(), 'cordis.patch.yml'), 'utf8')
+  const operations = [...ours.matchAll(/^-\s*([a-zA-Z-]+):/gm)].map((match) => match[1])
+  assert.deepEqual(operations, ['insert'], 'the shipped patch is a single insert over the profile root')
+
+  const rowKeys = [...ours.matchAll(/^\s{4}([a-zA-Z-]+):/gm)].map((match) => match[1])
+  const hostKeys = new Set(['id', 'name', 'config', 'disabled', 'inject'])
+  for (const key of new Set(rowKeys)) {
+    assert.ok(hostKeys.has(key), 'row key "' + key + '" is not one the host bundle patches use')
+  }
+
+  const bundled = readFileSync(join(nodeModules!, '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'), 'utf8')
+  assert.match(bundled, /^-\s*insert:/m, 'the host bundles mount the same way ours does')
+})
