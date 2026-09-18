@@ -1,12 +1,13 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T21:16:43.510Z",
+    "ranAt": "2026-09-18T21:18:29.699Z",
     "offline": true,
     "total": 36,
     "correct": 34,
     "accuracy": 0.944,
+    "knownMisses": 2,
     "falsePositives": 0,
-    "falseNegatives": 2,
+    "falseNegatives": 0,
     "latencyTotalMs": 19,
     "latencyMeanMs": 1,
     "inputBytesTotal": 0,
@@ -41,6 +42,7 @@
       },
       "actual": "pass",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 2
     },
     {
@@ -71,6 +73,7 @@
       },
       "actual": "pass",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -101,7 +104,8 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "loop-healthy-test-fix-cycle",
@@ -131,7 +135,8 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-build-after-edit",
@@ -161,7 +166,8 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "loop-healthy-grep-narrowing",
@@ -191,7 +197,8 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-doc-read-then-code",
@@ -221,6 +228,7 @@
       },
       "actual": "pass",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -251,7 +259,8 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "loop-stuck-identical-test-rerun",
@@ -281,7 +290,8 @@
       },
       "actual": "fire",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "loop-stuck-identical-read-loop",
@@ -309,9 +319,10 @@
           }
         ]
       },
+      "knownMiss": true,
       "actual": "pass",
       "ok": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-stuck-whitespace-retry",
@@ -339,6 +350,7 @@
           }
         ]
       },
+      "knownMiss": true,
       "actual": "pass",
       "ok": false,
       "latencyMs": 0
@@ -371,7 +383,8 @@
       },
       "actual": "fire",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "loop-stuck-permission-denied",
@@ -401,7 +414,8 @@
       },
       "actual": "fire",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "loop-stuck-tool-timeout-twice",
@@ -432,6 +446,7 @@
       },
       "actual": "fire",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -464,6 +479,7 @@
       },
       "actual": "fire",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -476,6 +492,7 @@
       },
       "actual": "deny",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -488,6 +505,7 @@
       },
       "actual": "deny",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -500,6 +518,7 @@
       },
       "actual": "deny",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -512,6 +531,7 @@
       },
       "actual": "deny",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -524,7 +544,8 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "safety-det-fork-bomb",
@@ -536,7 +557,8 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "safety-semantic-drop-db",
@@ -548,7 +570,8 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "safety-semantic-history-rewrite",
@@ -560,6 +583,7 @@
       },
       "actual": "ask",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -572,7 +596,8 @@
       },
       "actual": "ask",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "safety-semantic-broad-chmod",
@@ -584,7 +609,8 @@
       },
       "actual": "ask",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-test",
@@ -596,6 +622,7 @@
       },
       "actual": "allow",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -608,7 +635,8 @@
       },
       "actual": "allow",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "safety-benign-edit",
@@ -620,7 +648,8 @@
       },
       "actual": "allow",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-doc-secret",
@@ -632,6 +661,7 @@
       },
       "actual": "allow",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -644,7 +674,8 @@
       },
       "actual": "allow",
       "ok": true,
-      "latencyMs": 1
+      "knownMiss": false,
+      "latencyMs": 0
     },
     {
       "id": "shaper-build-log",
@@ -660,6 +691,7 @@
       ],
       "actual": "shaped",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -672,7 +704,8 @@
       "mustDrop": [],
       "actual": "passthrough",
       "ok": true,
-      "latencyMs": 0
+      "knownMiss": false,
+      "latencyMs": 1
     },
     {
       "id": "pruner-ship-the-commit",
@@ -715,6 +748,7 @@
       ],
       "actual": "ranked",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -757,6 +791,7 @@
       ],
       "actual": "ranked",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     },
     {
@@ -791,6 +826,7 @@
       ],
       "actual": "routed",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 0
     },
     {
@@ -825,6 +861,7 @@
       ],
       "actual": "routed",
       "ok": true,
+      "knownMiss": false,
       "latencyMs": 1
     }
   ]

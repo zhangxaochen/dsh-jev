@@ -44,6 +44,11 @@ interface BenchCase {
   mustKeep?: string[]
   /** Tools or skills that must not. */
   mustDrop?: string[]
+  /**
+   * A measured miss that is documented rather than expected to pass. Excluded
+   * from the failure count so the gate can be strict about everything else.
+   */
+  knownMiss?: boolean
 }
 
 /** One recorded exchange: the answers plus a fingerprint of the request that produced them. */
@@ -265,6 +270,7 @@ async function main(): Promise<void> {
   const rows: Array<Record<string, unknown>> = []
   let falsePositives = 0
   let falseNegatives = 0
+  let knownMisses = 0
   let correct = 0
   let latencyTotal = 0
   let inputBytesTotal = 0
@@ -317,21 +323,25 @@ async function main(): Promise<void> {
     const latencyMs = Date.now() - started
     latencyTotal += latencyMs
     const ok = actual === benchCase.expect
+    const known = ok ? false : benchCase.knownMiss === true
     if (ok) correct += 1
+    else if (known) knownMisses += 1
     else if (actual === 'fire' || actual === 'deny') falsePositives += 1
     else falseNegatives += 1
 
-    rows.push({ ...benchCase, actual, ok, latencyMs, note })
-    const mark = ok ? 'ok  ' : 'FAIL'
+    rows.push({ ...benchCase, actual, ok, knownMiss: known, latencyMs, note })
+    const mark = ok ? 'ok  ' : known ? 'KNOWN' : 'FAIL'
     console.log(mark + ' [' + benchCase.module + '] ' + benchCase.id.padEnd(32) + ' expect=' + benchCase.expect.padEnd(5) + ' actual=' + actual.padEnd(5) + ' ' + latencyMs + 'ms  ' + note)
   }
 
+  const unexpected = falsePositives + falseNegatives
   const summary = {
     ranAt: new Date().toISOString(),
     offline: OFFLINE,
     total: cases.length,
     correct,
     accuracy: Number((correct / cases.length).toFixed(3)),
+    knownMisses,
     falsePositives,
     falseNegatives,
     latencyTotalMs: latencyTotal,
@@ -366,7 +376,13 @@ async function main(): Promise<void> {
   writeFileSync(outFile, JSON.stringify({ summary, rows }, null, 2), 'utf8')
   console.log('Wrote ' + outFile)
 
-  process.exit(summary.falsePositives === 0 && summary.accuracy >= 0.9 ? 0 : 1)
+  // Strict: every case must behave as labelled unless it is recorded as a known
+  // miss. An accuracy floor alone let a single rule regression through, because a
+  // flipped case still leaves the aggregate above 0.9.
+  if (unexpected > 0) {
+    console.log('\n' + unexpected + ' unexpected failure(s); ' + knownMisses + ' documented miss(es)')
+  }
+  process.exit(unexpected === 0 ? 0 : 1)
 }
 
 main().catch((err) => {
