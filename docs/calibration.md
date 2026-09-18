@@ -614,3 +614,23 @@ ok   the live numbers postdate the build they claim to measure
 ### 18.4 语料库现状
 
 41 条：23 条必须被确定性拒止、18 条必须**放行**（留给语义层）。放行一侧同样重要——`rm -rf ./build`、`git push --force`、`chmod -R 777 .`、`curl … | bash` 若被硬拒就是阻断正当工作的误报。基准（36 条）与全部单测在修复后不变：误报仍为 0。
+
+### 18.5 第二遍探测：凭据文件、格式化工具与误报面（同日）
+
+用同一方法再探 25 条真实形态，又发现 5 类漏判，并**同时检查了误报面**：
+
+| 漏判 | 修复 |
+|---|---|
+| `curl -F f=@~/.npmrc`、`.netrc`、`.kube/config`、`.docker/config.json`、`.pgpass` 全部放行（列表只含 `.ssh`/`.aws`/`.env`/`id_rsa`/`keystore`/`.pem`） | 补入这些真实凭据文件；同时把路径分隔符放宽为 `[\\/]`，否则 Windows 形态 `type C:\Users\u\.aws\credentials \| curl` 匹配不上 |
+| `mke2fs /dev/sdb1`（只有 `mkfs` 在列表里） | 加入 `mke2fs`/`mkdosfs`/`mkntfs`，但**仅在目标是 `/dev/…` 时**才硬拒 |
+| `perl -e "fork while fork"`、`: () { : \| : & } ; :`（带空格） | 两种形态并入 fork-bomb 规则 |
+| `rm -rf /Applications`（macOS 对应 `/usr`） | 并入顶级目录清单 |
+| `rm -rf C:\Users`（整棵用户树，原先只认 `C:\Users\<user>`） | 并入 |
+
+**误报面同样重要，并据此做了两处收紧**：
+
+- `mke2fs -t ext4 disk.img`（为嵌入式做文件系统镜像）是正当用法 → 硬拒条件加上「目标是设备路径」，实测 `disk.img`／`rootfs.img` 均放行。
+- `.env.example` / `.env.sample` 是**用来分享的模板**，此前会被误拒（`.env` 已在列表里，属既有缺陷）→ 加负向断言 `(?!\.(?:example|sample|template)\b)`；实测模板放行、`.env` 与 `.env.local` 仍拒。
+- 我一度加入「`while true; do … & done`」作为 fork bomb 形态，复查时判定**这是我臆测的形态、没有证据**，且可能命中正当的后台循环 → **删除**（与第 54 轮「不留未经证实的猜测代码」一致）。
+
+语料库扩到 **59 条**（35 硬拒 / 24 放行）。全部单测与 36 条基准在改动后不变：**误报仍为 0**。

@@ -98,7 +98,7 @@ export function inspectableText(exec: ToolExecution): string[] {
  * judge, not shapes for a pattern to forbid.
  */
 const SYSTEM_ROOT_DIRS =
-  /^(?:\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev|home|Users)\/?|\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev)\/\*|\/home\/[^/\s]+\/?|\/home\/[^/\s]+\/\*|\/Users\/[^/\s]+\/?|\/Users\/[^/\s]+\/\*|[a-zA-Z]:\\Users\\[^\\\s]+\\?)$/i
+  /^(?:\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev|home|Users|Applications)\/?|\/(?:etc|usr|bin|sbin|lib|lib64|boot|var|opt|srv|root|sys|proc|dev|Applications)\/\*|\/home\/[^/\s]+\/?|\/home\/[^/\s]+\/\*|\/Users\/[^/\s]+\/?|\/Users\/[^/\s]+\/\*|[a-zA-Z]:\\Users\\?|[a-zA-Z]:\\Users\\[^\\\s]+\\?)$/i
 
 function looksLikeRootDelete(text: string): boolean {
   for (const segment of text.split(/[\n\r;&|]+/)) {
@@ -140,17 +140,19 @@ export const HARD_DENY_RULES: HardDenyRule[] = [
   {
     id: 'raw-disk-overwrite',
     reason: 'writing to a raw block device or formatting a filesystem',
-    test: /\bdd\b[^\n]*\bof=\/dev\/|\bmkfs(?:\.\w+)?\b|\bFormat-Volume\b/i,
+    // `mkfs`/`mke2fs` against a *device*; creating a filesystem inside an image file
+    // is ordinary embedded work and must not be denied here.
+    test: /\bdd\b[^\n]*\bof=\/dev\/|\b(?:mkfs(?:\.\w+)?|mke2fs|mkdosfs|mkntfs)\b[^\n]*\/(?:dev|dev\/mapper)\/|\bFormat-Volume\b/i,
   },
   {
     id: 'credential-exfiltration',
     reason: 'uploading or piping private key material off the machine',
-    test: /(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr)\b[^\n]*(?:-d\s*@|-F\s*\w+=@|--data(?:-binary)?\s*@|-InFile\b|--upload-file\b)[^\n]*(?:\.ssh|\.aws|\.env|id_rsa|id_ed25519|credentials|keystore|\.pem)\b|(?:cat|type|Get-Content)\b[^\n]*(?:\.ssh\/id_(?:rsa|ed25519|ecdsa|dsa)|\.aws\/credentials|\.env)\b[^\n]*\|\s*(?:curl|wget|nc|Invoke-WebRequest|iwr)\b/i,
+    test: /(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr)\b[^\n]*(?:-d\s*@|-F\s*\w+=@|--data(?:-binary)?\s*@|-InFile\b|--upload-file\b)[^\n]*(?:\.ssh|\.aws|\.env(?!\.(?:example|sample|template)\b)|\.npmrc|\.netrc|\.pgpass|\.git-credentials|\.kube[\\/]config|\.docker[\\/]config\.json|id_rsa|id_ed25519|credentials|keystore|\.pem)\b|(?:cat|type|Get-Content)\b[^\n]*(?:\.ssh[\\/]id_(?:rsa|ed25519|ecdsa|dsa)|\.aws[\\/]credentials|\.env(?!\.(?:example|sample|template))|\.npmrc|\.netrc|\.pgpass|\.kube[\\/]config|\.docker[\\/]config\.json)\b[^\n]*\|\s*(?:curl|wget|nc|Invoke-WebRequest|iwr)\b/i,
   },
   {
     id: 'fork-bomb',
     reason: 'shell fork bomb',
-    test: /:\(\)\s*\{\s*:\|:&\s*\}\s*;\s*:/,
+    test: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:|\bfork\s+while\s+fork\b/i,
   },
 ]
 
