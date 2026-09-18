@@ -217,3 +217,51 @@ test('LoopGuard ignores a stuck verdict that the model is not sure about', async
   const fired = await sure.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
   assert.ok(fired.additionalContexts, 'the same trajectory with confidence 0.9 must fire')
 })
+
+test('the exact-repeat deferral holds only for a consecutive identical call', async () => {
+  // The deferral hands exact repeats to DSH's repeat-tool-reminder, so it must not
+  // widen: a near repeat is still the guard's business, or a real loop goes silent.
+  const bash = (args: Record<string, unknown>): ToolExecution => ({ name: 'bash', args })
+  const A = bash({ command: 'npm test' })
+
+  async function fires(steps: Array<[ToolExecution, string]>, config: Record<string, unknown> = {}) {
+    const h = harness(async () => STUCK_FORESEEABLE, config)
+    let last: any
+    for (const [exec, content] of steps) last = await h.step({ ...exec, agent } as ToolExecution, content)
+    return Boolean(last?.additionalContexts || last?.contexts)
+  }
+
+  assert.equal(await fires([[A, 'same'], [A, 'same']]), false, 'an exact repeat is deferred, not judged')
+  assert.equal(await fires([[A, 'first'], [A, 'second']]), true, 'the same call with new output is judged')
+  assert.equal(
+    await fires([[A, 'same'], [bash({ command: 'npm test -- -u' }), 'same']]),
+    true,
+    'a different argument list is judged'
+  )
+  assert.equal(
+    await fires([[A, 'same'], [{ name: 'pwsh', args: { command: 'npm test' } }, 'same']]),
+    true,
+    'a different tool is judged'
+  )
+  assert.equal(
+    await fires([[bash({ command: 'npm  test' }), 'same'], [A, 'same']]),
+    true,
+    'a whitespace-only argument change is a different call'
+  )
+  assert.equal(
+    await fires([[A, 'same'], [A, 'same']], { deferExactRepeats: false }),
+    true,
+    'disabling the deferral puts exact repeats back under the semantic verdict'
+  )
+
+  // The canonical argument key ignores key order, so the same call written two ways
+  // is still recognised as the repeat it is.
+  assert.equal(
+    await fires([
+      [bash({ env: 'x', command: 'npm test' }), 'same'],
+      [bash({ command: 'npm test', env: 'x' }), 'same'],
+    ]),
+    false,
+    'argument key order does not make a new call'
+  )
+})
