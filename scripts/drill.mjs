@@ -141,4 +141,19 @@ for (const result of results) {
   console.log((result.caught ? 'CAUGHT ' : 'MISSED ') + result.name.padEnd(52) + ' <- ' + result.why)
 }
 console.log('\n' + (results.length - missed) + '/' + results.length + ' regressions caught by the net')
+
+// Each iteration rebuilt lib/ from a mutated source, so the last build reflects a
+// mutation that no longer exists. Rebuild once more and confirm the tree is back.
+try {
+  execFileSync('pnpm', ['run', 'build'], { stdio: 'ignore', shell: true })
+} catch {
+  console.error('the final rebuild failed; run `pnpm run build` before trusting the tree')
+  process.exit(1)
+}
+const leftovers = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' })
+if (leftovers.trim().length > 0) {
+  console.error('the drill left changes behind:\n' + leftovers.trim())
+  process.exit(1)
+}
+
 process.exit(missed === 0 ? 0 : 1)
