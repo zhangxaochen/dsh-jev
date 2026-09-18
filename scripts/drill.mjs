@@ -108,8 +108,8 @@ const drills = [
   {
     name: 'shaper requires a string where the service sends blocks',
     file: 'src/result-shaper.ts',
-    from: '  if (typeof content === \'string\') return content\n  if (!Array.isArray(content)) return undefined',
-    to: '  if (typeof content === \'string\') return content\n  return undefined',
+    from: '      const originalText = extractText(result.content)\n      if (originalText === undefined) return baseDecision',
+    to: '      if (typeof result.content !== \'string\') return baseDecision\n      const originalText = result.content',
     command: ['tests/integration-dsh.mjs'],
   },
 ]
