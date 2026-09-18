@@ -86,9 +86,9 @@ dsh plugin --profile headless add dsh-jev
 
 ```ts
 import { Context } from '@deepseek-ai/cordis'
-import * as TypeSafeClient from 'dsh-plugin-typesafe/client'
-import * as LoopGuard from 'dsh-plugin-typesafe/loop-guard'
-import * as SafetyGuard from 'dsh-plugin-typesafe/safety-guard'
+import * as TypeSafeClient from 'dsh-jev/client'
+import * as LoopGuard from 'dsh-jev/loop-guard'
+import * as SafetyGuard from 'dsh-jev/safety-guard'
 
 const ctx = new Context()
 

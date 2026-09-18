@@ -1,7 +1,7 @@
 /**
  * Execution safety gatekeeper plugin using TypeSafe AI.
  * Intercepts tools/pre-execute to screen sensitive commands for destructive actions or security hazards.
- * @module dsh-plugin-typesafe/safety-guard
+ * @module dsh-jev/safety-guard
  */
 
 import { noul, score, TypeSafeClient } from './client.js'

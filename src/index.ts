@@ -1,6 +1,6 @@
 /**
  * Entry point for TypeSafe AI integration suite for DeepSeek Harness (dsh).
- * @module dsh-plugin-typesafe
+ * @module dsh-jev
  */
 
 import * as ClientPlugin from './client.js'

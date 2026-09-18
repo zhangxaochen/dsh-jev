@@ -1,6 +1,6 @@
 /**
  * Type declarations for TypeSafe AI integration and dsh plugin hooks.
- * @module dsh-plugin-typesafe/types
+ * @module dsh-jev/types
  */
 
 // ==========================================

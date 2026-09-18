@@ -1,6 +1,6 @@
 /**
  * Client and Cordis service provider for TypeSafe AI (Jev System One model).
- * @module dsh-plugin-typesafe/client
+ * @module dsh-jev/client
  */
 
 import type {

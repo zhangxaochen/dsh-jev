@@ -1,7 +1,7 @@
 /**
  * Loop guard plugin for semantic loop and stagnation interception.
  * Observes tools/post-execute to detect cyclical agent behavior and prompt plan adaptation.
- * @module dsh-plugin-typesafe/loop-guard
+ * @module dsh-jev/loop-guard
  */
 
 import { randomUUID } from 'node:crypto'

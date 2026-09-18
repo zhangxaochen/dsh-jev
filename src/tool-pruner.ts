@@ -1,7 +1,7 @@
 /**
  * Dynamic tool and skill pruner using TypeSafe AI.
  * Ranks and filters tools to reduce context rot and speed up LLM inference.
- * @module dsh-plugin-typesafe/tool-pruner
+ * @module dsh-jev/tool-pruner
  */
 
 import { score, TypeSafeClient } from './client.js'
