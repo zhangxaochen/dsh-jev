@@ -228,6 +228,7 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: 判定无法获得（API 报错/超时）时的策略，默认 `deny-guarded`（受保护工具 fail-closed，其余工具放行）。需要旧的「出错即放行」行为时显式设为 `allow`。
 - `onUncertain?: 'deny-guarded' | 'deny-all' | 'allow'`: 拿到了答案但没有可用概率时的策略，默认 `deny-guarded`。
 - `rules?: Array<{ id, question, threshold?, action? }>`: 用户自定义语义规则，与内置问题同一次请求评估；`action` 可取 `deny` / `ask` / `warn`。
+- `headless?: boolean`: 会话无法弹窗询问时设为 `true`（默认 `false`）。此时任何 `ask`（含用户规则触发的）都转为 `deny`——宁可拒绝也不假装已获批准。桌面端保持默认即可。
 - `guardedTools?: string[]`: 受到审查保护的高危工具列表。库默认 = `bash` / `terminal` / `pwsh` / `run_command` / `execute_command` / `run_code` / `write_to_file` / `replace_file_content`；随包 `cordis.patch.yml` 与之一致（含文件写入，因为凭据常被写进仓库文件）。`tests/packaging.spec.ts` 会阻止发布配置把这份清单改小。
 
 ### `SkillRouterConfig`
@@ -256,6 +257,13 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - 前置检查：单行 >4000 字符、行数 ≥120、或结构重复率 ≥50% 才发起判定；类别全部被丢弃时**拒绝整形**、原样返回，且同一轮内不再重试。
 - ℹ️ 该模块仍是**opt-in / 实验性**：分类本身可靠（实测对 600 行中的单行报错给出 `failure`、置信度 1），但「保留 warning/failure、丢弃其余」意味着普通细节也会被丢弃——请按你的输出形态决定是否开启。
 ### `TypeSafeSuiteConfig` 开关
+
+套件配置按模块**嵌套**；未出现的模块取代码默认值（补丁是整行替换，见「方式 2」的提醒）：
+
+- `client?: TypeSafeClientConfig`: 客户端配置（`apiKey`、超时、缓存等），见上一节。
+- `loopGuard?: LoopGuardConfig | boolean`: 死循环判定（默认 `true`）。
+- `safetyGuard?: SafetyGuardConfig | boolean`: 语义安全裁决（默认 `true`）。
+- `toolPruner?: ToolPrunerConfig | boolean`: 工具剪枝（默认 `true`）。
 - `askTools?: boolean`: 是否注册 `jev_ask` / `jev_rank` / `jev_check`（默认 `true`）。
 - `skillRouter?: SkillRouterConfig | boolean`: 语义 skill 路由（默认 `true`）。
 - `resultShaper?: ResultShaperConfig | boolean`: 语义结果整形，需显式开启（默认 **关闭**）。

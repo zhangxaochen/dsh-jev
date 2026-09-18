@@ -128,6 +128,15 @@ const drills = [
   // unreachable rather than wrong and there is no regression to inject. The
   // contract it obscured is pinned by the safety-guard case instead.
   {
+    // A config field the code accepts must be documented; removing one from the
+    // README must fail rather than leave an undocumented option.
+    name: 'a config field loses its documentation',
+    file: 'README.md',
+    from: '- `headless?: boolean`: 会话无法弹窗询问时设为 `true`（默认 `false`）。此时任何 `ask`（含用户规则触发的）都转为 `deny`——宁可拒绝也不假装已获批准。桌面端保持默认即可。\n',
+    to: '',
+    test: 'tests/docs-consistency.spec.ts',
+  },
+  {
     // The shipped patch is what every user actually runs; a value that drifts from
     // the code default must fail rather than silently contradict the docs.
     name: 'the shipped patch drifts from the code default',

@@ -174,3 +174,26 @@ test('the research record cites sections and files that exist', () => {
     assert.ok(existsSync(join(cwd(), file)), 'research.md points at ' + file + ', which does not exist')
   }
 })
+
+test('every config field the code accepts is documented', () => {
+  // Keys added during this work (minKeep, minIntentChars, nameMatchBoost,
+  // requestTimeoutMs, minKindConfidence ...) each had to be written into the
+  // README by hand; five fields had already been missed, including
+  // SafetyGuardConfig.headless, which changes whether a prompt is possible. The
+  // check reads the interfaces rather than a list, so a new field cannot skip it.
+  const types = readFileSync(join(cwd(), 'src', 'types.ts'), 'utf8')
+  const readme = readFileSync(join(cwd(), 'README.md'), 'utf8')
+
+  const interfaces = [...types.matchAll(/export interface (\w*Config\w*) \{([\s\S]*?)\n\}/g)]
+  assert.ok(interfaces.length >= 5, 'expected the config interfaces to be found in src/types.ts')
+
+  const missing = []
+  for (const [, interfaceName, body] of interfaces) {
+    for (const match of body.matchAll(/^\s{2}(\w+)\??:/gm)) {
+      const field = match[1]
+      if (!new RegExp('`' + field + '\\??:').test(readme)) missing.push(interfaceName + '.' + field)
+    }
+  }
+
+  assert.deepEqual(missing, [], 'these config fields are accepted by the code but absent from README')
+})

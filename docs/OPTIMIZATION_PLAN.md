@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **142** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **143** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -608,3 +608,12 @@
 - [x] 首次运行时发现我的断言写错了（要求补丁必须钉住 `minKeep`/`minIntentChars`）——补丁省略即回退代码默认，行为正确；改为「登记的键必须匹配」后通过
 - [x] **牙齿验证**：把补丁的 `pLoopThreshold` 改成 0.95 → 报 `cordis.patch.yml pins pLoopThreshold away from the code default`；已加演练条目永久化
 - [x] 测试数 140 → 142
+
+## Phase 5 补充记录（配置项文档完整性守卫，Round 61）
+
+- [x] 检查下一层一致性：现有守卫是「补丁的键在类型里」（patch → types），**反向没有**——类型里被代码接受的字段是否都在 README 中有说明，无人守卫
+- [x] 实测 7 个 `*Config` 接口共 **50 个字段中有 5 个未在 README 出现**。其中 **`SafetyGuardConfig.headless` 是真实遗漏**：它决定「无法弹窗时 ask 是否转为 deny」，属安全相关行为却无文档；其余 4 个（`client` / `loopGuard` / `safetyGuard` / `toolPruner`）是**套件配置的嵌套写法**没展示，读者无法从配置参考里看出如何组装
+- [x] 补齐：README 的套件小节列出各模块字段与类型（并提示「未出现的模块取代码默认」），SafetyGuardConfig 小节补上 `headless` 的语义与默认值
+- [x] 新增守卫「**代码接受的每个配置字段都必须在 README 中有说明**」：直接读 `src/types.ts` 的接口而非维护一份清单，因此将来新增字段无法绕过
+- [x] **牙齿验证**：删掉 `headless` 那行 → 报 `these config fields are accepted by the code but absent from README`；已加演练条目永久化
+- [x] 测试数 142 → 143
