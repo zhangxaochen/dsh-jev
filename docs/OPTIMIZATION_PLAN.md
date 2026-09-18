@@ -263,3 +263,11 @@
 - [x] 实测确认：运行集成校验前后实机日志均为 **1847 行**（未追加）
 - [x] 单测 +3：路径覆盖优先级、构造与读取不落盘、环境变量确实隔离验证判决
 - [x] 测试数 94 → 97
+
+## Phase 5 补充记录（单测套件污染，Round 25 续）
+
+- [x] 发现：`pnpm test` 自身就会写实机文件——`tests/client.spec.ts` 经真实 `TypeSafeClient` 触发 `defaultMetrics.recordCall`，把 **v2 指标**写进 `~/.dsh/jev-stats.json`。这造成一次瞬时 `version 2` 读数，几乎让我误判「宿主已重载」；随后旧宿主写回 v1，doctor 才给出正确结论 `ACTION: restart DSH`
+- [x] 修复：新增 `tests/isolate.mjs`，由 `node --import ./tests/isolate.mjs` 在 spec 之前预载，把两个环境变量指向临时目录
+- [x] 实测：运行 97 个测试前后，实机指标 `version 1 / mtime 04:25:42` 不变；决策日志 1931 行不变
+- [x] 新增守卫单测：断言预载确实生效（`METRICS_PATH_ENV` 与 `DSH_JEV_DECISIONS_PATH` 已设且不指向 `.dsh/`），若将来 `test` 脚本丢掉预载会立刻失败
+- [x] 测试数 97 → 98

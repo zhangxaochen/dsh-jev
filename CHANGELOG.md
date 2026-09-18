@@ -43,9 +43,15 @@
 - 看板/`/api/dsh-jev/stats`/`jev_stats` 附最近一次基准摘要；未跑过时明确写「暂无记录」。
 - **工具剪枝保持上游顺序**：此前返回 `[...alwaysRetain, ...按相关性排序的入选工具]`，既把保留工具提前，又让尾部随分数每轮漂移；现改为保持候选原序（只决定成员、不决定位置），避免模型可见前部内容变动导致 KV cache 前缀失效。
 - 测试环境不再回退读取 `~/.dsh/.env`，离线测试因此真正离线（此前会静默打真实 API）。
+- **测试套件与实机状态隔离**：`pnpm test` 会经 `defaultMetrics` / `defaultDecisionLog` 写入实机文件——
+  足够让陈旧宿主看起来「已重载」（v2 指标被测试写到 `~/.dsh/jev-stats.json`），也足以把测试判决混进标定数据集。
+  现由 `tests/isolate.mjs` 经 `node --import` 预载重定向到临时目录，并有单测守卫该预载不被移除。
 - **决策日志同样可重定向**：`DSH_JEV_DECISIONS_PATH` 覆盖 `~/.dsh/jev-decisions.jsonl` 的位置，路径改为首次使用时解析。
   该文件是阈值复核所用的标定数据集，此前任何导入插件的脚本都会把自己的 mock 判决追加进去
   （实测一次集成校验追加 6 条），后续复核将读到植入的数据。
+- **测试套件与实机状态隔离**：`pnpm test` 会经 `defaultMetrics` / `defaultDecisionLog` 写入实机文件——
+  足够让陈旧宿主看起来「已重载」（v2 指标被测试写到 `~/.dsh/jev-stats.json`），也足以把测试判决混进标定数据集。
+  现由 `tests/isolate.mjs` 经 `node --import` 预载重定向到临时目录，并有单测守卫该预载不被移除。
 - **决策日志同样可重定向**：`DSH_JEV_DECISIONS_PATH` 覆盖 `~/.dsh/jev-decisions.jsonl` 的位置，路径改为首次使用时解析。
   该文件是阈值复核所用的标定数据集，此前任何导入插件的脚本都会把自己的 mock 判决追加进去
   （实测一次集成校验追加 6 条），后续复核将读到植入的数据。

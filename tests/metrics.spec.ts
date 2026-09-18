@@ -215,3 +215,13 @@ test('the environment override routes a collector to a scratch file', () => {
     rmSync(target, { force: true })
   }
 })
+
+test('the test run is isolated from the operator state by the preloaded env', () => {
+  // `node --import ./tests/isolate.mjs` sets these before any spec evaluates; if
+  // that preload is ever dropped, the suite starts writing to the live metrics
+  // and decision files and this fails instead of a deployment verdict silently
+  // flipping.
+  assert.ok(process.env[METRICS_PATH_ENV], 'metrics path must be redirected for tests')
+  assert.ok(process.env.DSH_JEV_DECISIONS_PATH, 'decision log path must be redirected for tests')
+  assert.doesNotMatch(resolveMetricsPath(), /\.dsh[\\/]jev-stats\.json$/)
+})
