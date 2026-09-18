@@ -81,3 +81,10 @@
 
 - [x] bench 支持 `--offline` 回放录制答案；30 条样本 0 误报、准确率 0.933
 - [x] 每次判决写入 `~/.dsh/jev-decisions.jsonl`（含 pass 负样本）
+
+## Phase 5 补充记录（发布收口）
+
+- [x] `package.json` 版本升至 `0.2.0`：本次含破坏性配置变更（移除 `stuckSeverityThreshold`、`safetyGuard` 默认改为 fail-closed、指标文件 schema 升到 v2）
+- [x] README 新增「从 0.1.0 升级到 0.2.0」迁移表（三项需检查的变更 + 兼容开关）
+- [x] `exports` 补齐 `decisions` / `bench-summary` / `ask-tools` / `skill-router` / `result-shaper`，README「方式 3」同步为可按需挂载
+- [x] 打包校验：`npm pack --dry-run` 56 个文件，5 个新模块均在包内；各子模块 import 冒烟通过

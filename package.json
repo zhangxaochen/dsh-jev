@@ -1,6 +1,6 @@
 {
   "name": "dsh-jev",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Jev (System One decision model) plugin suite for DeepSeek Harness (dsh)",
   "type": "module",
   "main": "./lib/index.js",
@@ -37,6 +37,26 @@
     "./typesafe-client": {
       "types": "./lib/typesafe-client.d.ts",
       "default": "./lib/typesafe-client.js"
+    },
+    "./decisions": {
+      "types": "./lib/decisions.d.ts",
+      "default": "./lib/decisions.js"
+    },
+    "./bench-summary": {
+      "types": "./lib/bench-summary.d.ts",
+      "default": "./lib/bench-summary.js"
+    },
+    "./ask-tools": {
+      "types": "./lib/ask-tools.d.ts",
+      "default": "./lib/ask-tools.js"
+    },
+    "./skill-router": {
+      "types": "./lib/skill-router.d.ts",
+      "default": "./lib/skill-router.js"
+    },
+    "./result-shaper": {
+      "types": "./lib/result-shaper.d.ts",
+      "default": "./lib/result-shaper.js"
     }
   },
   "files": [

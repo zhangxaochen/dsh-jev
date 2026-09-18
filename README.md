@@ -134,6 +134,9 @@ import { Context } from '@deepseek-ai/cordis'
 import * as TypeSafeClient from 'dsh-jev/client'
 import * as LoopGuard from 'dsh-jev/loop-guard'
 import * as SafetyGuard from 'dsh-jev/safety-guard'
+import * as ToolPruner from 'dsh-jev/tool-pruner'
+import * as SkillRouter from 'dsh-jev/skill-router'
+import * as ResultShaper from 'dsh-jev/result-shaper'   // 默认关闭，需显式挂载
 
 const ctx = new Context()
 
@@ -148,11 +151,32 @@ ctx.plugin(LoopGuard, {
 
 // 单独挂载安全门禁
 ctx.plugin(SafetyGuard, {
-  blockThreshold: 0.7
+  blockThreshold: 0.85,
+  onError: 'deny-guarded'
 })
+
+// 单独挂载语义 skill 路由（advisory）
+ctx.plugin(SkillRouter, { minScore: 1.5, minConfidence: 0.5 })
+
+// 单独挂载语义结果整形（改变模型所见，按需开启）
+ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 ```
 
+决策原语不经 `ctx.plugin` 挂载，而是注册为 Agent 工具（`registerJevTools(ctx, () => client)`，或直接用整包默认开启的 `askTools`）。
+
 ---
+
+## 从 0.1.0 升级到 0.2.0
+
+这是一次**破坏性变更**版本，升级后请检查三处：
+
+| 变更 | 0.1.0 | 0.2.0 | 需要做什么 |
+|---|---|---|---|
+| `loopGuard.stuckSeverityThreshold` | 有效区间 `[0, 2]`，但代码里被反向三元改成固定 1.4 | **已移除** | 从配置里删掉该项；改用 `pLoopThreshold`（默认 `0.6`）+ `minConfidence`（默认 `0.5`） |
+| `safetyGuard` 失败策略 | 出错/超时 → 放行；headless 下 `ask` → 放行 | 受保护工具 **fail-closed**，headless 下 `ask` → `deny` | 若确实需要旧行为，显式设置 `onError: allow` / `onUncertain: allow` |
+| 指标文件 `~/.dsh/jev-stats.json` | `version: 1`，含两个凭空常量折算的「节省 token」 | `version: 2`，只记实测字段 | 旧文件**不迁移**，插件启动时按新结构重新计数；如需保留历史先自行备份 |
+
+同时新增（默认值见下）：`jev_ask`/`jev_rank`/`jev_check` 决策原语、`skillRouter`、以及默认关闭的 `resultShaper`。
 
 ## 配置参考
 
