@@ -163,6 +163,14 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
+    // The delivery summary's per-module counts must track the specs they describe.
+    name: 'the delivery summary miscounts a module',
+    file: 'docs/OPTIMIZATION_PLAN.md',
+    from: '单测 13 项 + `verify:live`',
+    to: '单测 10 项 + `verify:live`',
+    test: 'tests/docs-consistency.spec.ts',
+  },
+  {
     // The evidence index is the first thing a reviewer reads; dropping a gate from it
     // must fail rather than hide that gate.
     name: 'the evidence index stops naming a gate',

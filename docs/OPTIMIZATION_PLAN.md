@@ -12,14 +12,14 @@
 | 模块 | 现在做什么 | 默认 | 验证手段 | 关键实测 |
 |---|---|---|---|---|
 | `typesafe-client` | 封装 Jev（批量提问、相同载荷缓存、输入字节与费用记账） | 开 | 单测 12 项 | 热调用 250–300ms；默认超时 2000ms、建议路径 800ms |
-| `loop-guard` | 语义死循环判定；精确重复让位 DSH 内置提醒 | 开 | 单测 10 项 + `verify:live` + 30 条基准 | 误报 0；真循环 `pLoop≈0.86` 命中 |
-| `safety-guard` | 确定性硬拒集 + 语义裁决 + 用户自定义规则；受保护工具 fail-closed | 开 | 单测 9 项 + 30 条基准 + 服务级集成 | 危险集 100% 拦下、工具体执行 0 次 |
-| `tool-pruner` | 按意图打分只注入 Top-K 工具，保持上游顺序 | 开 | 单测 5 项 + `verify:pruner` + 服务级集成 | 6/6 标注用例，必需工具零遗漏 |
-| `ask-tools` | `jev_ask` / `jev_rank` / `jev_check` 决策原语 | 开 | 单测 6 项 + `verify:tools` | 3 问一次请求 811ms；否定断言 p=0.04 |
+| `loop-guard` | 语义死循环判定；精确重复让位 DSH 内置提醒 | 开 | 单测 13 项 + `verify:live` + 36 条基准 | 误报 0；真循环 `pLoop≈0.86` 命中 |
+| `safety-guard` | 确定性硬拒集 + 语义裁决 + 用户自定义规则；受保护工具 fail-closed | 开 | 单测 11 项 + 92 例命令语料 + 36 条基准 + 服务级集成 | 危险集 100% 拦下、工具体执行 0 次 |
+| `tool-pruner` | 按意图打分只注入 Top-K 工具，保持上游顺序 | 开 | 单测 8 项 + `verify:pruner` + 服务级集成 | 6/6 标注用例，必需工具零遗漏 |
+| `ask-tools` | `jev_ask` / `jev_rank` / `jev_check` 决策原语 | 开 | 单测 7 项 + `verify:tools` | 3 问一次请求 811ms；否定断言 p=0.04 |
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
-| `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
+| `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **152** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **153** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -702,3 +702,11 @@
 - [x] 新增守卫「**证据索引必须点名每个闸门**」：`package.json` 中每个 `verify:*`（及 `test`/`drill`/`bench:offline`/`typecheck:scripts`）、每个 `*corpus*.spec.ts`、每个 `scripts/*.mjs` 都必须在报告中出现；命令名映射处理 `verify-build.mjs` → `verify:build`
 - [x] 新增演练条目：从复现清单删掉 `pnpm run drill` → 该守卫必须失败
 - [x] 测试数 151 → 152
+
+## 收尾核验（摘要数字同步，Round 72）
+
+- [x] 审计 README 与计划「交付摘要」里的数字：**摘要的逐模块计数已过期**——`loop-guard` 写 10（实为 13）、`safety-guard` 写 9（实为 11）、`tool-pruner` 写 5（实为 8）、`ask-tools` 写 6（实为 7）、两处基准写 30 条（实为 36）。总数一直有守卫，**逐模块的拆分没有**
+- [x] 修正五行，并在其中补记新证据（safety-guard 增加「92 例命令语料」、result-shaper 增加「16 例前置检查语料」）
+- [x] 新增守卫「**交付摘要的逐模块计数必须与用例文件一致**」：显式登记 模块→spec 映射（`typesafe-client` 含 `client.spec.ts` + `resilience.spec.ts`，因失败行为在后者中断言），并把「期望值」也写进用例——改了 spec 就要同时改这两处，无法单边漂移
+- [x] **牙齿验证**：把摘要改成「单测 10 项」→ 报 `the summary claims a test count for loop-guard that the specs no longer hold`；已加演练条目
+- [x] 测试数 152 → 153

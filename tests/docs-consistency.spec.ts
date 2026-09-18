@@ -276,3 +276,39 @@ test('the evidence index names every gate the package exposes', () => {
 
   assert.deepEqual(missing, [], 'the evidence index does not mention these gates')
 })
+
+test('the delivery summary counts each module as it stands', () => {
+  // The summary is the first table a reader sees, and its per-module counts had
+  // drifted: loop-guard said 10 against 13, safety-guard 9 against 11, tool-pruner 5
+  // against 8, ask-tools 6 against 7, and the bench 30 against 36. The total was
+  // gated; the breakdown was not.
+  const plan = readFileSync(join(cwd(), 'docs', 'OPTIMIZATION_PLAN.md'), 'utf8')
+  const summary = plan.slice(plan.indexOf('## 交付摘要'), plan.indexOf('## 基线'))
+
+  const countTests = (file: string) =>
+    (readFileSync(join(cwd(), 'tests', file), 'utf8').match(/^test\(/gm) ?? []).length
+
+  // Each module maps to the specs that cover it; the client's failure behaviour is
+  // asserted in the resilience spec, so those tests belong to it.
+  const MODULES: Array<[string, string[], number]> = [
+    ['typesafe-client', ['client.spec.ts', 'resilience.spec.ts'], 12],
+    ['loop-guard', ['loop-guard.spec.ts'], 13],
+    ['safety-guard', ['safety-guard.spec.ts'], 11],
+    ['tool-pruner', ['tool-pruner.spec.ts'], 8],
+    ['ask-tools', ['ask-tools.spec.ts'], 7],
+    ['skill-router', ['skill-router.spec.ts'], 9],
+    ['result-shaper', ['result-shaper.spec.ts'], 12],
+  ]
+
+  const wrong = []
+  for (const [module, files, expected] of MODULES) {
+    const actual = files.reduce((total, file) => total + countTests(file), 0)
+    if (actual !== expected) wrong.push(module + ': the case expects ' + expected + ' but the specs hold ' + actual)
+
+    const row = summary.split('\n').find((line) => line.startsWith('| `' + module + '`'))
+    assert.ok(row, 'the summary must carry a row for ' + module)
+    const claimed = Number(row!.match(/单测\s*(\d+)\s*项/)?.[1])
+    assert.equal(claimed, actual, 'the summary claims a test count for ' + module + ' that the specs no longer hold')
+  }
+  assert.deepEqual(wrong, [], 'update the mapping and the summary together')
+})
