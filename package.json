@@ -54,7 +54,8 @@
   "scripts": {
     "build": "tsc",
     "pretest": "tsc",
-    "test": "node --test tests/*.spec.ts"
+    "test": "node --test tests/*.spec.ts",
+    "sync:desktop": "tsc && node -e \"const fs = require('fs'), path = require('path'), dest = path.join(process.env.USERPROFILE, '.dsh/profiles/desktop/node_modules/dsh-jev'); fs.cpSync('lib', path.join(dest, 'lib'), {recursive: true, force: true}); fs.copyFileSync('package.json', path.join(dest, 'package.json')); fs.copyFileSync('cordis.patch.yml', path.join(dest, 'cordis.patch.yml')); console.log('Successfully synced dsh-jev to desktop!');\""
   },
   "keywords": [
     "deepseek-harness",
