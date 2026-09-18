@@ -22,6 +22,42 @@ Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://gith
 
 ---
 
+## 实际效果（本机实测输出摘录）
+
+以下均为**逐字摘录**，可用标注的命令复现（数值随当时的请求与输出规模变化；完整标定见 [`docs/calibration.md`](docs/calibration.md)）。
+
+**死循环判定**（`pnpm run verify:live`）：健康轨迹不触发，真循环以高置信度命中。
+
+```
+PASS [healthy-read-then-pwsh] fires=false (expected false) progress=0.67 pLoop=0.00 confidence=0.97  792ms
+PASS [true-loop]              fires=true  (expected true)  progress=0.10 pLoop=0.88 confidence=0.81  297ms
+```
+
+**工具剪枝**（`pnpm run verify:pruner`）：意图为「提交并推送」时，只保留该意图真正需要的工具。
+
+```
+PASS [ship-the-commit]   kept git_commit, git_push, run_tests   689ms
+PASS [fix-failing-test]  kept run_tests, read_file, edit_file    233ms
+```
+
+**结果整形**（`pnpm run verify:shaper`，默认关闭）：32.7KB 构建日志压到 253 字符且保留报错行；纯噪声直接拒绝整形。
+
+```
+PASS [build-log]    32725 -> 253 chars, kept 2 cluster(s), dropped 600 line(s)  773ms
+PASS [pure-noise]   declined (nothing worth keeping)                              1ms
+```
+
+**一整轮的语义开销**（`pnpm run verify:turn`：全部模块 + 真实模型 + 真实装配）：
+
+```
+assemble:       2139ms -> 12 tools to 5 (edit_file,git_commit,git_push,read_file,run_tests)
+skill intent:   把这份用户调研整理成一份 PRD 文档 -> 1 advice in 979ms
+post-execute:   586ms -> 32680 to 237 chars
+semantic overhead this turn: 3704ms
+```
+
+---
+
 ## 兼容性
 
 - **Node**：`^22.19.0 || >=24.0.0`
