@@ -172,6 +172,14 @@ const drills = [
     command: ['scripts/verify-host.mjs'],
   },
   {
+    // The cooldown count and the number of silent steps must agree.
+    name: 'the cooldown suppresses one step fewer than configured',
+    file: 'src/loop-guard.ts',
+    from: 'const cooling = chain.cooldown > 0',
+    to: 'const cooling = (chain.cooldown -= 1) > 0',
+    test: 'tests/loop-guard.spec.ts',
+  },
+  {
     // Each live script must be able to fail: one that cannot is decoration. These
     // four mutate the behaviour their script claims to verify.
     name: 'the shaper stops shaping anything',

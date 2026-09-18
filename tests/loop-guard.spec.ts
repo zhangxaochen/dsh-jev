@@ -115,15 +115,23 @@ test('LoopGuard passes the agent/pre-step decision through untouched', async () 
 })
 
 test('LoopGuard honours the cooldown after a notice', async () => {
-  const h = harness(async () => STUCK_FORESEEABLE, { cooldownSteps: 2 })
+  // triggerThreshold 1 keeps the streak gate out of the way: with the default 2 the
+  // step after a notice would be silent because the streak was reset, so the test
+  // could not tell whether the cooldown worked at all.
+  const h = harness(async () => STUCK_FORESEEABLE, { triggerThreshold: 1, cooldownSteps: 2 })
   const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
 
-  await h.step(exec, 'a')
-  const fired = await h.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
-  assert.ok(fired.additionalContexts)
+  const first = await h.step(exec, 'a')
+  assert.ok(first.additionalContexts, 'the first stuck step fires')
 
-  const cooled = await h.step({ name: 'bash', args: { command: 'npm test -- -x' }, agent }, 'c')
-  assert.equal(cooled.additionalContexts, undefined, 'cooldown must suppress repeated notices')
+  const cooled = await h.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
+  assert.equal(cooled.additionalContexts, undefined, 'the cooldown must suppress the next notice')
+
+  const stillCooled = await h.step({ name: 'bash', args: { command: 'npm test -- -x' }, agent }, 'c')
+  assert.equal(stillCooled.additionalContexts, undefined, 'two cooldown steps means two silent steps')
+
+  const resumed = await h.step({ name: 'bash', args: { command: 'npm test -- -y' }, agent }, 'd')
+  assert.ok(resumed.additionalContexts, 'and it fires again once the cooldown expires')
 })
 
 test('LoopGuard resets its chain on a new user instruction', async () => {

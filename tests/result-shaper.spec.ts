@@ -262,3 +262,62 @@ test('replaceText collapses text blocks in place and preserves every other block
   const appended = replaceText([{ type: 'image', url: 'only' }], 'shaped') as Array<Record<string, unknown>>
   assert.deepEqual(appended.map((block) => block.type), ['image', 'text'])
 })
+
+test('shape honours minKindConfidence', async () => {
+  // The knob decides how sure the classifier must be before a cluster is dropped, and
+  // nothing pinned it: lowering it changed behaviour with every test still green.
+  const content = noisyOutput(200)
+
+  const unsure = await service(
+    async () => ({
+      kind_0: { type: 'choice', choice: 'routine_progress', confidence: 0.99, probabilities: {} },
+      kind_1: { type: 'choice', choice: 'failure', confidence: 0.3, probabilities: {} },
+    })
+  ).shape(content, 'pwsh')
+  assert.equal(unsure, undefined, 'a low-confidence failure must not license dropping the rest')
+
+  const sure = await service(
+    async () => ({
+      kind_0: { type: 'choice', choice: 'routine_progress', confidence: 0.99, probabilities: {} },
+      kind_1: { type: 'choice', choice: 'failure', confidence: 0.9, probabilities: {} },
+    })
+  ).shape(content, 'pwsh')
+  assert.ok(sure, 'a confident failure keeps the cluster that carries it and drops the noise')
+  assert.match(sure!.text, /ERROR in src\/a\.ts:42/)
+
+  // Raising the bar above the answer's confidence has the same effect as the low one.
+  const strict = await service(
+    async () => ({
+      kind_0: { type: 'choice', choice: 'routine_progress', confidence: 0.99, probabilities: {} },
+      kind_1: { type: 'choice', choice: 'failure', confidence: 0.9, probabilities: {} },
+    }),
+    { minKindConfidence: 0.95 }
+  ).shape(content, 'pwsh')
+  assert.equal(strict, undefined, 'minKindConfidence governs whether a cluster is kept')
+})
+
+test('apply honours maxPerTurn and resets it for the next instruction', async () => {
+  const h = harness(
+    async (req: any) => {
+      const answers: Record<string, unknown> = {}
+      for (const [id, question] of Object.entries(req.questions ?? {})) {
+        const embedded = String((question as any).instructions ?? '')
+        const choice = /ERROR/.test(embedded) ? 'failure' : 'routine_progress'
+        answers[id] = { type: 'choice', choice, confidence: 0.99, probabilities: {} }
+      }
+      return answers
+    },
+    { thresholdChars: 1000, maxPerTurn: 1 }
+  )
+
+  const exec: ToolExecution = { name: 'pwsh', args: { command: 'build' } }
+  const first = await h.step(exec, noisyOutput(200))
+  assert.ok(first.content, 'the first eligible result is shaped')
+
+  const second = await h.step(exec, noisyOutput(200).replace(/ok/g, 'ok2'))
+  assert.equal(second.content, undefined, 'the per-turn budget stops the second')
+
+  h.preStep()
+  const nextTurn = await h.step(exec, noisyOutput(200).replace(/ok/g, 'ok3'))
+  assert.ok(nextTurn.content, 'a new instruction gets a fresh budget')
+})

@@ -204,7 +204,11 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
       const argsKey = canonicalArgs(exec.arguments ?? exec.args)
       const chain = chainFor(agent)
 
-      if (chain.cooldown > 0) chain.cooldown -= 1
+      // Read the state before ticking it down: decrementing first made
+      // `cooldownSteps: N` suppress only N-1 steps, so the configured number did not
+      // mean what it says. Every step still counts down.
+      const cooling = chain.cooldown > 0
+      if (cooling) chain.cooldown -= 1
 
       const previous = chain.history[chain.history.length - 1]
       const isExactRepeat =
@@ -233,7 +237,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         chain.noProgressStreak += 1
         return next()
       }
-      if (chain.cooldown > 0) {
+      if (cooling) {
         return next()
       }
 

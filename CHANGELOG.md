@@ -74,6 +74,8 @@
 - `bench --offline` 不再覆写 `~/.dsh/jev-bench.json`：离线回放没有延迟与费用可报，
   看板应保留最近一次真实 API 的实测数字。
 
+- `loopGuard.cooldownSteps` 实际只静默 **N−1** 步：冷却计数在判断之前先减量，因此配置 3 只有 2 步静默。改为先读状态再减量（每步仍计时），故 `N` 现在名副其实——与 README 的「Steps to stay silent after an intervention」一致。
+
 ### Notes
 
 - 升级到 0.2.0 需检查的三处破坏性变更见 README「从 0.1.0 升级到 0.2.0」。

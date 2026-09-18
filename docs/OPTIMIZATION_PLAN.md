@@ -17,9 +17,9 @@
 | `tool-pruner` | 按意图打分只注入 Top-K 工具，保持上游顺序 | 开 | 单测 9 项 + `verify:pruner` + 服务级集成 | 6/6 标注用例，必需工具零遗漏 |
 | `ask-tools` | `jev_ask` / `jev_rank` / `jev_check` 决策原语 | 开 | 单测 7 项 + `verify:tools` | 3 问一次请求 811ms；否定断言 p=0.04 |
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
-| `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
+| `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 14 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **167** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **169** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -865,3 +865,12 @@
 - [x] 给四个各配一条**瞄准其宣称验证的行为**的注入：整形器拒绝一切、剪枝器返回全部候选、路由器不给出选择、`jev_rank` 按升序排序
 - [x] 实测 **30/30 全部拦下** → 四个线上脚本**都有牙齿**（不是装饰），且该性质现已永久化
 - [x] 同步文档中的 drill 计数（26 → 30；计数守卫按设计先失败再修）
+
+## Phase 5 补充记录（变异扫描与 cooldown 差一，Round 95）
+
+- [x] 把「验证是否可信」推进到单测层：**10 处小变异**逐个注入（配置项改恒定值、限流改 no-op 等），重建后跑离线套件，看是否有测试失败。首轮 4/10 拦下、**3 处真实漏网**
+- [x] **抓到真实产品缺陷**：`loopGuard.cooldownSteps: N` 实际只静默 **N−1** 步（计数在判断之前先减量），与 README 所述「Steps to stay silent」不符。已修（先读状态再减量，每步仍计时）→ 用户可感的行为修正，CHANGELOG 已记
+- [x] **抓到一处「名字声称测了但没测到」**：名为「honours the cooldown」的测试**拦不住** cooldown 变异——其第三步被 streak 门挡住，从未走到 cooldown 判断。已改为 `triggerThreshold: 1` 使 streak 门不参与，并断言「N 个静默步后恢复」
+- [x] 补两个**完全没有测试**的配置项：`minKindConfidence`、`maxPerTurn`
+- [x] 修正后 **10/10 全部拦下**；新增演练条目（重新引入差一 → 必须失败）
+- [x] 测试数 167 → 169（`result-shaper` +2）；`docs/calibration.md` §21 记录方法与结论
