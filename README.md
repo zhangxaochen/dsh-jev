@@ -14,6 +14,9 @@ Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://gith
 | **`typesafe-loop-guard`** | `tools/post-execute` | 突破传统参数哈希去重局限，语义级评估每步是否产生有效解题增量，精准拦截死循环并在 `additionalContexts` 注入纠偏反思。 |
 | **`typesafe-safety-guard`** | `tools/pre-execute` | 毫秒级审查 Shell/PTC/文件操作中的高危破坏性行为（如 `rm -rf`、越狱提权、凭据泄露），触发阻断（`deny`）或审批（`ask`）。 |
 | **`typesafe-tool-pruner`** | `ctx.toolPruner` | 面对包含几十上百个 MCP / 本地 Tools 的场景，依据意图动态打分并只注入最相关 Top-K 工具，大幅减少 Prompt Token 消耗并降低首字延迟（TTFT）。 |
+| **`jev_ask` / `jev_rank` / `jev_check`** | 注册为 Agent 工具 | 把决策原语交给模型自己：一次请求批量提问、按准则排序候选、验证断言并区分「成立 / 不成立 / 无法判定」。 |
+| **`typesafe-skill-router`** | `system-prompt/assemble` | Skill 目录达到阈值时，为当前请求指出**一个**最该载入的 skill 并作为建议注入（advisory，不阻断、不删减）。 |
+| **`typesafe-result-shaper`** | `tools/post-execute`（**默认关闭**） | 对超长且明显重复的命令输出做语义选段：保留有信息量的中段、丢弃噪声，只改模型可见内容。 |
 
 ---
 
@@ -37,6 +40,8 @@ TYPESAFE_API_KEY=your_typesafe_api_key_here
 - **代码 / YAML 显式指定**：在 `cordis.patch.yml` 的 `client.apiKey` 中指定。
 
 > ℹ️ **说明**：未配置 Key 时，DSH 不会崩溃，插件会记录 Warn 警告日志，此时可作为 Mock 模式运行；但在真实执行中将无法向云端发起 System One 语义仲裁。
+
+> ⚠️ **失败策略**：受保护工具（`guardedTools`）上的语义判定一旦超时、报错或返回不可用结果，默认 **fail-closed（拒绝执行）**，headless 环境同样如此。需要旧的「出错即放行」行为时显式设置 `safetyGuard.onError: allow`。
 
 ---
 
@@ -86,6 +91,16 @@ dsh plugin --profile headless add github:zhangxaochen/dsh-jev
             - terminal
             - run_command
             - run_code
+        # 可选：Agent 决策原语（默认 true）
+        askTools: true
+        # 可选：语义 skill 路由（默认 true）
+        skillRouter:
+          minCandidates: 8
+          minScore: 1.5
+        # 可选：语义结果整形，默认关闭，需显式开启
+        # resultShaper:
+        #   thresholdChars: 8000
+        #   maxPerTurn: 2
         toolPruner:
           maxTools: 8
           minScoreThreshold: 2
@@ -167,12 +182,44 @@ ctx.plugin(SafetyGuard, {
 - `rules?: Array<{ id, question, threshold?, action? }>`: 用户自定义语义规则，与内置问题同一次请求评估；`action` 可取 `deny` / `ask` / `warn`。
 - `guardedTools?: string[]`: 受到审查保护的高危工具列表（默认包含 `bash`, `run_command`, `run_code`, `write_to_file`, `replace_file_content`）。
 
+### `SkillRouterConfig`
+- `minCandidates?: number`: 目录小于该规模不做路由（默认 `8`）。
+- `minIntentChars?: number`: 请求文本短于该长度不做路由（默认 `12`）。
+- `minScore?: number`: 建议 skill 的最低适用性打分，刻度 `[0, 2]`（默认 `1.5`）。
+- `minConfidence?: number`: 建议所需的最低答案置信度（默认 `0.5`）。
+
+### `ResultShaperConfig`（**默认关闭**）
+- `shapeTools?: string[]`: 允许整形的输出密集型工具（默认 `bash` / `pwsh` / `terminal` / `run_command` / `execute_command`）。
+- `thresholdChars?: number`: 触发整形的最小内容长度（默认 `8000`）。
+- `maxPerTurn?: number`: 每轮最多整形几次（默认 `2`）。
+- `linesPerSegment?: number`: 每个评估块包含的行数（默认 `40`）。
+- `maxSegments?: number`: 单次请求最多评估的块数，超出会均匀合并以保住尾部（默认 `24`）。
+- `keepThreshold?: number`: 保留某块所需的最低概率（默认 `0.5`；缺失答案一律保留）。
+
+### `TypeSafeSuiteConfig` 开关
+- `askTools?: boolean`: 是否注册 `jev_ask` / `jev_rank` / `jev_check`（默认 `true`）。
+- `skillRouter?: SkillRouterConfig | boolean`: 语义 skill 路由（默认 `true`）。
+- `resultShaper?: ResultShaperConfig | boolean`: 语义结果整形，需显式开启（默认 **关闭**）。
+
 ### `ToolPrunerConfig`
 - `maxTools?: number`: 上下文中最多保留的动态工具数量（默认 `8`）。
 - `minScoreThreshold?: number`: 工具入选的最低相关性打分；实测刻度为 `[0, 2]`（3 级 rubric，默认 `2`）。
 - `alwaysRetain?: string[]`: 永远不被剪枝保留的核心工具（默认包含 `read_file`, `write_to_file`, `bash`, `run_command`）。
 
 ---
+
+## 与 DSH 内置能力的分工
+
+Jev 只做 DSH 自己没有的那一层，避免重复与相互抵消：
+
+| 场景 | 归属 | 原因 |
+|---|---|---|
+| 完全相同（工具+参数+输出）的重复调用 | DSH `dsh-repeat-tool-reminder`（阈值 3/5/8） | 确定性精确匹配已经够用；dsh-jev 默认 `loopGuard.deferExactRepeats: true` 主动让位 |
+| **近似/语义层面的停滞** | dsh-jev `loop-guard` | 内置包明确「近义变体不做，缺证据」；本插件用死循环桶概率 + 置信度补上 |
+| 超长结果的 head/tail 截断 | DSH `dsh-spill-policy`、`dsh-compaction-tool-result-pruner` | 二者是 model-free、零成本、可复现的安全替换 |
+| **中段的语义选段** | dsh-jev `result-shaper`（默认关闭） | 内置包 Dev Note 把「semantic middle selection」列为未实现；本插件只补这一块 |
+| 危险命令的硬拒止 | dsh-jev 确定性外壳（`ctx.tools.guard()`） | 同步、单调、0 次模型调用；语义层不承担最后一道 |
+| 语义级风险裁决 / 用户自定义规则 | dsh-jev `safety-guard` | 模式列表之外的形态只能靠语义判定 |
 
 ## 本地开发与测试
 
@@ -182,9 +229,24 @@ ctx.plugin(SafetyGuard, {
 # 编译 TypeScript
 pnpm run build
 
-# 运行自动化单元测试
+# 离线单元测试（57 个用例，不联网、不需要 Key）
 pnpm test
+
+# 探针：确认 System One 三种原语的真实返回结构（score 是 [0, n-1] 的连续期望值）
+pnpm run probe
+
+# 线上验证：回放历史误报形态，确认误报消失且真循环仍被拦截
+pnpm run verify:live
+
+# 线上验证：jev_ask / jev_rank / jev_check 三个决策原语
+pnpm run verify:tools
+
+# A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
+pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
+pnpm run bench:offline    # 回放录制答案，零成本复现
 ```
+
+标定结果、阈值来源与基准数据见 [`docs/calibration.md`](docs/calibration.md)；分阶段执行清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)。
 
 ---
 
@@ -199,12 +261,12 @@ pnpm test
 
 | 守护维度 | 核心拦截/优化战果 | 预估 Token / 成本收益 |
 | :--- | :--- | :--- |
-| **🛠️ 工具动态剪枝** | 评估 **42** 次，裁剪 **210** 个次无关工具 | 净省约 **31.5K** Tokens (Prompt Schema 压缩) |
-| **🔄 死循环及早止损** | 检查 **18** 次，阻断 **2** 次死循环，警示 **3** 次 | 止损节省约 **30.0K** Tokens (避免无效空转) |
-| **🔒 执行安全护栏** | 审查 **65** 次敏感指令，阻断 **1** 次高危操作 | 拦截敏感破坏性命令 / 降级审批 **4** 次 |
-| **⚡ System One 响应** | 累计决策 **125** 次，平均延迟 **142ms** | 毫秒级快速裁决，保障会话低延迟零卡顿 |
+| **🛠️ 工具动态剪枝** | 评估 **42** 次，裁剪 **210** 个次无关工具（精确移除 **31,500** 字符） | 省约 **9.0K** Tokens（口径：tokenMeter 估算器 / 本地启发 / 混合） |
+| **🔄 死循环及早止损** | 检查 **18** 次，阻断 **2** 次、警示 **3** 次，共注入 **5** 条提示 | 不做 token 折算（避免成本不可测），仅报计数 |
+| **🔒 执行安全护栏** | 审查 **65** 次，阻断 **1** 次（确定性 **1** / 判定不可用 fail-closed **0**），审批 **4** 次 | 确定性外壳 0 次模型调用即可拒止 |
+| **⚡ System One 响应** | 累计决策 **125** 次（缓存命中 **12**），平均延迟 **142ms**，错误 **3** | 输入 **180.0KB**，按 $0.042/M 输入计约 **$0.0076**（输出免费） |
 
-> 💡 **累计总收益**：累计预估为当前工作区节省 **~61.5K** 运行 Token 开销。
+> 💡 **累计可测收益**：工具 Schema 精确移除字符数可核对；死循环与安全拦截只报计数，不做不可测的 token 折算。
 ```
 
 ### 2. HTTP / RPC 查询接口

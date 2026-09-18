@@ -74,8 +74,8 @@
 
 ## Phase 5 — 文档与发布
 
-- [ ] `README.md`：新增「与 DSH 内置能力的分工」一节
-- [ ] `README.md`：同步全部新增配置项
+- [x] `README.md`：新增「与 DSH 内置能力的分工」一节
+- [x] `README.md`：同步全部新增配置项
 
 ## Phase 2 补充记录
 
