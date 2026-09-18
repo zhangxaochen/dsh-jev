@@ -142,6 +142,8 @@ test('applySuite mounts jev_stats tool and stats web route', async () => {
   registeredRoute.handler({ headers: { accept: 'application/json' } }, fakeRes)
   const parsed = JSON.parse(jsonOutput)
   assert.equal(parsed.version, 2)
+  assert.ok(Object.hasOwn(parsed, 'bench'), 'the stats payload carries the last bench summary')
+  assert.ok(parsed.bench === null || typeof parsed.bench.total === 'number')
 
   dispose()
   assert.equal(registeredTool, undefined)

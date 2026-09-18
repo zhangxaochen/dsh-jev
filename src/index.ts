@@ -12,6 +12,7 @@ import * as ResultShaperPlugin from './result-shaper.js'
 import { registerJevTools } from './ask-tools.js'
 import { resolveClientFrom } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
+import { readBenchSummary, renderBenchLine } from './bench-summary.js'
 import type { CordisContext, TypeSafeSuiteConfig } from './types.js'
 
 export * from './types.js'
@@ -125,9 +126,11 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
             if (args && args.reset) {
               defaultMetrics.reset()
             }
+            const bench = readBenchSummary()
             return {
-              markdown: defaultMetrics.renderMarkdownDashboard(),
+              markdown: defaultMetrics.renderMarkdownDashboard() + '\n> ' + renderBenchLine(bench),
               tokensSaved: defaultMetrics.getTotalTokensSaved(),
+              bench: bench ?? null,
             }
           },
           presentCall: () => ({
@@ -167,7 +170,7 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
                 }
               } catch {}
             }
-            return Response.json(defaultMetrics.getSnapshot(), {
+            return Response.json({ ...defaultMetrics.getSnapshot(), bench: readBenchSummary() ?? null }, {
               headers: {
                 'content-type': 'application/json; charset=utf-8',
                 'cache-control': 'no-store',
@@ -226,7 +229,7 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
               )
             } else {
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-              res.end(JSON.stringify(defaultMetrics.getSnapshot(), null, 2))
+              res.end(JSON.stringify({ ...defaultMetrics.getSnapshot(), bench: readBenchSummary() ?? null }, null, 2))
             }
           },
         })

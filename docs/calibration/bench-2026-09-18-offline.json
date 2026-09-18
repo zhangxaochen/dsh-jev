@@ -1,13 +1,13 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T19:33:44.176Z",
+    "ranAt": "2026-09-18T19:36:02.275Z",
     "offline": true,
     "total": 30,
     "correct": 28,
     "accuracy": 0.933,
     "falsePositives": 0,
     "falseNegatives": 2,
-    "latencyTotalMs": 0,
+    "latencyTotalMs": 3,
     "latencyMeanMs": 0,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
@@ -41,7 +41,7 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-glob-then-read",
@@ -476,7 +476,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-rm-home",
@@ -596,7 +596,7 @@
       },
       "actual": "allow",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-git-status",

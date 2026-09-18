@@ -154,3 +154,13 @@ node --experimental-strip-types bench/run.ts --offline  # 回放录制答案，�
 | 任何异常 | 返回原始内容 |
 
 单测覆盖：分块上限与尾部保留、重复性前置检查、保留信息块并丢噪声、unknown/全保留返回 undefined、非适用工具零调用、失败结果与下游改写不覆盖、API 失败静默（`tests/result-shaper.spec.ts`）。
+
+## 7. 基准与看板的打通
+
+`bench/run.ts` 在写 `docs/calibration/bench-<date>.json` 的同时，把**摘要**镜像到 `~/.dsh/jev-bench.json`；运行中的插件通过 `readBenchSummary()` 读取它，出现在三处：
+
+- `/api/dsh-jev/stats` 与 webServer JSON 的 `bench` 字段
+- `jev_stats` 看板 markdown 末行的 A/B 基准行
+- 设置面板底部
+
+未跑过基准时明确显示「暂无记录（运行 `pnpm run bench` 后写入）」，不编造数字。这解决了 §4.2 遗留的第 1 条：看板上的每个数字要么来自会话实测指标，要么可回溯到一次带标注的基准运行。

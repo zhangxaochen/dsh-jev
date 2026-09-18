@@ -518,6 +518,15 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
             )
           ),
 
+          // Bench summary line
+          data?.bench
+            ? h(
+                'div',
+                { className: 'jev-footer-note', style: { marginTop: '4px' } },
+                `A/B 基准（${data.bench.offline ? '离线回放' : '真实 API'}）：${data.bench.correct}/${data.bench.total} 正确、误报 ${data.bench.falsePositives}、漏报 ${data.bench.falseNegatives}`
+              )
+            : null,
+
           // Footer
           h(
             'div',

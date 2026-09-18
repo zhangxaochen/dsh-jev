@@ -214,6 +214,16 @@ async function main(): Promise<void> {
     console.log('Recorded ' + Object.keys(captured).length + ' answer sets to bench/recorded.json')
   }
 
+  // Mirror the summary where the running plugin can read it.
+  const homeSummary = join(homedir(), '.dsh', 'jev-bench.json')
+  try {
+    mkdirSync(join(homedir(), '.dsh'), { recursive: true })
+    writeFileSync(homeSummary, JSON.stringify(summary, null, 2), 'utf8')
+    console.log('Mirrored summary to ' + homeSummary)
+  } catch {
+    /* an unwritable home only costs the dashboard line */
+  }
+
   const outDir = join(process.cwd(), 'docs', 'calibration')
   mkdirSync(outDir, { recursive: true })
   const outFile = join(outDir, 'bench-' + new Date().toISOString().slice(0, 10) + (OFFLINE ? '-offline' : '') + '.json')

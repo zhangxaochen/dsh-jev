@@ -47,7 +47,7 @@
 - [x] `src/safety-guard.ts`：凭据类别 Noul（4 组），避免 `read .env` 一律高危
 - [x] `src/typesafe-client.ts`：`normalizeAnswers` 保留 unknown
 - [x] `src/typesafe-client.ts`：输入字节数/费用记账钩子
-- [x] `src/typesafe-client.ts`：`systemOneCached`（指纹 + TTL）
+- [x] `src/typesafe-client.ts`：`systemOne()` 内建相同载荷缓存（指纹 + TTL + 条数上限），缓存命中不计入延迟均值
 - [x] `src/typesafe-client.ts`：`pathTimeoutMs`（默认 800），`timeoutMs` 默认降到 2000
 - [x] `src/types.ts` / `cordis.patch.yml` / `README.md`：修默认值不一致（`minScoreThreshold`、`maxTools`）
 - [x] `tests/resilience.spec.ts`：断言改为 guarded fail-closed / 非 guarded fail-open，保留 `onError: 'allow'` 兼容
@@ -56,11 +56,11 @@
 
 ## Phase 2 — 实测度量与标定
 
-- [x] `src/metrics.ts`：删除 `TOKENS_PER_PRUNED_TOOL` / `TOKENS_PER_INTERRUPTED_LOOP`，改用 tokenMeter 实测差
+- [x] `src/metrics.ts`：删除 `TOKENS_PER_PRUNED_TOOL` / `TOKENS_PER_INTERRUPTED_LOOP`；改为「精确移除字符数 + `ctx.tokenMeter.estimateMessage` 定价」，无估算器时回退到公开的 `FALLBACK_CHARS_PER_TOKEN`，并在 `tokenSource` 标明口径
 - [x] `src/metrics.ts`：新增 `inputBytes` / `estCostUsd` / `decisionErrors`
 - [x] `src/decisions.ts`：决策追加到 `~/.dsh/jev-decisions.jsonl`
-- [x] `bench/cases.jsonl` + `bench/run.ts`：≥30 条正负样本 A/B，输出 FP/FN/延迟/token/费用
-- [x] `src/index.ts` + `src/client.ts`：看板改为实测口径 + bench 摘要
+- [x] `bench/cases.jsonl` + `bench/run.ts`：30 条正负样本 A/B，输出 FP/FN/准确率/延迟；费用字段留空（bench 直连客户端，会话费用走线上指标，已在 calibration 注明）
+- [x] `src/index.ts` + `src/client.ts` + `src/bench-summary.ts`：看板/`/api/dsh-jev/stats`/`jev_stats` 改为实测口径，并附最近一次 bench 摘要（未跑过时明确说明）
 
 ## Phase 3 — 决策原语与 skill 路由
 
