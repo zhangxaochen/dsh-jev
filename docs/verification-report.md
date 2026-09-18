@@ -14,7 +14,7 @@
 | 离线单测 | **161/161**（`pnpm test`；其中 6 项在无 DSH 时跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 4/4（单轮语义开销 2.7–3.1s） |
-| 守卫网自检 | `pnpm run drill` **25/25**（对 25 条承诺注入对应回退，全部被某道闸门拦下） |
+| 守卫网自检 | `pnpm run drill` **26/26**（对 26 条承诺注入对应回退，全部被某道闸门拦下） |
 | 构建产物一致 | `pnpm run verify:build` → `ok`（`lib/` 入库，单测导入的是它） |
 | 宿主验收 | `pnpm run verify:host` → **exit 1**（宿主未重载，正是应有的结果；重启后期望 7/7） |
 | A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
@@ -42,7 +42,7 @@
 | 发布配置不弱化保护 | 单测（解析 `cordis.patch.yml`） | `guardedTools` ⊇ 库默认且含文件写入；`alwaysRetain` ⊇ 库默认 |
 | 文档默认值不说谎 | 单测（从 README/calibration 反解数字比对代码常量） | 全部一致（曾抓到 1 处不符） |
 | 验证脚本不写实机状态 | 单测（`tests/isolation.spec.ts`）+ 实测前后对比 | 连跑单测/集成/基准后，实机指标与决策日志均不变 |
-| **每条承诺都有闸门拦得住回退** | 回归演练（`pnpm run drill`，25 条注入） | **25/25**：每条承诺的对应回退都能被某个闸门拦下，其中 2 条（崩溃级、模块失效）只有真实运行时能抓到，无 DSH 时标记为 SKIPPED |
+| **每条承诺都有闸门拦得住回退** | 回归演练（`pnpm run drill`，26 条注入） | **26/26**：每条承诺的对应回退都能被某个闸门拦下，其中 2 条（崩溃级、模块失效）只有真实运行时能抓到，无 DSH 时标记为 SKIPPED |
 | bench 跑的是发布规则而非其副本 | 回归演练（改 `DEFAULT_P_LOOP_THRESHOLD` / `DEFAULT_BLOCK_THRESHOLD` 必须失败）+ 抽取前后离线数字一致 | loop 阈值改为由 bench 拦下；安全阈值由单测拦下（bench 语义用例全走 `risk_score`） |
 | 拒止规则覆盖真实命令形态 | 语料库（`tests/deterministic-corpus.spec.ts`，**92 例**：58 硬拒 / 34 放行） | 系统目录、`erase`/`ri` 别名、花括号展开、`find … -delete`、凭据文件、设备格式化均硬拒；工作区内的 `rm -rf ./build`、`chmod -R 777 .`、`.env.example` 上传均放行 |
 | 整形前置检查不误判真实输出 | 语料库（`tests/repetition-corpus.spec.ts`，16 例） | 构建日志/依赖树/目录列表/时间戳日志触发；短结果与内容各异的输出放行；并断言该检查保持纯字符串操作 |

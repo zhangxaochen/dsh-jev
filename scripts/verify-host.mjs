@@ -100,10 +100,13 @@ export function buildAcceptance(report, payload, statsFile) {
     'put TYPESAFE_API_KEY=... in ' + envFile + ', or export it in the host environment'
   )
 
+  // Before the restart the running host predates this build by definition, so its
+  // last write cannot be newer than the files; asserting freshness here would report
+  // the expected state as a failure. Once it is running the build, the check applies.
   const installedBuild = report.profiles[0] ? join(report.profiles[0].dir, 'lib', 'index.js') : undefined
   let fresh = true
-  let freshDetail = 'no installed build to compare'
-  if (installedBuild && existsSync(installedBuild) && statsFile && existsSync(statsFile)) {
+  let freshDetail = report.verdict.ready ? 'no installed build to compare' : 'not applicable before the restart'
+  if (report.verdict.ready && installedBuild && existsSync(installedBuild) && statsFile && existsSync(statsFile)) {
     const buildAt = statSync(installedBuild).mtimeMs
     const statsAt = payload?.lastUpdatedAt ? Date.parse(payload.lastUpdatedAt) : statSync(statsFile).mtimeMs
     fresh = statsAt >= buildAt
