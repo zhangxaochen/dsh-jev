@@ -1,0 +1,42 @@
+# DeepSeek Harness official bundle layer for dsh-plugin-typesafe
+- insert:
+    - id: typesafe-suite
+      name: dsh-plugin-typesafe
+      config:
+        client:
+          apiKey: !!js process.env.TYPESAFE_API_KEY
+        loopGuard:
+          triggerThreshold: 2
+          noProgressThreshold: 0.3
+          stuckSeverityThreshold: 2
+        safetyGuard:
+          blockThreshold: 0.85
+          askApprovalThreshold: 0.5
+          guardedTools:
+            - bash
+            - pwsh
+            - terminal
+            - run_command
+            - run_code
+        toolPruner:
+          maxTools: 8
+          minScoreThreshold: 2
+          alwaysRetain:
+            - read_file
+            - write_to_file
+            - write_file
+            - edit_file
+            - str_replace_editor
+            - bash
+            - terminal
+            - pwsh
+            - run_command
+            - execute_command
+            - grep
+            - glob
+            - find_by_name
+            - view_file
+            - replace_file_content
+            - list_dir
+            - directory-picker-native
+            - ui-directory-picker-native

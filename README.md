@@ -17,50 +17,70 @@ TypeSafe AI (Jev System One 决策模型) 与 [DeepSeek Harness (dsh)](https://g
 
 ---
 
-## 安装
+## 安装与挂载
+
+### 方式 1：DSH 官方命令行一键安装（推荐，自动激活为 Bundle）
+
+DSH 原生支持 Bundle 机制，执行以下命令会自动安装依赖并激活该插件层：
 
 ```bash
-pnpm add dsh-plugin-typesafe
+dsh plugin --profile <profile_name> add dsh-plugin-typesafe
 ```
 
----
+例如为 `headless` 或 `web` 激活：
+```bash
+dsh plugin --profile headless add dsh-plugin-typesafe
+```
 
-## 在 DeepSeek Harness 中挂载使用
+### 方式 2：在 profile 或全局 `cordis.patch.yml` 中手动挂载
 
-dsh 支持通过 `cordis.patch.yml` 为指定 profile（如 `web`, `headless`, `sdk`）注入插件：
-
-### 方式 1：挂载完整全家桶插件套件 (`typesafe-suite`)
-
-在 `$DSH_HOME/cordis.patch.yml` 或 profile 对应的 patch 文件中加入：
+若需深度定制各项阈值，可在 `$DSH_HOME/cordis.patch.yml` 或 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中添加配置：
 
 ```yaml
 - insert:
-    name: 'dsh-plugin-typesafe'
-    config:
-      client:
-        apiKey: !!js process.env.TYPESAFE_API_KEY
-      loopGuard:
-        triggerThreshold: 2
-        noProgressThreshold: 0.3
-        stuckSeverityThreshold: 2
-      safetyGuard:
-        blockThreshold: 0.7
-        askApprovalThreshold: 0.4
-        guardedTools:
-          - bash
-          - run_command
-          - run_code
-          - write_to_file
-      toolPruner:
-        maxTools: 5
-        minScoreThreshold: 2
-        alwaysRetain:
-          - read_file
-          - write_to_file
-          - run_command
+    - id: typesafe-suite
+      name: dsh-plugin-typesafe
+      config:
+        client:
+          apiKey: !!js process.env.TYPESAFE_API_KEY
+        loopGuard:
+          triggerThreshold: 2
+          noProgressThreshold: 0.3
+          stuckSeverityThreshold: 2
+        safetyGuard:
+          blockThreshold: 0.85
+          askApprovalThreshold: 0.5
+          guardedTools:
+            - bash
+            - pwsh
+            - terminal
+            - run_command
+            - run_code
+        toolPruner:
+          maxTools: 8
+          minScoreThreshold: 2
+          alwaysRetain:
+            - read_file
+            - write_to_file
+            - write_file
+            - edit_file
+            - str_replace_editor
+            - bash
+            - terminal
+            - pwsh
+            - run_command
+            - execute_command
+            - grep
+            - glob
+            - find_by_name
+            - view_file
+            - replace_file_content
+            - list_dir
+            - directory-picker-native
+            - ui-directory-picker-native
 ```
 
-### 方式 2：按需挂载单独插件
+### 方式 3：按需挂载单独插件
 
 你也可以仅引入所需特定守卫或客户端：
 
