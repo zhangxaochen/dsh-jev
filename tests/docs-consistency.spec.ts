@@ -8,9 +8,10 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_PATH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS } from '../lib/typesafe-client.js'
+import { cwd } from 'node:process'
 import {
   DEFAULT_COOLDOWN_STEPS,
   DEFAULT_MAX_HISTORY,
@@ -117,4 +118,37 @@ test('docs/calibration.md threshold table matches the code it documents', () => 
   assert.equal(documented('safetyGuard.blockThreshold'), DEFAULT_BLOCK_THRESHOLD)
   assert.equal(documented('safetyGuard.askApprovalThreshold'), DEFAULT_ASK_APPROVAL_THRESHOLD)
   assert.equal(documented('client.pathTimeoutMs'), DEFAULT_PATH_TIMEOUT_MS)
+})
+
+test('the documented unit-test count matches the suite', () => {
+  // Writing a count into documentation is itself a defect class found earlier in
+  // this work; the current-claim locations are guarded so adding tests fails the
+  // build until the numbers are updated. Historical entries in the plan are a log
+  // of each round and are deliberately not checked.
+  const specFiles = readdirSync(join(cwd(), 'tests')).filter((name) => name.endsWith('.spec.ts'))
+  let declared = 0
+  for (const name of specFiles) {
+    declared += (readFileSync(join(cwd(), 'tests', name), 'utf8').match(/^test\(/gm) ?? []).length
+  }
+  assert.ok(declared > 0, 'no test declarations found, so the count would be meaningless')
+
+  const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
+  const reportClaim = report.match(/离线单测 \| \*\*(\d+)\/(\d+)\*\*/)
+  assert.ok(reportClaim, 'the report must state the unit-test count')
+  assert.equal(Number(reportClaim[1]), declared, 'verification-report.md unit-test count is stale')
+  assert.equal(Number(reportClaim[2]), declared, 'the report states a mismatched pass count')
+
+  const plan = readFileSync(join(cwd(), 'docs', 'OPTIMIZATION_PLAN.md'), 'utf8')
+  const planClaim = plan.match(/合计 \*\*(\d+)\*\* 个离线单测/)
+  assert.ok(planClaim, 'the plan summary must state the unit-test count')
+  assert.equal(Number(planClaim[1]), declared, 'OPTIMIZATION_PLAN.md summary unit-test count is stale')
+})
+
+test('the integration script reports its own check count', () => {
+  // The count cannot be derived statically (each section also carries a catch
+  // guard), so the script prints it and the report points at that output.
+  const script = readFileSync(join(cwd(), 'tests', 'integration-dsh.mjs'), 'utf8')
+  assert.match(script, /checks passed: /, 'the integration script must print its check count')
+  const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
+  assert.match(report, /pnpm run verify:dsh/, 'the report names the command that prints the count')
 })

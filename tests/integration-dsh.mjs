@@ -533,5 +533,6 @@ try {
 }
 
 const failed = results.filter((entry) => !entry.ok)
-console.log('\n' + (failed.length === 0 ? 'all integration checks passed' : failed.length + ' integration check(s) failed'))
+console.log('\nchecks passed: ' + results.filter((entry) => entry.ok).length + ' / ' + results.length)
+console.log(failed.length === 0 ? 'all integration checks passed' : failed.length + ' integration check(s) failed')
 process.exit(failed.length === 0 ? 0 : 1)

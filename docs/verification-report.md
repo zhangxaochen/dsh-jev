@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **114/114**（`pnpm test`） |
+| 离线单测 | **116/116**（`pnpm test`） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** |
 | A/B 基准 | 30 条样本、准确率 **93.3%**、**误报 0**、均值延迟 ~300ms（`pnpm run bench:offline` 零成本复现） |
