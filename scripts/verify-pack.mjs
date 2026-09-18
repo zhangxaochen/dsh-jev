@@ -33,7 +33,10 @@ try {
   check('the tarball is produced', packed[0].filename.endsWith('.tgz'), packed[0].filename)
 
   writeFileSync(join(scratch, 'package.json'), JSON.stringify({ name: 'smoke', type: 'module', private: true }), 'utf8')
-  run('npm', ['install', '--no-save', '--no-audit', '--no-fund', tarball], { cwd: scratch })
+  // --omit=peer keeps the check hermetic: the peer dependency is the host's to
+  // provide, and resolving it here would make a verification step depend on the
+  // registry being reachable. The entry imports nothing at runtime.
+  run('npm', ['install', '--no-save', '--no-audit', '--no-fund', '--omit=peer', tarball], { cwd: scratch })
 
   // Import it the way the host does: by package name, resolved from the install.
   const entry = join(scratch, 'node_modules', 'dsh-jev')

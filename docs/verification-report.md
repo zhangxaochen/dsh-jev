@@ -18,7 +18,7 @@
 | 构建产物一致 | `pnpm run verify:build` → `ok`（`lib/` 入库，单测导入的是它） |
 | 宿主验收 | `pnpm run verify:host` → **exit 1**（宿主未重载，正是应有的结果；重启后期望 6/6） |
 | A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
-| 干净 clone 复现 | `install --frozen-lockfile` → `build` → `test` → `bench`，且重建后 `lib/` 零漂移 |
+| 干净 clone 复现 | **CI 的全部 8 个步骤**在同一工作区连续通过：`install --frozen-lockfile` → `build` → `verify:build` → `typecheck:scripts` → 单测 **149 通过 + 6 跳过**（无 DSH）→ `bench:offline` → `verify:pack` → `verify:dsh`（正确 SKIP）；全程后 `lib/` **零漂移** |
 | 布局状态 | `doctor` 报告 `ACTION: restart DSH`（文件已同步，宿主进程未重载） |
 
 ## 已验证的承诺
