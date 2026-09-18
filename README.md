@@ -272,6 +272,18 @@ pnpm run bench:offline    # 回放录制答案，零成本复现
 
 标定结果、阈值来源与基准数据见 [`docs/calibration.md`](docs/calibration.md)；分阶段执行清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)。
 
+### 让改动在本机生效
+
+profile 里的插件是**构建产物的副本**，改完源码必须同步过去：
+
+```bash
+pnpm run sync              # 同步到所有已安装该插件的 profile（自动发现）
+pnpm run sync:desktop      # 只同步 desktop
+node scripts/sync-profiles.js --dry-run   # 只列出目标，不写文件
+```
+
+> ⚠️ **必须重启 DSH**：本部署的 profile 组合里没有挂载 HMR 插件，运行中的进程不会重新加载 `node_modules` 下的模块。只同步不重启，会话里跑的还是旧构建——可用 `~/.dsh/jev-stats.json` 判定：`"version": 2` 才是 0.2.0 的新构建在运行。
+
 ---
 
 ## 📊 指标统计与用户收益感知
