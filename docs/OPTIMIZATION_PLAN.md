@@ -323,3 +323,10 @@
 - [x] CI 新增一步 `pnpm run verify:dsh`：GitHub runner 上无 DSH runtime，因此这一步**专门行使跳过路径**（必须打印 `SKIP` 并退出 0，而不是失败）。此前该路径只在第 16 轮手工验证过一次，任何让「无 DSH 时失败」的改动都不会被发现
 - [x] 与真实 runtime 的行为仍由装有 DSH 的机器运行同一脚本覆盖（18 项检查）
 - [x] 工作流 YAML 复核：6 个 `run` 步骤，顺序为 install → build → test → bench → verify:dsh → 打包校验
+
+## Phase 5 补充记录（隔离守卫与快照措辞，Round 33）
+
+- [x] 新增 `tests/isolation.spec.ts`（4 项）：静态断言**每个会触发判决的脚本**都设置了 `DSH_JEV_DECISIONS_PATH`、**每个会记录调用的脚本**都设置了 `DSH_JEV_METRICS_PATH`，且用 `??=` 不覆盖调用方已设的值；另断言 `test` 脚本仍预载 `tests/isolate.mjs`。此前只有单测侧被守护，四个独立脚本若丢失重定向行无人发现
+- [x] 已验证守卫有牙齿：把 `bench/run.ts` 的重定向行去掉后，检查会报出「missing metrics redirect」
+- [x] 验证报告补「快照」说明：文档写死数字本身是此前发现过的缺陷类型，故明确标注数字会随版本增长、以命令输出为准
+- [x] 测试数 100 → 104
