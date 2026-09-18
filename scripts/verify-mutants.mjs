@@ -6,6 +6,9 @@
  * guard whose silent removal would change user-visible behaviour.
  *
  * Usage: pnpm run verify:mutants
+ *
+ * The name follows the verify-*.mjs convention: the evidence index maps each such
+ * file to the pnpm script of the same name.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
