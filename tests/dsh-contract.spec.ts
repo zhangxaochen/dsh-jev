@@ -191,3 +191,19 @@ test('our shipped patch uses only the operations the host itself uses', { skip: 
   const bundled = readFileSync(join(nodeModules!, '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'), 'utf8')
   assert.match(bundled, /^-\s*insert:/m, 'the host bundles mount the same way ours does')
 })
+
+test('the host patch dialect still supports the !!js expression the patch uses', { skip: !nodeModules }, () => {
+  // The shipped patch sets `apiKey: !!js process.env.TYPESAFE_API_KEY`. If the loader
+  // stopped supporting the tag, the layer would fail or resolve the expression to a
+  // literal - and the plugin would either not mount or mount without a key.
+  const ours = readFileSync(join(process.cwd(), 'cordis.patch.yml'), 'utf8')
+  assert.match(ours, /!!js process\.env\.TYPESAFE_API_KEY/, 'the patch no longer uses the expression this checks')
+
+  const loader = join(nodeModules!, '@deepseek-ai', 'cordis-plugin-loader', 'lib', 'index.js')
+  const includeFile = join(nodeModules!, '@deepseek-ai', 'cordis-plugin-include', 'lib', 'index.js')
+  const dialect = [loader, includeFile].filter((file) => existsSync(file)).map((file) => readFileSync(file, 'utf8'))
+  assert.ok(dialect.length > 0, 'the patch dialect packages should be installed')
+
+  const mentions = dialect.some((text) => /`!!js`|!!js\b/.test(text))
+  assert.ok(mentions, 'the host no longer documents the !!js tag; re-verify the patch syntax')
+})
