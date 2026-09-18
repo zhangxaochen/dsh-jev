@@ -31,10 +31,10 @@ import {
   DEFAULT_MIN_SCORE,
 } from '../lib/skill-router.js'
 import {
-  DEFAULT_KEEP_THRESHOLD,
-  DEFAULT_LINES_PER_SEGMENT,
+  DEFAULT_MAX_CLUSTERS,
   DEFAULT_MAX_PER_TURN,
-  DEFAULT_MAX_SEGMENTS,
+  DEFAULT_MIN_KIND_CONFIDENCE,
+  DEFAULT_SAMPLE_CHARS,
   DEFAULT_THRESHOLD_CHARS,
 } from '../lib/result-shaper.js'
 
@@ -82,9 +82,9 @@ test('README documents the pruner, router and shaper defaults the code applies',
   assert.ok(README.includes('（默认 `' + ROUTER_MIN_CONFIDENCE + '`）'))
   assert.equal(documentedDefault('thresholdChars?: number'), DEFAULT_THRESHOLD_CHARS)
   assert.equal(documentedDefault('maxPerTurn?: number'), DEFAULT_MAX_PER_TURN)
-  assert.equal(documentedDefault('linesPerSegment?: number'), DEFAULT_LINES_PER_SEGMENT)
-  assert.equal(documentedDefault('maxSegments?: number'), DEFAULT_MAX_SEGMENTS)
-  assert.equal(documentedDefault('keepThreshold?: number'), DEFAULT_KEEP_THRESHOLD)
+  assert.equal(documentedDefault('minKindConfidence?: number'), DEFAULT_MIN_KIND_CONFIDENCE)
+  assert.equal(documentedDefault('maxClusters?: number'), DEFAULT_MAX_CLUSTERS)
+  assert.equal(documentedDefault('sampleChars?: number'), DEFAULT_SAMPLE_CHARS)
 })
 
 test('the operationally important defaults are stated, not implied', () => {

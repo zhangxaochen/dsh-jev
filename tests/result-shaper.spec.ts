@@ -2,24 +2,49 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   apply,
+  clusterLines,
   DROP_MARKER,
   extractText,
+  lineShape,
   looksRepetitive,
   replaceText,
   ResultShaperService,
-  segmentText,
 } from '../lib/result-shaper.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { CordisContext, PostToolDecision, ToolExecution } from '../lib/types.js'
 
-function repetitiveOutput(blocks: number, linesPerBlock = 40): string {
-  const lines: string[] = []
-  for (let block = 0; block < blocks; block += 1) {
-    for (let line = 0; line < linesPerBlock; line += 1) {
-      lines.push(block === 1 ? 'ERROR at src/a.ts:' + line + ' unexpected token' : 'progress: chunk ' + line + ' ok')
+/** Repetitive progress output with one informative line in the middle. */
+function noisyOutput(progressLines = 200): string {
+  return [
+    ...Array.from({ length: progressLines }, () => 'progress: chunk ok'),
+    'ERROR in src/a.ts:42 TS2345',
+    ...Array.from({ length: progressLines }, () => 'progress: chunk ok'),
+  ].join('\n')
+}
+
+/** Answer the classifier: keep the cluster whose sample carries the error. */
+function kindMock(overrides: Record<number, { choice: string; confidence: number }> = {}) {
+  return async (req: any) => {
+    const answers: Record<string, unknown> = {}
+    for (const [id, question] of Object.entries(req.questions ?? {})) {
+      const index = Number(String(id).replace('kind_', ''))
+      const embedded = String((question as any).instructions ?? '')
+      const override = overrides[index]
+      const choice =
+        override?.choice ?? (/ERROR|WARN|not ok|AssertionError/.test(embedded) ? 'failure' : 'routine_progress')
+      answers[id] = {
+        type: 'choice',
+        choice,
+        confidence: override?.confidence ?? 0.99,
+        probabilities: { [choice]: 0.99 },
+      }
     }
+    return answers
   }
-  return lines.join('\n')
+}
+
+function service(mock: (req: any) => Promise<Record<string, unknown>>, config: Record<string, unknown> = {}) {
+  return new ResultShaperService(() => new TypeSafeClient({ mockHandler: mock }), config)
 }
 
 function harness(mock: (req: any) => Promise<Record<string, unknown>>, config: Record<string, unknown> = {}) {
@@ -43,128 +68,125 @@ function harness(mock: (req: any) => Promise<Record<string, unknown>>, config: R
   }
 }
 
-test('segmentText groups lines and honours the segment cap', () => {
-  const text = Array.from({ length: 100 }, (_, index) => 'line ' + index).join('\n')
-  assert.equal(segmentText(text, 40, 24).length, 3)
-  const capped = segmentText(Array.from({ length: 2000 }, (_, i) => 'l' + i).join('\n'), 10, 24)
-  assert.ok(capped.length <= 24, 'segments must never exceed the cap, got ' + capped.length)
-  assert.match(capped[capped.length - 1] ?? '', /^l1990/m, 'the tail must survive coalescing')
+test('lineShape normalises numbers and hashes so variants share a key', () => {
+  assert.equal(
+    lineShape('module src/feature-12/index.ts transformed in 15ms'),
+    lineShape('module src/feature-99/index.ts transformed in 3ms')
+  )
+  assert.notEqual(lineShape('ERROR in src/a.ts:42'), lineShape('progress: chunk ok'))
+  assert.equal(lineShape('commit 4f9a2b1c8e'), 'commit #')
+})
+
+test('clusterLines collapses variants and keeps distinct lines apart', () => {
+  const clusters = clusterLines(noisyOutput(200))
+  assert.equal(clusters.length, 2, 'hundreds of progress lines collapse into one cluster')
+  assert.equal(clusters[0].count, 400)
+  assert.match(clusters[0].sample, /progress: chunk ok/)
+  assert.equal(clusters[1].count, 1)
+  assert.match(clusters[1].sample, /ERROR in src\/a\.ts:42/)
 })
 
 test('looksRepetitive fires on bulk, whether or not the lines repeat verbatim', () => {
-  // Below every threshold.
   assert.equal(looksRepetitive('short output'), false)
-  assert.equal(looksRepetitive(Array.from({ length: 20 }, (_, i) => 'varied line ' + i + ' of 20').join('\n')), false)
-
-  // Verbatim repetition.
-  assert.equal(looksRepetitive(Array.from({ length: 60 }, () => 'downloading... 100%').join('\n')), true)
-  // Structurally identical lines that differ only in numbers or hashes: the shape
-  // of a build log, a numbered listing or a dependency tree listing.
-  assert.equal(looksRepetitive(Array.from({ length: 60 }, (_, i) => 'unique line ' + i).join('\n')), true)
-  // Bulk by volume even when every line is genuinely different.
   assert.equal(
-    looksRepetitive(Array.from({ length: 130 }, (_, i) => 'line ' + i + ' with distinct words ' + 'x'.repeat(i % 5)).join('\n')),
+    looksRepetitive(Array.from({ length: 20 }, (_, i) => 'varied line ' + i + ' of 20').join('\n')),
+    false
+  )
+  assert.equal(looksRepetitive(Array.from({ length: 60 }, () => 'downloading... 100%').join('\n')), true)
+  assert.equal(looksRepetitive(noisyOutput(30)), true)
+  assert.equal(
+    looksRepetitive(
+      Array.from({ length: 130 }, (_, i) => 'line ' + i + ' with distinct words ' + 'x'.repeat(i % 5)).join('\n')
+    ),
     true
   )
-  // A single enormous line (minified bundle, base64 blob).
   assert.equal(looksRepetitive('x'.repeat(5000)), true)
 })
 
-test('shape declines when the model does not separate the blocks', async () => {
-  // Measured behaviour on build-log output: every block near-identical, the one
-  // carrying the error included. Dropping on that basis would be arbitrary.
-  const flat = new ResultShaperService(
-    () =>
-      new TypeSafeClient({
-        mockHandler: async () => ({
-          keep_0: { type: 'noul', noul: 0.35 },
-          keep_1: { type: 'noul', noul: 0.36 },
-          keep_2: { type: 'noul', noul: 0.34 },
-        }),
-      }),
-    {}
-  )
-  assert.equal(await flat.shape(repetitiveOutput(3), 'pwsh'), undefined, 'a flat distribution must decline')
+test('shape keeps the failure cluster and drops the rest with a marker', async () => {
+  const content = noisyOutput(200)
+  const shaped = await service(kindMock()).shape(content, 'pwsh')
 
-  // A separated distribution still shapes.
-  const separated = new ResultShaperService(
-    () =>
-      new TypeSafeClient({
-        mockHandler: async () => ({
-          keep_0: { type: 'noul', noul: 0.02 },
-          keep_1: { type: 'noul', noul: 0.95 },
-          keep_2: { type: 'noul', noul: 0.03 },
-        }),
-      }),
-    {}
-  )
-  const shaped = await separated.shape(repetitiveOutput(3), 'pwsh')
-  assert.ok(shaped, 'a separated distribution must shape')
-  assert.ok(shaped!.text.length < repetitiveOutput(3).length)
-})
-test('shape keeps informative blocks and drops repetitive ones', async () => {
-  const service = new ResultShaperService(
-    () => new TypeSafeClient({ mockHandler: async () => ({ keep_1: { type: 'noul', noul: 0.9 }, keep_0: { type: 'noul', noul: 0.05 }, keep_2: { type: 'noul', noul: 0.04 } }) }),
-    {}
-  )
-  const content = repetitiveOutput(3)
-  const shaped = await service.shape(content, 'pwsh')
-
-  assert.ok(shaped, 'a clearly repetitive output must be shaped')
+  assert.ok(shaped, 'a classified failure among bulk must shape')
   assert.ok(shaped!.text.length < content.length)
-  assert.match(shaped!.text, /ERROR at src\/a\.ts:39/)
+  assert.match(shaped!.text, /ERROR in src\/a\.ts:42/)
   assert.match(shaped!.text, new RegExp(DROP_MARKER.replace('%d', '\\d+')))
-  assert.equal(shaped!.keptSegments, 1)
-  assert.equal(shaped!.droppedSegments, 2)
+  assert.equal(shaped!.keptClusters, 1)
+  assert.equal(shaped!.droppedClusters, 1)
+  assert.equal(shaped!.droppedLines, 400)
 })
 
-test('shape keeps everything when the answers are unusable or all-keep', async () => {
-  const unknown = new ResultShaperService(() => new TypeSafeClient({ mockHandler: async () => ({}) }), {})
-  assert.equal(await unknown.shape(repetitiveOutput(3), 'pwsh'), undefined, 'unknown must keep the original')
-
-  const allKeep = new ResultShaperService(
-    () =>
-      new TypeSafeClient({
-        mockHandler: async () => ({
-          keep_0: { type: 'noul', noul: 0.9 },
-          keep_1: { type: 'noul', noul: 0.9 },
-          keep_2: { type: 'noul', noul: 0.9 },
-        }),
-      }),
-    {}
+test('shape declines when the model keeps nothing', async () => {
+  const onlyProgress = { 1: { choice: 'routine_progress', confidence: 0.99 } }
+  assert.equal(
+    await service(kindMock(onlyProgress)).shape(noisyOutput(200), 'pwsh'),
+    undefined,
+    'pure noise must not be reshaped'
   )
-  assert.equal(await allKeep.shape(repetitiveOutput(3), 'pwsh'), undefined)
+
+  // The honest answer for pure noise is the same on every attempt, so the turn
+  // stops asking instead of spending its second budget on the same non-answer.
+  const shaper = service(kindMock(onlyProgress), { thresholdChars: 100 })
+  assert.equal(await shaper.shape(noisyOutput(200), 'pwsh'), undefined)
+  assert.equal(
+    shaper.shouldConsider({ name: 'pwsh', args: {} }, noisyOutput(200)),
+    false,
+    'the turn is marked declined'
+  )
+  shaper.resetTurnBudget()
+  assert.equal(
+    shaper.shouldConsider({ name: 'pwsh', args: {} }, noisyOutput(200)),
+    true,
+    'a new turn may try again'
+  )
 })
 
-test('apply shapes only eligible results and preserves the invariants', async () => {
+test('shape keeps clusters the model could not classify, and any beyond the cap', async () => {
+  // An unusable answer keeps content rather than guessing.
+  assert.equal(
+    await service(async () => ({})).shape(noisyOutput(200), 'pwsh'),
+    undefined,
+    'nothing classified means nothing dropped'
+  )
+
+  // A cluster past maxClusters keeps its lines: the cap bounds cost, it is not a
+  // licence to drop content the model never saw. Here only the progress cluster
+  // is classified (as progress) while the failure cluster sits past the cap, so
+  // the failure survives and the progress run collapses.
+  const capped = await service(kindMock(), { maxClusters: 1 }).shape(noisyOutput(200), 'pwsh')
+  assert.ok(capped, 'the uncapped cluster is kept, so shaping still happens')
+  assert.match(capped!.text, /ERROR in src\/a\.ts:42/)
+  assert.doesNotMatch(capped!.text, /progress: chunk ok/)
+})
+
+test('shape leaves input alone when there is nothing to decide', async () => {
+  const single = await service(kindMock()).shape('progress: chunk ok\nprogress: chunk ok', 'pwsh')
+  assert.equal(single, undefined, 'one cluster means no distinction to make')
+})
+
+test('apply shapes eligible results only and preserves the invariants', async () => {
   let calls = 0
   const h = harness(
-    async () => {
+    async (req) => {
       calls += 1
-      return {
-        keep_0: { type: 'noul', noul: 0.05 },
-        keep_1: { type: 'noul', noul: 0.9 },
-        keep_2: { type: 'noul', noul: 0.05 },
-      }
+      return kindMock()(req)
     },
     { thresholdChars: 1000 }
   )
 
   const exec: ToolExecution = { name: 'pwsh', args: { command: 'build' } }
-  const shaped = await h.step(exec, repetitiveOutput(3))
+  const shaped = await h.step(exec, noisyOutput(200))
   assert.ok(shaped.content, 'eligible output must be replaced')
   assert.match(shaped.content!, /dropped by TypeSafe result shaper/)
 
-  // An ineligible tool is left alone and costs nothing.
   const before = calls
-  const untouched = await h.step({ name: 'read_file', args: {} }, repetitiveOutput(3))
+  const untouched = await h.step({ name: 'read_file', args: {} }, noisyOutput(200))
   assert.equal(untouched.content, undefined)
   assert.equal(calls, before, 'ineligible tools must not trigger a decision')
 
-  // The per-turn budget resets on a new instruction.
   h.preStep()
-  const afterReset = await h.step(exec, repetitiveOutput(3).replace(/ok/g, 'ok2'))
-  assert.ok(afterReset.content ?? true)
+  const afterReset = await h.step(exec, noisyOutput(200).replace(/ok/g, 'ok2'))
+  assert.ok(afterReset.content ?? true, 'a new turn resets the budget')
 })
 
 test('apply never shapes a failed result or one already rewritten downstream', async () => {
@@ -184,14 +206,14 @@ test('apply never shapes a failed result or one already rewritten downstream', a
 
   const failed = await postHandler(
     { name: 'pwsh', args: {} },
-    { content: repetitiveOutput(3), isError: true },
+    { content: noisyOutput(200), isError: true },
     async () => ({ kind: 'accept', action: 'accept' })
   )
   assert.equal(failed.content, undefined)
 
   const rewritten = await postHandler(
     { name: 'pwsh', args: {} },
-    { content: repetitiveOutput(3) },
+    { content: noisyOutput(200) },
     async () => ({ kind: 'accept', action: 'accept', content: 'downstream text' })
   )
   assert.equal(rewritten.content, 'downstream text')
@@ -201,15 +223,18 @@ test('apply stays silent when the decision call fails', async () => {
   const h = harness(async () => {
     throw new Error('api down')
   })
-  const decision = await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3))
+  const decision = await h.step({ name: 'pwsh', args: {} }, noisyOutput(200))
   assert.equal(decision.content, undefined)
   assert.equal(decision.kind, 'accept')
 })
 
 test('extractText reads both the string form and the block form the service uses', () => {
   assert.equal(extractText('plain text'), 'plain text')
-  assert.equal(extractText([{ type: 'text', text: 'a' }, { type: 'image', url: 'x' }, { type: 'text', text: 'b' }]), 'a\nb')
-  assert.equal(extractText([{ type: 'image', url: 'x' }]), undefined, 'a non-text-only result has nothing to shape')
+  assert.equal(
+    extractText([{ type: 'text', text: 'a' }, { type: 'image', url: 'x' }, { type: 'text', text: 'b' }]),
+    'a\nb'
+  )
+  assert.equal(extractText([{ type: 'image', url: 'x' }]), undefined)
   assert.equal(extractText(undefined), undefined)
   assert.equal(extractText({ type: 'text', text: 'not an array' }), undefined)
 })
@@ -236,34 +261,4 @@ test('replaceText collapses text blocks in place and preserves every other block
 
   const appended = replaceText([{ type: 'image', url: 'only' }], 'shaped') as Array<Record<string, unknown>>
   assert.deepEqual(appended.map((block) => block.type), ['image', 'text'])
-})
-
-test('a flat decline stops further shaping attempts for the turn', async () => {
-  let calls = 0
-  const h = harness(
-    async () => {
-      calls += 1
-      return {
-        keep_0: { type: 'noul', noul: 0.35 },
-        keep_1: { type: 'noul', noul: 0.36 },
-        keep_2: { type: 'noul', noul: 0.34 },
-      }
-    },
-    { thresholdChars: 1000 }
-  )
-
-  const first = await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3))
-  assert.equal(first.content, undefined, 'a flat distribution must leave the content alone')
-  assert.equal(calls, 1)
-
-  // Every measured question shape behaves this way on bulk output, so a second
-  // attempt in the same turn would spend a request on the same non-answer.
-  const second = await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3).replace(/ok/g, 'ok2'))
-  assert.equal(second.content, undefined)
-  assert.equal(calls, 1, 'no further request may be made after a flat decline')
-
-  // A new instruction clears the decision.
-  h.preStep()
-  await h.step({ name: 'pwsh', args: {} }, repetitiveOutput(3).replace(/ok/g, 'ok3'))
-  assert.equal(calls, 2, 'a new turn may try again')
 })

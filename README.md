@@ -233,17 +233,20 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - **语义**：同一意图只在首次装配时给出一次建议（指纹相同即跳过，不重复调用模型也不重复注入）；每轮装配最多一条 `typesafe-skill-router` 条目，同名替换而非堆叠；低于分/置信度阈值时保持沉默；`skills.list()` 抛错时 prompt 原样返回。
 
 ### `ResultShaperConfig`（**默认关闭**）
+
+判定单元是**行形状**：先把只差数字/哈希的行归为一类，再对每类的代表行做**有界分类**（类别见下），
+只有 `warning` / `failure` 两类留下。实测依据见 [`docs/calibration.md`](docs/calibration.md) §9。
+
 - `shapeTools?: string[]`: 允许整形的输出密集型工具（默认 `bash` / `pwsh` / `terminal` / `run_command` / `execute_command`）。
 - `thresholdChars?: number`: 触发整形的最小内容长度（默认 `8000`）。
 - `maxPerTurn?: number`: 每轮最多整形几次（默认 `2`）。
-- `linesPerSegment?: number`: 每个评估块包含的行数（默认 `40`）。
-- `maxSegments?: number`: 单次请求最多评估的块数，超出会均匀合并以保住尾部（默认 `24`）。
-- `keepThreshold?: number`: 保留某块所需的最低概率（默认 `0.5`；缺失答案一律保留）。
-- `blockPreviewChars?: number`: 每块发给模型判断的字符数（默认 `600`）。
-- `requestTimeoutMs?: number`: 整形请求自身的超时，它是插件里最大的请求（默认 `4000`）。
-- `spreadThreshold?: number`: 最高与最低 keep 概率之差低于该值时**视为模型无法区分并放弃整形**，内容原样保留（默认 `0.15`）。
-- ⚠️ **实验性**：实测在构建日志这类输入上，模型对含报错的块与噪声块给出几乎相同的概率（见 `docs/calibration.md` §9），因此本模块当前会**拒绝动作**而保持默认关闭。宁可不用，也不随机丢内容。
-
+- `keepKinds?: string[]`: 保留下来的类别（默认 `warning`, `failure`）；可选类别为 `routine_progress` / `summary` / `warning` / `failure`。
+- `minKindConfidence?: number`: 分类置信度低于该值时该类**保留**（默认 `0.6`）。
+- `maxClusters?: number`: 单次请求最多分类的行形状数，超出的类别一律保留（默认 `24`）。
+- `sampleChars?: number`: 每类代表行送入分类的字符数（默认 `400`）。
+- `requestTimeoutMs?: number`: 分类请求自身的超时（默认 `4000`）。
+- 前置检查：单行 >4000 字符、行数 ≥120、或结构重复率 ≥50% 才发起判定；类别全部被丢弃时**拒绝整形**、原样返回，且同一轮内不再重试。
+- ℹ️ 该模块仍是**opt-in / 实验性**：分类本身可靠（实测对 600 行中的单行报错给出 `failure`、置信度 1），但「保留 warning/failure、丢弃其余」意味着普通细节也会被丢弃——请按你的输出形态决定是否开启。
 ### `TypeSafeSuiteConfig` 开关
 - `askTools?: boolean`: 是否注册 `jev_ask` / `jev_rank` / `jev_check`（默认 `true`）。
 - `skillRouter?: SkillRouterConfig | boolean`: 语义 skill 路由（默认 `true`）。

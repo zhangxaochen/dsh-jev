@@ -228,18 +228,16 @@ export interface ResultShaperConfig {
     thresholdChars?: number;
     /** At most this many shaped results per user turn (default 2). */
     maxPerTurn?: number;
-    /** Lines grouped into one asked-about block (default 40). */
-    linesPerSegment?: number;
-    /** Upper bound on blocks per request (default 24). */
-    maxSegments?: number;
-    /** Keep-probability at or above which a block survives (default 0.5). */
-    keepThreshold?: number;
-    /** Characters of each block sent for judgement (default 600). */
-    blockPreviewChars?: number;
-    /** Timeout for the shaping request, which carries the most blocks (default 4000ms). */
+    /** Kinds that survive shaping; everything else is dropped (default warning, failure). */
+    keepKinds?: string[];
+    /** Minimum classifier confidence to keep a cluster (default 0.6). */
+    minKindConfidence?: number;
+    /** Upper bound on classified line shapes per request (default 24). */
+    maxClusters?: number;
+    /** Characters of each representative line sent for classification (default 400). */
+    sampleChars?: number;
+    /** Timeout for the classification request (default 4000ms). */
     requestTimeoutMs?: number;
-    /** Minimum separation between the highest and lowest keep-probability to act (default 0.15). */
-    spreadThreshold?: number;
 }
 export interface ToolPrunerConfig {
     /** Max tools to keep in active context (default: 5) */

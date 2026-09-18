@@ -350,3 +350,15 @@
 - [x] 据此新增成本守卫：分布平坦导致拒绝后，**同一轮内不再重试整形**（`declinedThisTurn`，`agent/pre-step` 清除），避免把第二次预算花在同一个无解问题上
 - [x] `docs/calibration.md` §9.2 记录全部五组测量（含纯噪声反例），§9.3 更新结论与建议
 - [x] 测试数 105 → 106
+
+## Phase 4 补充记录（整形器重写，Round 36）
+
+第 34/35 轮的结论（「Jev 无法完成这类判断」）被对照实验**推翻**，根因是请求打包方式。
+
+- [x] 对照实验：裸文本错误行 → `kind=error` confidence **1**、`is_failure=0.98`；进度行 → `kind=progress` conf 1。**Jev 分类单行完全可靠**
+- [x] 根因：把 N 项塞进 `state` 再用 `kind_N`/`keep_N` **按索引指代**，模型无法绑定 → 全部问题同一答案。仓库里工作正常的 `tool-pruner` 正是把候选描述写进各自问题（`score_<name>`）
+- [x] 可行设计实测：行形状聚类 + 每类一条**内容嵌入问题**的代表行 → 构建日志 4 簇（error/stack 判 `failure` conf 1、进度判 `routine_progress` conf 1）、依赖树 3 簇（WARN 判 `warning` conf 1）、测试运行 3 簇（`not ok`/`AssertionError` 判 `failure`）、纯噪声 1 簇（无保留类别 → 拒绝）
+- [x] 据此重写 `src/result-shaper.ts`：判定单元由「17–24 块 × 600 字符」变为「1–4 条问题」；配置项随之替换为 `keepKinds` / `minKindConfidence` / `maxClusters` / `sampleChars` / `requestTimeoutMs`
+- [x] 保留的守卫：类别全被丢弃即拒绝且本轮不再重试、答案不可用即保留、超出 `maxClusters` 的类别一律保留、内容未变小即返回原文、失败结果与下游改写不覆盖
+- [x] 测试重写（12 项）；集成脚本 mock 改为回答 `kind_*` 并按真实测量把栈帧也判为 failure；测试数 106 → 107，集成 18/18
+- [x] `docs/calibration.md` 新增 §9.3（对照实验）与 §9.4（可行设计实测表）

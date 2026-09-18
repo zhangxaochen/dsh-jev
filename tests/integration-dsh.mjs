@@ -63,10 +63,15 @@ function check(name, condition, detail) {
 /** Answer the two question sets the guards ask, based on the question ids. */
 async function answersFor(req) {
   const ids = Object.keys(req.questions ?? {})
-  if (ids.every((id) => id.startsWith('keep_'))) {
-    // Result shaper: keep the segment that carries the informative lines.
+  if (ids.every((id) => id.startsWith('kind_'))) {
+    // Result shaper: classify each line shape. The sample travels inside the
+    // question, so the mock reads it from there - exactly as the live model does.
     const answers = {}
-    for (const id of ids) answers[id] = { type: 'noul', noul: id === 'keep_6' ? 0.95 : 0.02 }
+    for (const id of ids) {
+      const sample = String(req.questions[id]?.instructions ?? '')
+      const choice = /ERROR|error|AssertionError|not ok|stack:/.test(sample) ? 'failure' : 'routine_progress'
+      answers[id] = { type: 'choice', choice, confidence: 0.99, probabilities: { [choice]: 0.99 } }
+    }
     return answers
   }
   if (ids.includes('stuck_severity')) {

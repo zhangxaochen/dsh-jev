@@ -1,5 +1,5 @@
 /**
- * Semantic result shaping for oversized tool output.
+ * Semantic shaping for oversized tool output.
  *
  * DSH already caps oversized results twice, both model-free and both blind to
  * meaning: `dsh-spill-policy` keeps a head/tail preview at result time, and
@@ -7,20 +7,48 @@
  * triggers — its own Dev Note defers "semantic middle selection" because it
  * "would need a model or structured heuristics".
  *
- * This module is that semantic selection, and nothing else: it keeps the
- * interesting middle and drops repetition, only for output-heavy tools, only
- * above a size threshold, only a bounded number of times per turn, and only
- * when the cheap pre-check says the text is actually repetitive. Any failure
+ * The decision unit is a **line shape**, not a block: lines are clustered by
+ * normalising numbers and hashes, and one representative per cluster is
+ * classified by kind with its text embedded in its own question. Measured
+ * against the live model (docs/calibration.md §9):
+ *
+ * - "which part of this output matters" is unreliable in every phrasing tried —
+ *   flat distributions, or confident answers on pure noise
+ * - "what kind of line is this" is reliable once each question carries its own
+ *   sample, and it collapses 600 lines into a handful of decisions
+ *
+ * Only warning and failure clusters survive; everything else is dropped with a
+ * marker, and nothing is dropped when the model keeps nothing. Any failure
  * returns the original content untouched.
  * @module dsh-jev/result-shaper
  */
 
-import { noul, resolveClientFrom, type TypeSafeClient } from './typesafe-client.js'
+import { choice, resolveClientFrom, type TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type { CordisContext, PostToolDecision, ResultShaperConfig, ToolExecution } from './types.js'
 
 export const name = 'typesafe-result-shaper'
+
+export const DEFAULT_SHAPE_TOOLS = ['bash', 'pwsh', 'terminal', 'run_command', 'execute_command']
+
+export const DROP_MARKER = '[... %d lines dropped by TypeSafe result shaper ...]'
+
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export const DEFAULT_THRESHOLD_CHARS = 8000
+export const DEFAULT_MAX_PER_TURN = 2
+export const DEFAULT_KEEP_KINDS = ['warning', 'failure']
+export const DEFAULT_MIN_KIND_CONFIDENCE = 0.6
+export const DEFAULT_MAX_CLUSTERS = 24
+export const DEFAULT_SAMPLE_CHARS = 400
+
+/** The closed label set the classifier chooses from. */
+export const KIND_CRITERIA: Record<string, string> = {
+  routine_progress: 'Routine progress: steps completed, files processed, chunks emitted, items listed',
+  summary: 'Neutral summary: totals, counts, timings, versions, a final status line',
+  warning: 'A deprecation or a warning that may need attention',
+  failure: 'A failure: an error code, an exception, a failed build, a failing test, a stack frame',
+}
 
 /** One model-facing content block, as the tools service carries it. */
 export interface ContentBlock {
@@ -68,49 +96,31 @@ export function replaceText(content: unknown, text: string): unknown {
   return rebuilt
 }
 
-export const DEFAULT_SHAPE_TOOLS = [
-  'bash',
-  'pwsh',
-  'terminal',
-  'run_command',
-  'execute_command',
-]
+/** Shape of a line with numbers and hashes normalised, so variants share a key. */
+export function lineShape(line: string): string {
+  return line.replace(/[0-9a-f]{6,}|\d+/gi, '#')
+}
 
-export const DROP_MARKER = '[... %d lines dropped by TypeSafe result shaper ...]'
+export interface LineCluster {
+  /** Normalised shape shared by every line in the cluster. */
+  shape: string
+  /** How many lines collapse into this cluster. */
+  count: number
+  /** First line, used as the sample the classifier sees. */
+  sample: string
+}
 
-/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
-export const DEFAULT_THRESHOLD_CHARS = 8000
-export const DEFAULT_MAX_PER_TURN = 2
-export const DEFAULT_LINES_PER_SEGMENT = 40
-export const DEFAULT_MAX_SEGMENTS = 24
-export const DEFAULT_KEEP_THRESHOLD = 0.5
-/** Characters of each block sent for judgement; the model judges, it does not read. */
-export const DEFAULT_BLOCK_PREVIEW_CHARS = 600
-/** The shaping request is the plugin's largest, so it gets its own budget. */
-export const DEFAULT_REQUEST_TIMEOUT_MS = 4000
-/**
- * Minimum separation between the highest and lowest keep-probability for the
- * shaper to act. Below it the model is not discriminating and dropping blocks
- * would be arbitrary.
- */
-export const DEFAULT_SPREAD_THRESHOLD = 0.15
-
-/** Group lines into contiguous segments so one question covers a coherent block. */
-export function segmentText(text: string, linesPerSegment: number, maxSegments: number): string[] {
-  const lines = text.split('\n')
-  const raw: string[] = []
-  for (let index = 0; index < lines.length; index += linesPerSegment) {
-    raw.push(lines.slice(index, index + linesPerSegment).join('\n'))
+/** Group lines that differ only in numbers or hashes. */
+export function clusterLines(text: string): LineCluster[] {
+  const byShape = new Map<string, LineCluster>()
+  for (const line of text.split('\n')) {
+    if (line.trim().length === 0) continue
+    const shape = lineShape(line)
+    const existing = byShape.get(shape)
+    if (existing) existing.count += 1
+    else byShape.set(shape, { shape, count: 1, sample: line })
   }
-  if (raw.length <= maxSegments) return raw
-
-  // Coalesce evenly so the cap holds without discarding the tail.
-  const perSegment = Math.ceil(raw.length / maxSegments)
-  const merged: string[] = []
-  for (let index = 0; index < raw.length; index += perSegment) {
-    merged.push(raw.slice(index, index + perSegment).join('\n'))
-  }
-  return merged
+  return [...byShape.values()]
 }
 
 /**
@@ -119,8 +129,7 @@ export function segmentText(text: string, linesPerSegment: number, maxSegments: 
  * Byte-identical repetition alone is too narrow: build logs, dependency trees
  * and file listings vary on every line (a counter, a path, a version) and are
  * exactly the output that fills a context window. Volume and structural
- * repetition both count, and everything still passes the model's per-block
- * judgement before anything is dropped.
+ * repetition both count, and the classifier still decides what survives.
  */
 export function looksRepetitive(text: string): boolean {
   const lines = text
@@ -139,8 +148,7 @@ export function looksRepetitive(text: string): boolean {
   if (lines.length < 40) return false
   if (uniqueRatio(lines) >= 0.25) return true
   // Structurally identical lines that only differ in numbers, hashes or paths.
-  const shapes = lines.map((line) => line.replace(/[0-9a-f]{6,}|\d+/gi, '#'))
-  return uniqueRatio(shapes) >= 0.5
+  return uniqueRatio(lines.map(lineShape)) >= 0.5
 }
 
 /** Share of lines that repeat an earlier line verbatim. */
@@ -148,13 +156,20 @@ function uniqueRatio(lines: string[]): number {
   return 1 - new Set(lines).size / lines.length
 }
 
+export interface ShapeOutcome {
+  text: string
+  keptClusters: number
+  droppedClusters: number
+  droppedLines: number
+  latencyMs: number
+}
+
 export class ResultShaperService {
   private shapedThisTurn = 0
   /**
-   * Set when the model failed to separate the blocks. Every measured question
-   * shape behaves this way on bulk output (docs/calibration.md §9), so once it
-   * happens the rest of the turn skips further shaping attempts instead of
-   * spending another bounded request on the same non-answer.
+   * Set when the model kept nothing. That is the honest answer for pure noise,
+   * but re-asking in the same turn would only spend another request, so the rest
+   * of the turn skips shaping.
    */
   private declinedThisTurn = false
 
@@ -179,18 +194,24 @@ export class ResultShaperService {
   }
 
   /**
-   * Keep the segments Jev judges still informative, drop the rest.
+   * Classify each distinct line shape and keep only the clusters that report a
+   * warning or a failure.
    * @returns the shaped text, or undefined when shaping is not justified.
    */
-  async shape(content: string, toolName: string): Promise<{ text: string; droppedSegments: number; keptSegments: number; latencyMs: number } | undefined> {
-    const segments = segmentText(content, this.config.linesPerSegment ?? DEFAULT_LINES_PER_SEGMENT, this.config.maxSegments ?? DEFAULT_MAX_SEGMENTS)
-    if (segments.length < 3) return undefined
+  async shape(content: string, toolName: string): Promise<ShapeOutcome | undefined> {
+    const clusters = clusterLines(content)
+    if (clusters.length < 2) return undefined
 
+    const selected = clusters.slice(0, this.config.maxClusters ?? DEFAULT_MAX_CLUSTERS)
     const questions: Record<string, unknown> = {}
-    segments.forEach((_segment, index) => {
-      questions['keep_' + index] = noul(
-        'Does this block of command output still carry information a developer needs ' +
-          '(errors, results, counts, decisions, paths), rather than repetitive noise that can be dropped?'
+    selected.forEach((cluster, index) => {
+      // The sample travels inside its own question: referencing cluster N in the
+      // state instead produced confident nonsense (docs/calibration.md §9).
+      questions['kind_' + index] = choice(
+        'Classify this line of tool output by kind:\n---\n' +
+          cluster.sample.slice(0, this.config.sampleChars ?? DEFAULT_SAMPLE_CHARS) +
+          '\n---',
+        KIND_CRITERIA
       )
     })
 
@@ -200,75 +221,72 @@ export class ResultShaperService {
       {
         state: {
           tool: toolName,
-          note: 'Output is split into ordered blocks; decide per block whether to keep it.',
-          // Enough of each block to judge whether it informs; sending it whole
-          // made a 24-block request tens of kilobytes.
-          blocks: segments.map((segment, index) => ({ index, text: segment.slice(0, this.config.blockPreviewChars ?? DEFAULT_BLOCK_PREVIEW_CHARS) })),
+          note: 'Each question carries one line of output; classify that line.',
+          distinctLines: clusters.length,
+          occurrences: selected.map((cluster) => cluster.count),
         },
         questions: questions as any,
       },
-      { timeoutMs: this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS }
+      { timeoutMs: this.config.requestTimeoutMs ?? 4000 }
     )
     const latencyMs = Date.now() - started
 
-    const keep: boolean[] = segments.map((_segment, index) => {
-      const answer = results['keep_' + index] as any
-      if (!answer || answer.unknown) return true // unknown keeps content
-      const probability = typeof answer.noul === 'number' ? answer.noul : answer.probability
-      return typeof probability !== 'number' ? true : probability >= (this.config.keepThreshold ?? DEFAULT_KEEP_THRESHOLD)
+    const keepKinds = new Set(this.config.keepKinds ?? DEFAULT_KEEP_KINDS)
+    const minConfidence = this.config.minKindConfidence ?? DEFAULT_MIN_KIND_CONFIDENCE
+
+    const keptShapes = new Set<string>()
+    // Clusters past the cap keep their lines: the cap bounds cost, it is not a
+    // licence to drop content the model never saw.
+    for (const cluster of clusters.slice(selected.length)) keptShapes.add(cluster.shape)
+
+    selected.forEach((cluster, index) => {
+      const answer = results['kind_' + index] as any
+      if (!answer || answer.unknown) {
+        keptShapes.add(cluster.shape)
+        return
+      }
+      const confidence = typeof answer.confidence === 'number' ? answer.confidence : 0
+      if (keepKinds.has(answer.choice) && confidence >= minConfidence) keptShapes.add(cluster.shape)
     })
 
-    // Measured 2026-09-18 (docs/calibration.md §9): on build-log output the model
-    // returns a flat distribution — every block near-identical, the one block
-    // carrying the actual error included. Acting on that would drop blocks at
-    // random, error block included, so a distribution that does not separate is
-    // treated as "cannot decide" and the original content survives.
-    const scored = segments
-      .map((_segment, index) => {
-        const answer = results['keep_' + index] as any
-        if (!answer || answer.unknown) return undefined
-        const probability = typeof answer.noul === 'number' ? answer.noul : answer.probability
-        return typeof probability === 'number' ? probability : undefined
-      })
-      .filter((value): value is number => value !== undefined)
-    if (scored.length < segments.length) return undefined
-    const spread = Math.max(...scored) - Math.min(...scored)
-    if (spread < (this.config.spreadThreshold ?? DEFAULT_SPREAD_THRESHOLD)) {
+    if (keptShapes.size === 0) {
       this.declinedThisTurn = true
       return undefined
     }
-
-    const keptSegments = keep.filter(Boolean).length
-    const droppedSegments = keep.length - keptSegments
-    // Shaping must be a clear win: keep at least the informative part and drop real volume.
-    if (droppedSegments === 0 || keptSegments === 0) return undefined
 
     let droppedLines = 0
     const rebuilt: string[] = []
     let runStart = -1
     const flushRun = (endExclusive: number) => {
       if (runStart < 0) return
-      const lines = segments.slice(runStart, endExclusive).join('\n').split('\n').length
-      droppedLines += lines
-      rebuilt.push(DROP_MARKER.replace('%d', String(lines)))
+      droppedLines += endExclusive - runStart
+      rebuilt.push(DROP_MARKER.replace('%d', String(endExclusive - runStart)))
       runStart = -1
     }
 
-    keep.forEach((keepIt, index) => {
-      if (keepIt) {
+    const lines = content.split('\n')
+    lines.forEach((line, index) => {
+      const kept = line.trim().length === 0 || keptShapes.has(lineShape(line))
+      if (kept) {
         flushRun(index)
-        rebuilt.push(segments[index]!)
+        rebuilt.push(line)
       } else if (runStart < 0) {
         runStart = index
       }
     })
-    flushRun(keep.length)
+    flushRun(lines.length)
 
     const text = rebuilt.join('\n')
-    if (text.length >= content.length) return undefined
+    if (droppedLines === 0 || text.length >= content.length) return undefined
 
     this.shapedThisTurn += 1
-    return { text, droppedSegments, keptSegments, latencyMs }
+    return {
+      text,
+      keptClusters: keptShapes.size,
+      droppedClusters: Math.max(0, clusters.length - keptShapes.size),
+      droppedLines,
+      latencyMs,
+    }
   }
 }
 
@@ -312,10 +330,9 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
       const originalText = extractText(result.content)
       if (originalText === undefined) return baseDecision
       if (!shaper.shouldConsider(exec, originalText)) return baseDecision
-      // A downstream listener already replaced the value; content replacement
-      // alongside it is rejected by the tools service.
+      // A downstream listener already replaced the value or the content;
+      // replacing either alongside it is rejected by the tools service.
       if (baseDecision && Object.hasOwn(baseDecision, 'value')) return baseDecision
-      // Another listener already rewrote the content; do not clobber its decision.
       if (baseDecision && Object.hasOwn(baseDecision, 'content')) return baseDecision
       if (baseDecision && baseDecision.kind === 'block') return baseDecision
 
@@ -329,8 +346,9 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
         latencyMs: shaped.latencyMs,
         detail: {
           tool: exec.name,
-          keptSegments: shaped.keptSegments,
-          droppedSegments: shaped.droppedSegments,
+          keptClusters: shaped.keptClusters,
+          droppedClusters: shaped.droppedClusters,
+          droppedLines: shaped.droppedLines,
           charsRemoved: originalText.length - shaped.text.length,
         },
       })
