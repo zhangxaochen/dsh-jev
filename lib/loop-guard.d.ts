@@ -13,5 +13,12 @@ import type { CordisContext, LoopGuardConfig } from './types.js';
 export declare const name = "typesafe-loop-guard";
 /** Buckets of the stuck-severity rubric; index 2 is the "definite dead loop" bucket. */
 export declare const STUCK_SEVERITY_CRITERIA: string[];
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export declare const DEFAULT_TRIGGER_THRESHOLD = 2;
+export declare const DEFAULT_NO_PROGRESS_THRESHOLD = 0.3;
+export declare const DEFAULT_P_LOOP_THRESHOLD = 0.6;
+export declare const DEFAULT_MIN_CONFIDENCE = 0.5;
+export declare const DEFAULT_COOLDOWN_STEPS = 3;
+export declare const DEFAULT_MAX_HISTORY = 8;
 export declare function apply(ctx: CordisContext, config?: LoopGuardConfig): () => void;
 //# sourceMappingURL=loop-guard.d.ts.map

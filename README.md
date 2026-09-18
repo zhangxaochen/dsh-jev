@@ -186,7 +186,9 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `apiKey?: string`: TypeSafe API Key（默认优先读取环境变量 `TYPESAFE_API_KEY`）。
 - `baseUrl?: string`: API 地址（默认 `https://api.typesafe.ai/v1/systemone`）。
 - `model?: string`: 决策模型（默认 `jev-latest`）。
-- `timeoutMs?: number`: 超时时间，单位毫秒（默认 `10000`）。
+- `timeoutMs?: number`: 交互式请求超时，单位毫秒（默认 `2000`）。实测热调用 250–300ms、冷启动 700–750ms。
+- `pathTimeoutMs?: number`: 后置建议路径（死循环判定、安全语义裁决、结果整形）的超时，单位毫秒（默认 `800`）。
+- `cacheTtlMs?: number`: 相同载荷结果的缓存有效期，`0` 关闭（默认 `30000`）。
 - `mockHandler?: MockHandler`: 自定义离线 Mock 处理器，常用于自动化测试或离线断网环境。
 
 ### `LoopGuardConfig`

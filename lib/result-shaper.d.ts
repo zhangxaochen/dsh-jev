@@ -19,6 +19,12 @@ import type { CordisContext, ResultShaperConfig, ToolExecution } from './types.j
 export declare const name = "typesafe-result-shaper";
 export declare const DEFAULT_SHAPE_TOOLS: string[];
 export declare const DROP_MARKER = "[... %d lines dropped by TypeSafe result shaper ...]";
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export declare const DEFAULT_THRESHOLD_CHARS = 8000;
+export declare const DEFAULT_MAX_PER_TURN = 2;
+export declare const DEFAULT_LINES_PER_SEGMENT = 40;
+export declare const DEFAULT_MAX_SEGMENTS = 24;
+export declare const DEFAULT_KEEP_THRESHOLD = 0.5;
 /** Group lines into contiguous segments so one question covers a coherent block. */
 export declare function segmentText(text: string, linesPerSegment: number, maxSegments: number): string[];
 /** Cheap pre-check: is this output repetitive enough that shaping can pay off? */

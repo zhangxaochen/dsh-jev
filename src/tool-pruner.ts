@@ -15,6 +15,9 @@ import type {
 
 export const name = 'typesafe-tool-pruner'
 
+/** Max dynamic tools kept in context when the host mounts the suite. */
+export const DEFAULT_MAX_TOOLS = 8
+
 export const DEFAULT_ALWAYS_RETAIN = [
   'read_file',
   'write_to_file',
@@ -185,7 +188,7 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
         if (!assembly || !Array.isArray(assembly.tools)) {
           return typeof next === 'function' ? next() : assembly
         }
-        const maxTools = config.maxTools ?? 8
+        const maxTools = config.maxTools ?? DEFAULT_MAX_TOOLS
         if (assembly.tools.length <= maxTools) {
           return typeof next === 'function' ? next() : assembly
         }

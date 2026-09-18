@@ -6,6 +6,8 @@
 import { TypeSafeClient } from './typesafe-client.js';
 import type { CordisContext, ToolDefinitionMinimal, ToolPrunerConfig } from './types.js';
 export declare const name = "typesafe-tool-pruner";
+/** Max dynamic tools kept in context when the host mounts the suite. */
+export declare const DEFAULT_MAX_TOOLS = 8;
 export declare const DEFAULT_ALWAYS_RETAIN: string[];
 /** Minimal shape of the harness token estimator, kept structural on purpose. */
 export interface TokenEstimator {

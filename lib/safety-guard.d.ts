@@ -18,6 +18,9 @@ export declare const name = "typesafe-safety-guard";
 export declare const DEFAULT_GUARDED_TOOLS: string[];
 /** Credential classes, so a placeholder or a doc link is not read as a live secret. */
 export declare const CREDENTIAL_CRITERIA: Record<string, string>;
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export declare const DEFAULT_BLOCK_THRESHOLD = 0.85;
+export declare const DEFAULT_ASK_APPROVAL_THRESHOLD = 0.5;
 interface HardDenyRule {
     id: string;
     reason: string;

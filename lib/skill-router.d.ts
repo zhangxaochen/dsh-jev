@@ -12,6 +12,9 @@ import type { CordisContext, SkillRouterConfig, SkillSummary } from './types.js'
 export declare const name = "typesafe-skill-router";
 /** Only route when the catalog is big enough for routing to pay for itself. */
 export declare const DEFAULT_MIN_CANDIDATES = 8;
+export declare const DEFAULT_MIN_INTENT_CHARS = 12;
+export declare const DEFAULT_MIN_SCORE = 1.5;
+export declare const DEFAULT_MIN_CONFIDENCE = 0.5;
 export interface SkillCandidate {
     name: string;
     description: string;

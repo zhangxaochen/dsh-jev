@@ -51,6 +51,10 @@ export const CREDENTIAL_CRITERIA: Record<string, string> = {
 
 const CREDENTIAL_HAZARD_BUCKETS = ['real_credential', 'private_key']
 
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export const DEFAULT_BLOCK_THRESHOLD = 0.85
+export const DEFAULT_ASK_APPROVAL_THRESHOLD = 0.5
+
 interface HardDenyRule {
   id: string
   reason: string
@@ -147,8 +151,8 @@ export function deterministicVerdict(exec: ToolExecution): { id: string; reason:
 }
 
 export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
-  const blockThreshold = config.blockThreshold ?? 0.85
-  const askApprovalThreshold = config.askApprovalThreshold ?? 0.5
+  const blockThreshold = config.blockThreshold ?? DEFAULT_BLOCK_THRESHOLD
+  const askApprovalThreshold = config.askApprovalThreshold ?? DEFAULT_ASK_APPROVAL_THRESHOLD
   const guardedTools = config.guardedTools ?? DEFAULT_GUARDED_TOOLS
   const onError = config.onError ?? 'deny-guarded'
   const onUncertain = config.onUncertain ?? 'deny-guarded'

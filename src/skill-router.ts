@@ -17,6 +17,9 @@ export const name = 'typesafe-skill-router'
 
 /** Only route when the catalog is big enough for routing to pay for itself. */
 export const DEFAULT_MIN_CANDIDATES = 8
+export const DEFAULT_MIN_INTENT_CHARS = 12
+export const DEFAULT_MIN_SCORE = 1.5
+export const DEFAULT_MIN_CONFIDENCE = 0.5
 const CRITERIA = [
   'Not applicable: this skill would not help with the request',
   'Possibly applicable: related but not the primary need',
@@ -61,7 +64,7 @@ export class SkillRouterService {
   shouldRoute(intent: string, summaries: SkillSummary[]): boolean {
     const minCandidates = this.config.minCandidates ?? DEFAULT_MIN_CANDIDATES
     if (summaries.length < minCandidates) return false
-    if (intent.trim().length < (this.config.minIntentChars ?? 12)) return false
+    if (intent.trim().length < (this.config.minIntentChars ?? DEFAULT_MIN_INTENT_CHARS)) return false
     const key = intentKey(intent)
     if (key === this.lastKey) return false
     this.lastKey = key
@@ -116,8 +119,8 @@ export class SkillRouterService {
   ): Promise<{ name: string; text: string } | undefined> {
     const best = await this.route(intent, summaries)
     if (!best) return undefined
-    const minScore = this.config.minScore ?? 1.5
-    const minConfidence = this.config.minConfidence ?? 0.5
+    const minScore = this.config.minScore ?? DEFAULT_MIN_SCORE
+    const minConfidence = this.config.minConfidence ?? DEFAULT_MIN_CONFIDENCE
     if (best.score < minScore || best.confidence < minConfidence) {
       defaultMetrics.recordDecisionError()
       defaultDecisionLog.append({

@@ -32,6 +32,13 @@ export const DEFAULT_SHAPE_TOOLS = [
 
 export const DROP_MARKER = '[... %d lines dropped by TypeSafe result shaper ...]'
 
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export const DEFAULT_THRESHOLD_CHARS = 8000
+export const DEFAULT_MAX_PER_TURN = 2
+export const DEFAULT_LINES_PER_SEGMENT = 40
+export const DEFAULT_MAX_SEGMENTS = 24
+export const DEFAULT_KEEP_THRESHOLD = 0.5
+
 /** Group lines into contiguous segments so one question covers a coherent block. */
 export function segmentText(text: string, linesPerSegment: number, maxSegments: number): string[] {
   const lines = text.split('\n')
@@ -80,8 +87,8 @@ export class ResultShaperService {
   shouldConsider(exec: ToolExecution, content: string): boolean {
     const tools = this.config.shapeTools ?? DEFAULT_SHAPE_TOOLS
     if (!tools.includes(exec?.name)) return false
-    if (content.length < (this.config.thresholdChars ?? 8000)) return false
-    if (this.shapedThisTurn >= (this.config.maxPerTurn ?? 2)) return false
+    if (content.length < (this.config.thresholdChars ?? DEFAULT_THRESHOLD_CHARS)) return false
+    if (this.shapedThisTurn >= (this.config.maxPerTurn ?? DEFAULT_MAX_PER_TURN)) return false
     return looksRepetitive(content)
   }
 
@@ -90,7 +97,7 @@ export class ResultShaperService {
    * @returns the shaped text, or undefined when shaping is not justified.
    */
   async shape(content: string, toolName: string): Promise<{ text: string; droppedSegments: number; keptSegments: number; latencyMs: number } | undefined> {
-    const segments = segmentText(content, this.config.linesPerSegment ?? 40, this.config.maxSegments ?? 24)
+    const segments = segmentText(content, this.config.linesPerSegment ?? DEFAULT_LINES_PER_SEGMENT, this.config.maxSegments ?? DEFAULT_MAX_SEGMENTS)
     if (segments.length < 3) return undefined
 
     const questions: Record<string, unknown> = {}
@@ -120,7 +127,7 @@ export class ResultShaperService {
       const answer = results['keep_' + index] as any
       if (!answer || answer.unknown) return true // unknown keeps content
       const probability = typeof answer.noul === 'number' ? answer.noul : answer.probability
-      return typeof probability !== 'number' ? true : probability >= (this.config.keepThreshold ?? 0.5)
+      return typeof probability !== 'number' ? true : probability >= (this.config.keepThreshold ?? DEFAULT_KEEP_THRESHOLD)
     })
 
     const keptSegments = keep.filter(Boolean).length

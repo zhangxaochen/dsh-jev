@@ -33,6 +33,14 @@ export const STUCK_SEVERITY_CRITERIA = [
 ]
 const TOP_BUCKET_INDEX = STUCK_SEVERITY_CRITERIA.length - 1
 
+/** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
+export const DEFAULT_TRIGGER_THRESHOLD = 2
+export const DEFAULT_NO_PROGRESS_THRESHOLD = 0.3
+export const DEFAULT_P_LOOP_THRESHOLD = 0.6
+export const DEFAULT_MIN_CONFIDENCE = 0.5
+export const DEFAULT_COOLDOWN_STEPS = 3
+export const DEFAULT_MAX_HISTORY = 8
+
 interface StepRecord {
   tool: string
   argsKey: string
@@ -76,12 +84,12 @@ function canonicalArgs(args: unknown): string {
 }
 
 export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
-  const triggerThreshold = config.triggerThreshold ?? 2
-  const noProgressThreshold = config.noProgressThreshold ?? 0.3
-  const pLoopThreshold = config.pLoopThreshold ?? 0.6
-  const minConfidence = config.minConfidence ?? 0.5
-  const cooldownSteps = config.cooldownSteps ?? 3
-  const maxHistory = config.maxHistory ?? 8
+  const triggerThreshold = config.triggerThreshold ?? DEFAULT_TRIGGER_THRESHOLD
+  const noProgressThreshold = config.noProgressThreshold ?? DEFAULT_NO_PROGRESS_THRESHOLD
+  const pLoopThreshold = config.pLoopThreshold ?? DEFAULT_P_LOOP_THRESHOLD
+  const minConfidence = config.minConfidence ?? DEFAULT_MIN_CONFIDENCE
+  const cooldownSteps = config.cooldownSteps ?? DEFAULT_COOLDOWN_STEPS
+  const maxHistory = config.maxHistory ?? DEFAULT_MAX_HISTORY
   const deferExactRepeats = config.deferExactRepeats ?? true
   const include = config.include ?? []
   const exclude = config.exclude ?? []
