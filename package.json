@@ -62,6 +62,7 @@
   "files": [
     "lib",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "cordis.patch.yml"
   ],

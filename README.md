@@ -1,5 +1,7 @@
 # dsh-jev
 
+[![CI](https://github.com/zhangxaochen/dsh-jev/actions/workflows/ci.yml/badge.svg)](https://github.com/zhangxaochen/dsh-jev/actions/workflows/ci.yml)
+
 Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) 的官方 Cordis 插件组合包体系。
 
 通过引入 ~150ms 极低延迟的非生成式语义决策原语（Noul、Choice、Score），为 dsh 提供**动态工具剪枝（降 Token 提速）**、**语义死循环阻断（智能自愈）**与**高危执行安全门禁**。
@@ -270,7 +272,9 @@ pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
 pnpm run bench:offline    # 回放录制答案，零成本复现
 ```
 
-标定结果、阈值来源与基准数据见 [`docs/calibration.md`](docs/calibration.md)；分阶段执行清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)。
+标定结果、阈值来源与基准数据见 [`docs/calibration.md`](docs/calibration.md)；分阶段执行清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)；行为变更史见 [`CHANGELOG.md`](CHANGELOG.md)。
+
+CI（`.github/workflows/ci.yml`）在 Node 22 与 24 上跑 `build → test → bench:offline → 打包校验`：基准是离线回放的，因此不需要 API Key，任何误报或准确率低于 0.9 都会让 CI 失败。
 
 ### 让改动在本机生效
 
