@@ -178,3 +178,13 @@
 - [x] **`cordis.patch.yml` 的键必须存在于 TS 类型**：DSH 遇到未声明的配置键会**拒绝加载插件**，一个拼写错误就会让所有用户挂掉；校验从 `src/types.ts` 反解 42 个已声明字段，与 patch 文件里 `config:` 的直接子键比对（已验证有牙齿：把 `loopGuard` 写成 `loopGard` 会报出 `loopGard`）
 - [x] **manifest 指向的文件必须存在**：`main`/`types`/`dsh.bundle.patch`、`exports` 的每个 `default` 与 `types` 目标、`lib/client.js` 必须随包发布、`dsh.client.inject` 必须含 settings slot
 - [x] 新增 `tests/packaging.spec.ts`（4 个用例），测试数 79 → 83
+
+## Phase 5 补充记录（前缀稳定性，Round 18）
+
+落实设计阶段标记的 KV cache 风险（D5/D6 讨论中列出但未实现的一项）。
+
+- [x] `tool-pruner` 此前返回 `[...alwaysRetain 全部提前, ...selected 按分数排序]`：既改变了与未剪枝路径同一集合下的顺序，也让尾部随每轮分数漂移——工具块位于请求前部，任何变化都会让可复用前缀失效
+- [x] 改为保持候选原序：选择只决定「哪些工具留下」，不决定排列（`candidates.filter(t => keep.has(t))`，用对象集合精确匹配）
+- [x] 新增 3 个用例：入选集合不变但顺序必须等于输入序（分数最高者在最后）；`alwaysRetain` 工具不得被提到最前；候选数已满足 `maxTools` 时返回**同一个数组**且不调用模型
+- [x] README 配置参考补充「顺序稳定性」说明；CHANGELOG 记录该行为变更
+- [x] 测试数 83 → 86

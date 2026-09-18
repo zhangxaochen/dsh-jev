@@ -237,6 +237,7 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 
 ### `ToolPrunerConfig`
 - `maxTools?: number`: 上下文中最多保留的动态工具数量（默认 `8`）。
+- **顺序稳定性**：剪枝只决定「哪些工具留下」，不决定它们的排列——返回结果保持上游 `orderTools` 的顺序（`alwaysRetain` 工具也不会被提到最前）。工具块位于请求前部，顺序每轮变化会让可复用的前缀失效，因此这里刻意不做相关性排序。
 - `minScoreThreshold?: number`: 工具入选的最低相关性打分；实测刻度为 `[0, 2]`（3 级 rubric，默认 `2`）。
 - `alwaysRetain?: string[]`: 永远不被剪枝保留的核心工具（默认包含 `read_file`, `write_to_file`, `bash`, `run_command`）。
 

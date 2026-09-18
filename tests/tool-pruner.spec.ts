@@ -74,3 +74,77 @@ test('ToolPrunerService bypasses pruning when candidates <= maxTools', async () 
   assert.equal(result.length, 2)
   assert.deepEqual(result, candidates)
 })
+
+test('ToolPrunerService emits survivors in their original order', async () => {
+  // Scores deliberately disagree with the input order: the highest score is the
+  // last candidate. Relevance decides membership, never position.
+  const pruner = new ToolPrunerService(
+    () =>
+      new TypeSafeClient({
+        mockHandler: async () => ({
+          score_alpha: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+          score_mid: { type: 'score', score: 0.5, confidence: 0.9, probabilities: {} },
+          score_zeta: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+          score_omega: { type: 'score', score: 0.5, confidence: 0.9, probabilities: {} },
+        }),
+      }),
+    { maxTools: 3, minScoreThreshold: 2, alwaysRetain: [] }
+  )
+
+  const candidates: ToolDefinitionMinimal[] = [
+    { name: 'alpha', description: 'first' },
+    { name: 'mid', description: 'second' },
+    { name: 'zeta', description: 'third' },
+    { name: 'omega', description: 'fourth' },
+  ]
+
+  const result = await pruner.pruneTools('pick the two relevant tools', candidates)
+
+  assert.deepEqual(
+    result.map((tool) => tool.name),
+    ['alpha', 'zeta'],
+    'survivors must follow the input order, not the score order'
+  )
+})
+
+test('ToolPrunerService keeps always-retained tools in place rather than hoisting them', async () => {
+  const pruner = new ToolPrunerService(
+    () =>
+      new TypeSafeClient({
+        mockHandler: async () => ({
+          score_alpha: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+          score_beta: { type: 'score', score: 0.1, confidence: 0.9, probabilities: {} },
+          score_gamma: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+        }),
+      }),
+    { maxTools: 3, minScoreThreshold: 2, alwaysRetain: ['beta'] }
+  )
+
+  const candidates: ToolDefinitionMinimal[] = [
+    { name: 'alpha', description: 'a' },
+    { name: 'beta', description: 'b' },
+    { name: 'gamma', description: 'c' },
+  ]
+
+  const result = await pruner.pruneTools('any goal', candidates)
+  assert.deepEqual(result.map((tool) => tool.name), ['alpha', 'beta', 'gamma'])
+})
+
+test('ToolPrunerService returns the very same array when nothing needs pruning', async () => {
+  const pruner = new ToolPrunerService(
+    () =>
+      new TypeSafeClient({
+        mockHandler: async () => {
+          throw new Error('must not call the model when the candidate set already fits')
+        },
+      }),
+    { maxTools: 5 }
+  )
+
+  const candidates: ToolDefinitionMinimal[] = [
+    { name: 'a', description: 'a' },
+    { name: 'b', description: 'b' },
+  ]
+  const result = await pruner.pruneTools('goal', candidates)
+  assert.equal(result, candidates, 'a fitting candidate set must pass through untouched')
+})

@@ -154,7 +154,13 @@ export class ToolPrunerService {
         .slice(0, capacity)
         .map((item) => item.tool)
 
-      const finalTools = [...retainedTools, ...selected]
+      // Emit the surviving tools in their original order. Score order would
+      // reshuffle the model-facing tool block every turn, and this block sits
+      // near the start of the request, so any change invalidates the reusable
+      // prefix. Selection decides *which* tools survive; it must not decide
+      // where they appear.
+      const keep = new Set<ToolDefinitionMinimal>([...retainedTools, ...selected])
+      const finalTools = candidates.filter((tool) => keep.has(tool))
       const prunedTools = evaluateCandidates.filter((item) => !selected.includes(item))
       defaultMetrics.recordPrune(
         candidates.length,
