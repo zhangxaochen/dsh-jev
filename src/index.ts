@@ -20,7 +20,7 @@ export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } f
 export const name = 'dsh-jev'
 
 export const inject = {
-  optional: ['tools', 'webServer', 'typesafe', 'systemPrompt'],
+  optional: ['tools', 'connection', 'webServer', 'typesafe', 'systemPrompt'],
 }
 
 /**
@@ -112,13 +112,47 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
     }
   }
 
-  // 6. Mount web route for HTTP / RPC inspection if webServer is available
+  // 6. Mount Fetch route on connection service (/api/dsh-jev/stats)
+  // This is the canonical DSH route supported by both Desktop (dsh-app://) and Web HTTP servers.
+  const connection = typeof ctx.get === 'function' ? ctx.get('connection') : (ctx as any).connection
+  if (connection?.fetch && typeof connection.fetch.register === 'function') {
+    try {
+      const apiDisposer = connection.fetch.register({
+        path: '/api/dsh-jev/stats',
+        methods: ['GET', 'POST'],
+        requestBody: 'buffered',
+        fetch: async (request: Request) => {
+          if (request.method === 'POST') {
+            try {
+              const body = (await request.json()) as any
+              if (body && body.reset) {
+                defaultMetrics.reset()
+              }
+            } catch {}
+          }
+          return Response.json(defaultMetrics.getSnapshot(), {
+            headers: {
+              'content-type': 'application/json; charset=utf-8',
+              'cache-control': 'no-store',
+            },
+          })
+        },
+      })
+      if (typeof apiDisposer === 'function') {
+        disposers.push(apiDisposer)
+      }
+    } catch {
+      // Ignore route registration collisions
+    }
+  }
+
+  // 7. Mount web route for HTTP / RPC inspection if webServer is available
   const webServer = typeof ctx.get === 'function' ? ctx.get('webServer') : (ctx as any).webServer
   if (webServer && typeof webServer.register === 'function') {
     try {
       const routeDisposer = webServer.register({
         kind: 'exact',
-        path: '/dsh-jev/stats',
+        path: '/api/dsh-jev/stats',
         handler: (req: any, res: any) => {
           if (typeof res?.setHeader === 'function') {
             res.setHeader('Access-Control-Allow-Origin', '*')
@@ -132,7 +166,7 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
             return
           }
 
-          const url = new URL(req.url || '/dsh-jev/stats', 'http://localhost')
+          const url = new URL(req.url || '/api/dsh-jev/stats', 'http://localhost')
           if (req.method === 'POST' || url.searchParams.get('reset') === '1' || url.searchParams.get('reset') === 'true') {
             defaultMetrics.reset()
             if (req.method === 'POST') {

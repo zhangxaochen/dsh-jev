@@ -133,7 +133,7 @@ test('applySuite mounts jev_stats tool and stats web route', async () => {
 
   // Web route check
   assert.ok(registeredRoute)
-  assert.equal(registeredRoute.path, '/dsh-jev/stats')
+  assert.equal(registeredRoute.path, '/api/dsh-jev/stats')
 
   let jsonOutput = ''
   const fakeRes: any = {

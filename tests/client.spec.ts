@@ -25,7 +25,9 @@ test('Question definition helpers', () => {
 
 test('TypeSafeClient throws when API key is missing and no mock handler', async () => {
   const oldKey = process.env.TYPESAFE_API_KEY
+  const oldNodeEnv = process.env.NODE_ENV
   delete process.env.TYPESAFE_API_KEY
+  process.env.NODE_ENV = 'test'
 
   try {
     const client = new TypeSafeClient()
@@ -40,6 +42,11 @@ test('TypeSafeClient throws when API key is missing and no mock handler', async 
     )
   } finally {
     if (oldKey) process.env.TYPESAFE_API_KEY = oldKey
+    if (oldNodeEnv !== undefined) {
+      process.env.NODE_ENV = oldNodeEnv
+    } else {
+      delete process.env.NODE_ENV
+    }
   }
 })
 
