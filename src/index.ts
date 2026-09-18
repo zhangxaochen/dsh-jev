@@ -7,6 +7,9 @@ import * as ClientPlugin from './typesafe-client.js'
 import * as LoopGuardPlugin from './loop-guard.js'
 import * as SafetyGuardPlugin from './safety-guard.js'
 import * as ToolPrunerPlugin from './tool-pruner.js'
+import * as SkillRouterPlugin from './skill-router.js'
+import { registerJevTools } from './ask-tools.js'
+import { resolveClientFrom } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import type { CordisContext, TypeSafeSuiteConfig } from './types.js'
 
@@ -16,6 +19,8 @@ export * from './metrics.js'
 export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js'
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js'
 export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } from './tool-pruner.js'
+export { apply as applySkillRouter, name as skillRouterName, SkillRouterService } from './skill-router.js'
+export { registerJevTools } from './ask-tools.js'
 
 export const name = 'dsh-jev'
 
@@ -52,7 +57,24 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
     disposers.push(prunerDisposer)
   }
 
-  // 5. Mount Jev Metrics tool if tools service is available
+  // 5. Mount the agent-facing decision primitives
+  if (config.askTools !== false) {
+    try {
+      for (const dispose of registerJevTools(ctx, () => resolveClientFrom(ctx))) {
+        disposers.push(dispose)
+      }
+    } catch {
+      /* primitives are optional */
+    }
+  }
+
+  // 6. Mount the semantic skill router (advisory)
+  if (config.skillRouter !== false) {
+    const routerConfig = typeof config.skillRouter === 'object' ? config.skillRouter : {}
+    disposers.push(SkillRouterPlugin.apply(ctx, routerConfig))
+  }
+
+  // 7. Mount Jev Metrics tool if tools service is available
   let toolsRegistered = false
   const registerTools = (targetCtx: CordisContext) => {
     if (toolsRegistered) return

@@ -110,3 +110,18 @@ node --experimental-strip-types bench/run.ts --offline  # 回放录制答案，�
 
 - `inputBytesTotal` / `estimatedCostUsd` 在 bench 中仍为 0：bench 直接调用客户端，未接 `defaultMetrics`。真实会话中的费用由 `/api/dsh-jev/stats` 提供。
 - 每次判决都会追加到 `~/.dsh/jev-decisions.jsonl`（含 pass 的负样本），`DecisionLog.summarize()` 给出各模块的置信度分布，供后续阈值复核。
+
+## 5. Phase 3 决策原语线上验证（`node --experimental-strip-types tests/live-tools.ts`）
+
+| 原语 | 实测 |
+|---|---|
+| `jev_ask`（3 个问题一次请求） | `needs_review=0.84`、`risk=1.06`(confidence 0.71)、`area=guard`(confidence 1)，共 **811ms** |
+| `jev_rank`（3 个候选） | `src/loop-guard.ts` 1.83 > `bench/cases.jsonl` 0.09 > `README.md` 0.08，共 **666ms** |
+| `jev_check`（正向） | `"every test passes"` → `holds=true`, p=0.99 |
+| `jev_check`（反向） | `"the safety guard still fails closed"` 对「删掉 fail-closed 分支的 diff」→ `holds=false`, p=0.04 |
+
+要点：批量提问是同一次请求（验证 `Object.keys(questions).length === 4` 的单测覆盖），延迟与 §1.5 的热调用区间一致（250–800ms）。
+
+### 5.1 skill 路由
+
+`SkillRouterService` 复用同一套 score 评分：目录小于 `minCandidates`（默认 8）、请求过短、或与上一轮请求相同（FNV-1a 指纹）时**不发起调用**；命中后把建议写进 `assembly.contexts` 的 `typesafe-skill-router` 条目（同名条目替换而非堆叠），低于 `minScore`/`minConfidence` 时保持沉默。全部路径 fail-open：`skills.list()` 抛错时 prompt 原样返回（单测覆盖）。

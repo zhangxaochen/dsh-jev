@@ -9,6 +9,8 @@ export * from './metrics.js';
 export { apply as applyLoopGuard, name as loopGuardName } from './loop-guard.js';
 export { apply as applySafetyGuard, name as safetyGuardName } from './safety-guard.js';
 export { apply as applyToolPruner, name as toolPrunerName, ToolPrunerService } from './tool-pruner.js';
+export { apply as applySkillRouter, name as skillRouterName, SkillRouterService } from './skill-router.js';
+export { registerJevTools } from './ask-tools.js';
 export declare const name = "dsh-jev";
 export declare const inject: string[];
 /**

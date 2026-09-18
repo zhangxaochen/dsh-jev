@@ -64,8 +64,8 @@
 
 ## Phase 3 — 决策原语与 skill 路由
 
-- [ ] `src/ask-tools.ts`：注册 `jev_ask` / `jev_rank` / `jev_check`
-- [ ] `src/skill-router.ts`：复用评分逻辑做 skill Top-1 路由（advisory）
+- [x] `src/ask-tools.ts`：注册 `jev_ask` / `jev_rank` / `jev_check`
+- [x] `src/skill-router.ts`：复用评分逻辑做 skill Top-1 路由（advisory）
 
 ## Phase 4 — 语义结果整形（opt-in）
 

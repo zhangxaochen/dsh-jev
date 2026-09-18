@@ -214,6 +214,24 @@ export interface SafetyGuardConfig {
   rules?: SafetyRule[]
 }
 
+/** Registry summary shape the skill router consumes (structural, host-agnostic). */
+export interface SkillSummary {
+  name: string
+  description?: string
+  whenToUse?: string
+}
+
+export interface SkillRouterConfig {
+  /** Skip routing below this catalog size (default 8). */
+  minCandidates?: number
+  /** Skip routing for shorter requests (default 12 characters). */
+  minIntentChars?: number
+  /** Minimum applicability score to advise a skill, on the [0, 2] scale (default 1.5). */
+  minScore?: number
+  /** Minimum answer confidence to advise a skill (default 0.5). */
+  minConfidence?: number
+}
+
 export interface ToolPrunerConfig {
   /** Max tools to keep in active context (default: 5) */
   maxTools?: number
@@ -228,4 +246,7 @@ export interface TypeSafeSuiteConfig {
   loopGuard?: LoopGuardConfig | boolean
   safetyGuard?: SafetyGuardConfig | boolean
   toolPruner?: ToolPrunerConfig | boolean
+  /** Agent-facing decision primitives (`jev_ask`, `jev_rank`, `jev_check`), default true. */
+  askTools?: boolean
+  skillRouter?: SkillRouterConfig | boolean
 }

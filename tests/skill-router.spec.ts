@@ -1,0 +1,134 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { apply, DEFAULT_MIN_CANDIDATES, SkillRouterService, toCandidates } from '../lib/skill-router.js'
+import { TypeSafeClient } from '../lib/typesafe-client.js'
+import type { CordisContext, SkillSummary } from '../lib/types.js'
+
+function skills(count: number): SkillSummary[] {
+  return Array.from({ length: count }, (_, index) => ({
+    name: 'skill-' + index,
+    description: 'does thing ' + index,
+  }))
+}
+
+function service(mock: () => Promise<Record<string, unknown>>, config: Record<string, unknown> = {}) {
+  return new SkillRouterService(() => new TypeSafeClient({ mockHandler: mock }), config)
+}
+
+test('toCandidates maps registry summaries onto router candidates', () => {
+  const candidates = toCandidates([{ name: 'a', description: 'd', whenToUse: 'w' }])
+  assert.deepEqual(candidates, [{ name: 'a', description: 'd', whenToUse: 'w' }])
+  assert.deepEqual(toCandidates([{ name: 'b' }]), [{ name: 'b', description: '', whenToUse: undefined }])
+})
+
+test('shouldRoute skips small catalogs, short requests and repeated intent', () => {
+  const router = service(async () => ({}), {})
+  const catalog = skills(DEFAULT_MIN_CANDIDATES + 2)
+
+  assert.equal(router.shouldRoute('a request long enough to judge', skills(2)), false)
+  assert.equal(router.shouldRoute('too short', catalog), false)
+  assert.equal(router.shouldRoute('a request long enough to judge', catalog), true)
+  assert.equal(
+    router.shouldRoute('a request long enough to judge', catalog),
+    false,
+    'an unchanged request must not be routed twice'
+  )
+  assert.equal(router.shouldRoute('a different request of length', catalog), true)
+})
+
+test('route picks the highest scoring skill', async () => {
+  const router = service(async () => ({
+    'skill_skill-0': { type: 'score', score: 0.3, confidence: 0.9, probabilities: {} },
+    'skill_skill-1': { type: 'score', score: 1.9, confidence: 0.8, probabilities: {} },
+    'skill_skill-2': { type: 'score', score: 1.1, confidence: 0.7, probabilities: {} },
+  }))
+  const best = await router.route('please audit this diff for security issues', skills(3))
+  assert.equal(best?.name, 'skill-1')
+  assert.equal(best?.score, 1.9)
+})
+
+test('advise stays silent below threshold and does not repeat itself', async () => {
+  const weak = service(async () => ({ 'skill_skill-0': { type: 'score', score: 1.0, confidence: 0.9, probabilities: {} } }))
+  assert.equal(await weak.advise('some request text', skills(1)), undefined)
+
+  const strong = service(async () => ({ 'skill_skill-0': { type: 'score', score: 1.8, confidence: 0.9, probabilities: {} } }))
+  const first = await strong.advise('some request text', skills(1))
+  assert.equal(first?.name, 'skill-0')
+  assert.match(first?.text ?? '', /looks directly applicable/)
+  assert.equal(await strong.advise('some request text', skills(1)), undefined, 'the same skill is advised once')
+})
+
+test('apply injects one advisory context into the assembled prompt', async () => {
+  let assembleHandler: any
+  const ctx: CordisContext = {
+    on: (event: string, callback: any) => {
+      if (event === 'system-prompt/assemble') assembleHandler = callback
+      return () => {}
+    },
+    get: (name: string) =>
+      name === 'skills'
+        ? { list: async () => skills(12) }
+        : name === 'typesafe'
+          ? new TypeSafeClient({
+              mockHandler: async () => ({ 'skill_skill-3': { type: 'score', score: 1.7, confidence: 0.8, probabilities: {} } }),
+            })
+          : undefined,
+  }
+
+  apply(ctx, {})
+  const assembly: any = {
+    sections: [{ name: 'persona', text: 'you are a careful engineer working on a long task' }],
+    contexts: [],
+    tools: [],
+  }
+  const result = await assembleHandler(assembly, {}, async () => assembly)
+
+  assert.equal(result.contexts.length, 1)
+  assert.equal(result.contexts[0].name, 'typesafe-skill-router')
+  assert.match(result.contexts[0].text, /skill-3/)
+
+  // A second pass replaces the previous advice instead of stacking it.
+  const again = await assembleHandler(
+    { ...assembly, sections: [{ name: 'persona', text: 'another distinctly different request body' }] },
+    {},
+    async () => assembly
+  )
+  assert.ok(again.contexts.filter((entry: any) => entry.name === 'typesafe-skill-router').length <= 1)
+})
+
+test('apply leaves the prompt untouched without a skills service or on failure', async () => {
+  let assembleHandler: any
+  const bare: CordisContext = {
+    on: (event: string, callback: any) => {
+      if (event === 'system-prompt/assemble') assembleHandler = callback
+      return () => {}
+    },
+  }
+  apply(bare, {})
+  const assembly: any = { sections: [{ name: 'p', text: 'a sufficiently long request body' }], contexts: [], tools: [] }
+  const untouched = await assembleHandler(assembly, {}, async () => assembly)
+  assert.deepEqual(untouched.contexts, [])
+
+  let failing: any
+  const broken: CordisContext = {
+    on: (event: string, callback: any) => {
+      if (event === 'system-prompt/assemble') failing = callback
+      return () => {}
+    },
+    get: (name: string) =>
+      name === 'skills'
+        ? {
+            list: async () => {
+              throw new Error('provider exploded')
+            },
+          }
+        : undefined,
+  }
+  apply(broken, {})
+  const stillFine = await failing(
+    { sections: [{ name: 'p', text: 'a sufficiently long request body' }], contexts: [], tools: [] },
+    {},
+    async () => ({ sections: [], contexts: [], tools: [] })
+  )
+  assert.deepEqual(stillFine.contexts, [])
+})
