@@ -238,13 +238,25 @@ export function apply(ctx: CordisContext, config: SkillRouterConfig = {}) {
 
       if (!router.shouldRoute(intent, summaries)) return proceed()
 
-      const advice = await router.advise(intent, summaries)
-      if (!advice) return proceed()
+      // Start the routing call before handing the assembly downstream, so it runs
+      // while the pruner makes its own call. Measured on the real assembly: the two
+      // calls ran back to back (0ms -> 772ms, then 955ms -> 1908ms), so overlapping
+      // them removes one whole call from the critical path of every turn without
+      // adding a request (docs/calibration.md §20). The advice depends only on the
+      // intent and the skill catalog, neither of which the downstream listeners touch.
+      const pending = router.advise(intent, summaries).catch((err) => {
+        console.warn('[TypeSafe SkillRouter] Routing failed, continuing without advice:', err)
+        return undefined
+      })
+
+      const downstream = await proceed()
+      const advice = await pending
+      if (!advice) return downstream
 
       const contexts = Array.isArray(assembly.contexts) ? assembly.contexts : []
       const withoutStale = contexts.filter((entry: any) => entry?.name !== 'typesafe-skill-router')
       assembly.contexts = [...withoutStale, { name: 'typesafe-skill-router', text: advice.text }]
-      return proceed()
+      return downstream
     } catch (err) {
       // Advisory only: a routing failure must never disturb prompt assembly.
       console.warn('[TypeSafe SkillRouter] Routing failed, continuing without advice:', err)

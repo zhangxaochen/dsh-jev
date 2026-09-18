@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { measureRemovedTools, ToolPrunerService } from '../lib/tool-pruner.js'
+import { apply, measureRemovedTools, ToolPrunerService } from '../lib/tool-pruner.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { ToolDefinitionMinimal } from '../lib/types.js'
 
@@ -273,4 +273,62 @@ test('measureRemovedTools prices through the meter and falls back when it refuse
     estimatedTokens: 0,
     tokenSource: 'heuristic',
   })
+})
+
+test('the pruner starts ranking before the rest of the assembly runs', async () => {
+  // This listener runs first in the waterfall, so awaiting the ranking here would
+  // make every later listener wait for it. Measured on the real assembly the two
+  // calls ran back to back (0 -> 772ms, then 955 -> 1908ms); starting this one early
+  // overlaps them and removes a call from the critical path of every turn.
+  let handler: any
+  const starts: number[] = []
+  let downstreamResolvedAt = 0
+
+  const client = new TypeSafeClient({
+    mockHandler: async () => {
+      starts.push(Date.now())
+      return {
+        score_alpha: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+        score_beta: { type: 'score', score: 2, confidence: 0.9, probabilities: {} },
+        score_gamma: { type: 'score', score: 0, confidence: 0.9, probabilities: {} },
+        score_delta: { type: 'score', score: 0, confidence: 0.9, probabilities: {} },
+      }
+    },
+  })
+
+  const ctx: any = {
+    on: (event: string, callback: any) => {
+      if (event === 'system-prompt/assemble') handler = callback
+      return () => {}
+    },
+    get: () => undefined,
+    typesafe: client,
+  }
+  apply(ctx, { maxTools: 2 })
+
+  const assembly: any = {
+    tools: [
+      { name: 'alpha', description: 'a' },
+      { name: 'beta', description: 'b' },
+      { name: 'gamma', description: 'c' },
+      { name: 'delta', description: 'd' },
+    ],
+    sections: [{ text: 'run the tests and fix the failing assertion' }],
+  }
+
+  const downstream = async () => {
+    // Stands in for the listeners that follow, each of which makes its own call.
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    downstreamResolvedAt = Date.now()
+    return assembly
+  }
+
+  await handler(assembly, {}, downstream)
+
+  assert.equal(starts.length, 1, 'the ranking call must happen exactly once')
+  assert.ok(
+    starts[0] < downstreamResolvedAt,
+    'the ranking must start before the downstream chain resolves, or the calls serialise'
+  )
+  assert.equal(assembly.tools.length, 2, 'and its result must still be applied')
 })

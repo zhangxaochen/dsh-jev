@@ -294,7 +294,7 @@ test('the delivery summary counts each module as it stands', () => {
     ['typesafe-client', ['client.spec.ts', 'resilience.spec.ts'], 12],
     ['loop-guard', ['loop-guard.spec.ts'], 13],
     ['safety-guard', ['safety-guard.spec.ts'], 11],
-    ['tool-pruner', ['tool-pruner.spec.ts'], 8],
+    ['tool-pruner', ['tool-pruner.spec.ts'], 9],
     ['ask-tools', ['ask-tools.spec.ts'], 7],
     ['skill-router', ['skill-router.spec.ts'], 9],
     ['result-shaper', ['result-shaper.spec.ts'], 12],
