@@ -495,3 +495,28 @@ const gate = await this.ctx.waterfall(carrier, "tools/pre-execute", exec,
 | `lib/*.js` 整体 | 93.89% | **94.91%** |
 
 部分提升来自**删除不可达分支**——这也是诚实的读法：分子没变，分母变小了，同时风险降低。
+
+## 16. 把 README 对宿主的论断变成闸门（2026-09-19）
+
+第 15 轮暴露出一个模式：文档里对 DSH 的**技术论断**（钩子形状）写错了没人发现，直到覆盖率审计顺手撞上。README 的「与 DSH 内置能力的分工」表里还有几条同类论断，其中一条是**功能依赖**而非描述：
+
+> `loopGuard.deferExactRepeats: true` 主动让位给 DSH 的 `dsh-repeat-tool-reminder`（阈值 3/5/8）
+
+如果该内置包改名或改阈值，本插件的默认行为就建立在不存在的假设上——而 README 只会静静地说错。
+
+### 16.1 新增 `tests/dsh-contract.spec.ts`（4 项，无 DSH 时整体跳过）
+
+| 断言 | 依据 |
+|---|---|
+| README 点名的三个内置包**确实已安装** | `dsh-repeat-tool-reminder` / `dsh-spill-policy` / `dsh-compaction-tool-result-pruner` |
+| 重复提醒仍以 **`[3, 5, 8]`** 为 `thresholds` 默认值 | 读其 zod 配置默认值（README 写的就是这三个数） |
+| 已安装的 DSH **满足 `engines.dsh`** | `package.json` 的 `>=0.1.5-rc.2` 与实际 `0.1.5-rc.2` 逐段比较（含预发布语义：正式版高于自身的预发布） |
+| 钩子派发的实参形态 | `pre-execute` 的载荷是 `exec`、`post-execute` 是 `exec, result`（读宿主调用点），并**行为验证** post-execute：真实服务调用下监听器恰好收到 `(exec, result, next)` 三个参数 |
+
+### 16.2 边界说明（诚实标注）
+
+- 这是**源码文本 + 真实服务行为**的混合检查。文本部分会因宿主重排而失败——失败时的正确动作是**重新核对签名**，而不是放宽断言，这一点写在断言消息里。
+- 表中「内置包明确『近义变体不做，缺证据』」这类**引文**仍无法机器校验，属于人工阅读结论，保留在文档中但不假装已被覆盖。
+- 无 DSH 的机器上 4 项全部跳过（实测 `pass 0 / skipped 4`），CI 的跳过路径不变。
+
+新增演练条目：把 `engines.dsh` 抬到 `>=99.0.0` → 该闸门必须失败。

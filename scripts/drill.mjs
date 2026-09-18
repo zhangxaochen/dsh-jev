@@ -128,6 +128,15 @@ const drills = [
   // unreachable rather than wrong and there is no regression to inject. The
   // contract it obscured is pinned by the safety-guard case instead.
   {
+    // The published engine range is a claim about the host; raising it above the
+    // installed version must fail the contract gate.
+    name: 'published engine range stops matching the host',
+    file: 'package.json',
+    from: '"dsh": ">=0.1.5-rc.2"',
+    to: '"dsh": ">=99.0.0"',
+    test: 'tests/dsh-contract.spec.ts',
+  },
+  {
     // verify:live is the evidence that the historical loop-guard false positives
     // are gone, and it used to restate the thresholds instead of calling the rule.
     name: 'loop guard threshold change reaches verify:live',
