@@ -26,6 +26,7 @@ import * as LoopGuard from '../lib/loop-guard.js'
 import * as SafetyGuard from '../lib/safety-guard.js'
 import * as ToolPruner from '../lib/tool-pruner.js'
 import * as ResultShaper from '../lib/result-shaper.js'
+import * as SkillRouter from '../lib/skill-router.js'
 import { join as joinPath } from 'node:path'
 
 /** Locate the cordis package the host actually loaded. */
@@ -391,6 +392,57 @@ try {
   )
 } catch (err) {
   check('service-level assembly pass runs', false, err instanceof Error ? err.message : String(err))
+}
+
+// 9. The skill router against the real registry: the catalog shape it consumes,
+//    and a single advisory context in the assembled prompt.
+try {
+  const nm = joinPath(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules')
+  const loadPkg = (pkg) => import(pathToFileURL(joinPath(nm, pkg, 'lib', 'index.js')).href)
+  const SystemPrompt = await loadPkg('@deepseek-ai/dsh-system-prompt')
+  const Skills = await loadPkg('@deepseek-ai/dsh-skill')
+  const SkillFs = await loadPkg('@deepseek-ai/dsh-skill-filesystem')
+
+  const skillCtx = new Context()
+  skillCtx.plugin(SystemPrompt.default ?? SystemPrompt)
+  skillCtx.plugin(Skills.default ?? Skills)
+  skillCtx.plugin(SkillFs.default ?? SkillFs)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+
+  const registry = skillCtx.get('skills')
+  const catalog = await registry.list({})
+  check(
+    'the real skill catalog carries the summary shape the router consumes',
+    Array.isArray(catalog) && catalog.every((entry) => typeof entry.name === 'string' && typeof entry.description === 'string'),
+    'catalog=' + catalog.length
+  )
+
+  ClientPlugin.apply(skillCtx, {
+    mockHandler: async (req) => {
+      const answers = {}
+      for (const id of Object.keys(req.questions ?? {})) {
+        answers[id] = { type: 'score', score: 2, confidence: 0.9, probabilities: { '0': 0, '1': 0, '2': 1 } }
+      }
+      return answers
+    },
+  })
+  SkillRouter.apply(skillCtx, { minCandidates: 3 })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  const assembled = await skillCtx.systemPrompt.assemble({})
+  const advice = (assembled.contexts ?? []).filter((entry) => entry.name === 'typesafe-skill-router')
+  check(
+    'the router advises exactly one skill through the real prompt assembly',
+    advice.length === 1 && /looks directly applicable/.test(advice[0]?.text ?? ''),
+    'entries=' + advice.length
+  )
+
+  // A second assembly must replace the advice, never stack it.
+  const again = await skillCtx.systemPrompt.assemble({})
+  const stacked = (again.contexts ?? []).filter((entry) => entry.name === 'typesafe-skill-router')
+  check('assembling again does not stack a second advice entry', stacked.length <= 1, 'entries=' + stacked.length)
+} catch (err) {
+  check('service-level skill-routing pass runs', false, err instanceof Error ? err.message : String(err))
 }
 
 const failed = results.filter((entry) => !entry.ok)

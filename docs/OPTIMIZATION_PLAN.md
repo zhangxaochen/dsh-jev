@@ -286,3 +286,12 @@
 - [x] 收紧断言：集成校验原先用 `contexts ?? additionalContexts` 回退，无法分辨哪个键真正生效；现改为断言**服务实际合并的那个键**（输出 `additionalContexts=1`）
 - [x] 新增单测：两个键各含 1 条且 `id` 相同（防止未来出现双份注入）
 - [x] 测试数 98 → 99
+
+## Phase 5 补充记录（skill 路由的服务级覆盖，Round 28）
+
+`skill-router` 是最后一个缺服务级覆盖的模块——它依赖真实 `ctx.skills` 的目录形状与规模，与此前「字符串 vs 块内容」「contexts vs additionalContexts」同类假设，从未在真实注册表上验证。
+
+- [x] 实测真实注册表：`ctx.skills.list({})` 返回 **112 个 skill**，摘要字段为 `name,path,description,invocation,source,provider,resourceBase`——与 `SkillSummary` 一致（`whenToUse` 为可选，首个条目就没有该字段，代码按可选处理 ✓）
+- [x] 集成校验新增 3 项（现 **18/18**）：真实目录满足路由消费的形状；装配后恰好一条 `typesafe-skill-router` 建议且文案含「looks directly applicable」；再次装配不会堆叠第二条
+- [x] README 补充该模块语义：同一意图只建议一次（指纹相同即跳过，既不重复调用模型也不重复注入）；每轮装配最多一条同名条目；`skills.list()` 抛错时 prompt 原样返回
+- [x] 至此**五个模块全部具备服务级（真实 DSH 服务）覆盖**

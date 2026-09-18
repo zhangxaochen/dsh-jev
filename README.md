@@ -221,6 +221,7 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `minIntentChars?: number`: 请求文本短于该长度不做路由（默认 `12`）。
 - `minScore?: number`: 建议 skill 的最低适用性打分，刻度 `[0, 2]`（默认 `1.5`）。
 - `minConfidence?: number`: 建议所需的最低答案置信度（默认 `0.5`）。
+- **语义**：同一意图只在首次装配时给出一次建议（指纹相同即跳过，不重复调用模型也不重复注入）；每轮装配最多一条 `typesafe-skill-router` 条目，同名替换而非堆叠；低于分/置信度阈值时保持沉默；`skills.list()` 抛错时 prompt 原样返回。
 
 ### `ResultShaperConfig`（**默认关闭**）
 - `shapeTools?: string[]`: 允许整形的输出密集型工具（默认 `bash` / `pwsh` / `terminal` / `run_command` / `execute_command`）。
