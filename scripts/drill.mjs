@@ -128,6 +128,15 @@ const drills = [
   // unreachable rather than wrong and there is no regression to inject. The
   // contract it obscured is pinned by the safety-guard case instead.
   {
+    // The shipped patch is what every user actually runs; a value that drifts from
+    // the code default must fail rather than silently contradict the docs.
+    name: 'the shipped patch drifts from the code default',
+    file: 'cordis.patch.yml',
+    from: '          pLoopThreshold: 0.6',
+    to: '          pLoopThreshold: 0.95',
+    test: 'tests/packaging.spec.ts',
+  },
+  {
     // The research record points at the sections and files holding its evidence;
     // a stale citation must fail rather than send a reader nowhere.
     name: 'the research record cites a section that does not exist',

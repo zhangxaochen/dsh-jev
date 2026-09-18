@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **140** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **142** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -599,3 +599,12 @@
 - [x] **发现用户会踩的坑**（来自 `dsh-base/cordis.patch.yml` 原文）：*"A patch replaces the targeted row's whole `config` rather than merging into it … the last write winning per row."* —— 即补丁是**整行替换**，用户若只写要改的那个键，会连带丢掉该行其余配置（如 `guardedTools`、`alwaysRetain`、`client.apiKey`）。README「方式 2」此前**没有这个警告**，已补上并引用宿主原文
 - [x] 按 §16 的做法把该语义也变成闸门：断言宿主文件仍声明同一语义（跨行注释先归一化再匹配）且 README 保留该警告 —— 若 DSH 将来改为深度合并，警告会失效并由该断言暴露
 - [x] 测试数 138 → 140（`dsh-contract` 6 项，无 DSH 时跳过）
+
+## Phase 5 补充记录（随包补丁数值漂移守卫，Round 60）
+
+- [x] 发现同类缺口：`packaging.spec.ts` 只断言补丁的**键合法**与两个列表 ⊇ 库默认，**没有任何闸门**比较补丁里钉住的**数值**与代码默认值。由于补丁整行替换（§Round 59），这些数值正是每个用户实际运行的值——代码改默认而补丁留旧值，部署行为会与文档默认**静默背离**（README 有 docs-consistency 守卫，补丁没有）
+- [x] 新增守卫「补丁钉住的每个标量都必须等于代码默认，且必须在本测试**登记**」：未登记的新键会失败（提示「register it here」），因此将来新增钉住项无法绕过
+- [x] 新增守卫「随包补丁不得开启实验性 shaper」：`resultShaper` 与 `askTools` 均不得出现在补丁里（前者是 opt-in 契约，后者应依赖代码默认）
+- [x] 首次运行时发现我的断言写错了（要求补丁必须钉住 `minKeep`/`minIntentChars`）——补丁省略即回退代码默认，行为正确；改为「登记的键必须匹配」后通过
+- [x] **牙齿验证**：把补丁的 `pLoopThreshold` 改成 0.95 → 报 `cordis.patch.yml pins pLoopThreshold away from the code default`；已加演练条目永久化
+- [x] 测试数 140 → 142

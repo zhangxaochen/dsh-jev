@@ -12,7 +12,24 @@ import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import vm from 'node:vm'
-import { DEFAULT_GUARDED_TOOLS } from '../lib/safety-guard.js'
+import {
+  DEFAULT_ASK_APPROVAL_THRESHOLD,
+  DEFAULT_BLOCK_THRESHOLD,
+  DEFAULT_GUARDED_TOOLS,
+} from '../lib/safety-guard.js'
+import {
+  DEFAULT_COOLDOWN_STEPS,
+  DEFAULT_MAX_HISTORY,
+  DEFAULT_MIN_CONFIDENCE,
+  DEFAULT_NO_PROGRESS_THRESHOLD,
+  DEFAULT_P_LOOP_THRESHOLD,
+  DEFAULT_TRIGGER_THRESHOLD,
+} from '../lib/loop-guard.js'
+import {
+  DEFAULT_MAX_TOOLS,
+  DEFAULT_MIN_INTENT_CHARS,
+  DEFAULT_MIN_KEEP,
+} from '../lib/tool-pruner.js'
 import { DEFAULT_ALWAYS_RETAIN } from '../lib/tool-pruner.js'
 
 const ROOT = process.cwd()
@@ -195,4 +212,76 @@ test('the settings panel polls the route the host actually registers', () => {
 
   const bundle = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8')
   assert.ok(bundle.includes(requested[1]), 'the built panel must carry the same endpoint')
+})
+
+/** The scalar value pinned for one `key:` inside the shipped config. */
+function patchScalar(key) {
+  const line = PATCH.split('\n').find((entry) => entry.trim().startsWith(key + ':'))
+  assert.ok(line, 'cordis.patch.yml does not configure ' + key)
+  const raw = line.trim().slice(key.length + 1).trim()
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  const asNumber = Number(raw)
+  return Number.isFinite(asNumber) && raw.length > 0 ? asNumber : raw
+}
+
+/** Every scalar pinned inside the shipped config: `key: value` on one line. */
+function patchScalars() {
+  const lines = PATCH.split('\n')
+  const start = lines.findIndex((line) => line.trim() === 'config:')
+  assert.ok(start >= 0, 'cordis.patch.yml has no config block')
+  const configIndent = lines[start].length - lines[start].trimStart().length
+  const scalars = {}
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim().length === 0 || line.trimStart().startsWith('#')) continue
+    const indent = line.length - line.trimStart().length
+    if (indent <= configIndent) break
+    const match = line.match(/^\s+(\w+):\s+(\S+)\s*$/)
+    if (!match) continue
+    const raw = match[2]
+    scalars[match[1]] = raw === 'true' ? true : raw === 'false' ? false : Number.isFinite(Number(raw)) ? Number(raw) : raw
+  }
+  return scalars
+}
+
+test('every value the shipped bundle pins still matches the code default', () => {
+  // A patch replaces the row's whole config, so these values are what every user
+  // actually runs. If a code default moves and the patch keeps the old number, the
+  // deployed behaviour silently contradicts the documented default: the README is
+  // checked against the code, but nothing checked the patch. Keys the patch omits
+  // fall back to the code default by construction, so absence is fine.
+  const DEFAULTS = {
+    triggerThreshold: DEFAULT_TRIGGER_THRESHOLD,
+    noProgressThreshold: DEFAULT_NO_PROGRESS_THRESHOLD,
+    pLoopThreshold: DEFAULT_P_LOOP_THRESHOLD,
+    minConfidence: DEFAULT_MIN_CONFIDENCE,
+    cooldownSteps: DEFAULT_COOLDOWN_STEPS,
+    maxHistory: DEFAULT_MAX_HISTORY,
+    deferExactRepeats: true,
+    blockThreshold: DEFAULT_BLOCK_THRESHOLD,
+    askApprovalThreshold: DEFAULT_ASK_APPROVAL_THRESHOLD,
+    onError: 'deny-guarded',
+    onUncertain: 'deny-guarded',
+    maxTools: DEFAULT_MAX_TOOLS,
+    minScoreThreshold: 2,
+    minIntentChars: DEFAULT_MIN_INTENT_CHARS,
+    minKeep: DEFAULT_MIN_KEEP,
+  }
+
+  const pinned = patchScalars()
+  assert.ok(Object.keys(pinned).length > 0, 'the shipped patch should pin the reviewed defaults')
+
+  for (const [key, value] of Object.entries(pinned)) {
+    assert.ok(
+      Object.hasOwn(DEFAULTS, key),
+      'cordis.patch.yml pins "' + key + '"; register it here so a code default change cannot drift past'
+    )
+    assert.equal(value, DEFAULTS[key], 'cordis.patch.yml pins ' + key + ' away from the code default')
+  }
+})
+test('the shipped bundle leaves the experimental shaper off', () => {
+  // result-shaper changes what the model sees and is opt-in; shipping a patch that
+  // enables it would contradict both the README and the module's own contract.
+  assert.doesNotMatch(PATCH, /^\s*resultShaper:/m, 'the shipped patch must not enable resultShaper')
+  assert.doesNotMatch(PATCH, /^\s*askTools:/m, 'the shipped patch should lean on the code default here')
 })
