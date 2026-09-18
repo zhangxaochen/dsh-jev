@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **165** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **166** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -844,3 +844,10 @@
 - [x] **测量后决定不改**：收益只在 shaper 开启时出现（opt-in、默认关闭；关闭时 waterfall 终点立即 resolve，重叠零收益），而代价是重构 `loop-guard` 的 post-execute 监听器——正是历史上因漏调用 `next()` 导致 agent loop 崩溃的那一处。风险/收益不成比例；已在 §20.4 写明「何时应重新考虑」
 - [x] **排除一处伪成本**：先前测量中剪枝到路由之间有 183ms 空隙，怀疑是路由器每次列举 112 项技能；实测该服务**自身缓存**目录（173ms → 0ms → 0ms → 0ms），故非每轮成本，无需处理
 - [x] `docs/calibration.md` §20.4 / §20.5 记录
+
+## Phase 5 补充记录（调用预算与一处静默失效的断言，Round 92）
+
+- [x] 把上一轮建立的性质「**重叠但不增加调用**」变成可观测断言：`verify:turn` 现统计组装期调用数并断言 **≤2**（剪枝 + 路由），输出形如 `assemble: 1455ms / 2 call(s)`
+- [x] 顺带发现 rehearsal 自身一处**静默失效的断言**：turn 预算检查被写在统计与打印循环**之后** → 从未被评估、从未被打印，超出预算也不会报错。已移到循环之前，现输出 `ok the semantic layer fits a practical turn budget (3411ms of 15000ms)`
+- [x] rehearsal 由 4 项增至 **6 项**；新增守卫断言文档中的 `verify:turn N/N` 与脚本中的 `check(` 数一致（与 `verify:host` 同一手法）
+- [x] 测试数 165 → 166

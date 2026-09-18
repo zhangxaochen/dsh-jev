@@ -379,3 +379,21 @@ test('the documented host-acceptance size matches the script', () => {
     assert.equal(value, checks, 'a documented acceptance size disagrees with the script')
   }
 })
+
+test('the documented rehearsal size matches the script', () => {
+  // The whole-turn rehearsal grew from four checks to six when the call budget and
+  // the key probe landed; its size is quoted in the index, so it is read from the
+  // script. One of those checks had been added after the reporting loop, so it was
+  // never printed and never counted until this round.
+  const script = readFileSync(join(cwd(), 'tests', 'live-turn.ts'), 'utf8')
+  const checks = (script.match(/^\s{2}check\(/gm) ?? []).length
+  assert.ok(checks >= 5, 'the rehearsal should carry its checks explicitly')
+
+  const report = readFileSync(join(cwd(), 'docs', 'verification-report.md'), 'utf8')
+  const claimed = [...report.matchAll(/`verify:turn`[^\n]*?(\d+)\/(\d+)/g)]
+  assert.ok(claimed.length >= 1, 'the index should quote the rehearsal size')
+  for (const match of claimed) {
+    assert.equal(Number(match[1]), checks, 'the documented rehearsal size disagrees with the script')
+    assert.equal(Number(match[2]), checks, 'the documented rehearsal pass count disagrees with the script')
+  }
+})

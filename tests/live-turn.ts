@@ -114,6 +114,17 @@ async function main(): Promise<void> {
     })
   }
 
+  // Count the calls the assembly makes. Overlapping the pruner's and the router's
+  // ranking removed one from the critical path without adding any: the property is
+  // "same calls, less time", so it is asserted rather than only timed.
+  const client = ctx.get('typesafe')
+  const callLog: number[] = []
+  const originalSystemOne = client.systemOne.bind(client)
+  ;(client as any).systemOne = async (req: any, options: any) => {
+    callLog.push(Date.now())
+    return originalSystemOne(req, options)
+  }
+
   const catalog = await ctx.get('skills').list({})
   // Two halves, two intents: the tool surface is decided against repository work,
   // and the router is exercised with a request the PM catalog can actually serve.
@@ -128,12 +139,19 @@ async function main(): Promise<void> {
   const skillIntent = '把这份用户调研整理成一份 PRD 文档'
 
   const disposeWork = prompt.section({ name: 'rehearsal-work', order: 100, text: () => workIntent })
+  const callsBefore = callLog.length
   const assembleStarted = Date.now()
   const assembly = await prompt.assemble({})
   const assembleMs = Date.now() - assembleStarted
+  const assembleCalls = callLog.length - callsBefore
   const keptTools = (assembly.tools ?? []).map((tool: any) => tool.name ?? tool.function?.name)
 
   check('the tool surface shrank in the real assembly', assembly.tools.length < TOOLS.length, keptTools.join(','))
+  check(
+    'the assembly spends two calls and no more',
+    assembleCalls === 2,
+    assembleCalls + ' call(s): pruner + router'
+  )
   check(
     'the intent-appropriate tools survived',
     keptTools.includes('run_tests') && keptTools.includes('edit_file'),
@@ -164,11 +182,17 @@ async function main(): Promise<void> {
   console.log('=== one whole turn, live (catalog ' + catalog.length + ', tools ' + TOOLS.length + ') ===')
   console.log('work intent:  ' + workIntent)
   console.log(
-    'assemble: ' + assembleMs + 'ms -> ' + TOOLS.length + ' tools to ' + assembly.tools.length +
-      ' (' + keptTools.join(',') + ')'
+    'assemble: ' + assembleMs + 'ms / ' + assembleCalls + ' call(s) -> ' + TOOLS.length + ' tools to ' +
+      assembly.tools.length + ' (' + keptTools.join(',') + ')'
   )
   console.log('skill intent: ' + skillIntent + ' -> ' + advice.length + ' advice in ' + routeMs + 'ms')
   console.log('post-execute: ' + postMs + 'ms -> ' + NOISY.length + ' to ' + shapedText.length + ' chars')
+
+  // The budget is checked with the others: adding it after the loop meant it was
+  // never printed and never counted, so a breach went unreported.
+  const budgetMs = 15000
+  const total = assembleMs + routeMs + postMs
+  check('the semantic layer fits a practical turn budget', total < budgetMs, total + 'ms of ' + budgetMs + 'ms')
 
   let failures = 0
   for (const entry of checks) {
@@ -176,9 +200,6 @@ async function main(): Promise<void> {
     console.log((entry.ok ? 'ok   ' : 'FAIL ') + entry.label + (entry.detail ? '  (' + entry.detail + ')' : ''))
   }
 
-  const budgetMs = 15000
-  const total = assembleMs + routeMs + postMs
-  check('the semantic layer fits a practical turn budget', total < budgetMs, total + 'ms of ' + budgetMs + 'ms')
   console.log(
     '\nsemantic overhead this turn: ' + total + 'ms (' + assembleMs + ' work assemble + ' + routeMs +
       ' skill assemble + ' + postMs + ' post-execute)'
