@@ -94,6 +94,7 @@
     "verify:tools": "node --experimental-strip-types tests/live-tools.ts",
     "bench": "node --experimental-strip-types bench/run.ts",
     "bench:offline": "node --experimental-strip-types bench/run.ts --offline",
+    "doctor": "node scripts/doctor.js",
     "sync": "pnpm run build && node scripts/sync-profiles.js",
     "sync:desktop": "pnpm run build && node scripts/sync-profiles.js --profile desktop"
   },

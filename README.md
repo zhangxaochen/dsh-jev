@@ -282,7 +282,15 @@ pnpm run sync:desktop      # 只同步 desktop
 node scripts/sync-profiles.js --dry-run   # 只列出目标，不写文件
 ```
 
-> ⚠️ **必须重启 DSH**：本部署的 profile 组合里没有挂载 HMR 插件，运行中的进程不会重新加载 `node_modules` 下的模块。只同步不重启，会话里跑的还是旧构建——可用 `~/.dsh/jev-stats.json` 判定：`"version": 2` 才是 0.2.0 的新构建在运行。
+判定「本机是否真的在跑新构建」用一条命令：
+
+```bash
+pnpm run doctor
+```
+
+它会逐 profile 比对构建哈希、比对安装版本，并读取 `~/.dsh/jev-stats.json` 的 schema 版本，输出 `ACTION:` 或 `OK:`；`--json` 供 CI 使用，退出码 0 表示运行中的宿主已在用当前构建。
+
+> ⚠️ **必须重启 DSH**：本部署的 profile 组合里没有挂载 HMR 插件，运行中的进程不会重新加载 `node_modules` 下的模块。只同步不重启，会话里跑的还是旧构建（`doctor` 会明确报 `ACTION: restart DSH`）。
 
 ---
 
