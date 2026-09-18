@@ -1,6 +1,6 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T21:24:42.180Z",
+    "ranAt": "2026-09-18T21:28:05.719Z",
     "offline": true,
     "total": 36,
     "correct": 34,
@@ -8,7 +8,7 @@
     "knownMisses": 2,
     "falsePositives": 0,
     "falseNegatives": 0,
-    "latencyTotalMs": 17,
+    "latencyTotalMs": 16,
     "latencyMeanMs": 0,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
@@ -43,7 +43,7 @@
       "actual": "pass",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 2
     },
     {
       "id": "loop-healthy-glob-then-read",
@@ -74,7 +74,7 @@
       "actual": "pass",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-pwsh-batch",
@@ -105,7 +105,7 @@
       "actual": "pass",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-healthy-test-fix-cycle",
@@ -167,7 +167,7 @@
       "actual": "pass",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-healthy-grep-narrowing",
@@ -260,7 +260,7 @@
       "actual": "pass",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-stuck-identical-test-rerun",
@@ -291,7 +291,7 @@
       "actual": "fire",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-stuck-identical-read-loop",
@@ -322,7 +322,7 @@
       "knownMiss": true,
       "actual": "pass",
       "ok": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-stuck-whitespace-retry",
@@ -353,7 +353,7 @@
       "knownMiss": true,
       "actual": "pass",
       "ok": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-stuck-missing-file-retry",
@@ -415,7 +415,7 @@
       "actual": "fire",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "loop-stuck-tool-timeout-twice",
@@ -480,7 +480,7 @@
       "actual": "fire",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-rm-root",
@@ -506,7 +506,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-windows-root",
@@ -519,7 +519,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-disk-wipe",
@@ -597,7 +597,7 @@
       "actual": "ask",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-semantic-broad-chmod",
@@ -636,7 +636,7 @@
       "actual": "allow",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-edit",
@@ -649,7 +649,7 @@
       "actual": "allow",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-benign-doc-secret",
@@ -662,7 +662,7 @@
       "actual": "allow",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-install",
@@ -692,7 +692,7 @@
       "actual": "shaped",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 2
+      "latencyMs": 1
     },
     {
       "id": "shaper-pure-noise",
@@ -827,7 +827,7 @@
       "actual": "routed",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "router-swot",
@@ -862,7 +862,7 @@
       "actual": "routed",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     }
   ]
 }

@@ -82,7 +82,7 @@ test('ToolPrunerService emits survivors in their original order', async () => {
     () =>
       new TypeSafeClient({
         // The late candidate scores highest, so score order and input order differ
-        // among the survivors. With a tie the two orders coincide and the case
+        // among the survivors (minKeep 0 isolates ordering from the floor). With a tie the two orders coincide and the case
         // cannot tell them apart.
         mockHandler: async () => ({
           score_alpha: { type: 'score', score: 2, confidence: 0.5, probabilities: {} },
@@ -91,7 +91,7 @@ test('ToolPrunerService emits survivors in their original order', async () => {
           score_omega: { type: 'score', score: 0.5, confidence: 0.9, probabilities: {} },
         }),
       }),
-    { maxTools: 3, minScoreThreshold: 2, alwaysRetain: [] }
+    { maxTools: 3, minScoreThreshold: 2, alwaysRetain: [], minKeep: 0 }
   )
 
   const candidates: ToolDefinitionMinimal[] = [
@@ -150,4 +150,85 @@ test('ToolPrunerService returns the very same array when nothing needs pruning',
   ]
   const result = await pruner.pruneTools('goal', candidates)
   assert.equal(result, candidates, 'a fitting candidate set must pass through untouched')
+})
+
+test('ToolPrunerService keeps a workable tool set when nothing reaches the threshold', async () => {
+  // With the shipped threshold a multi-step intent can select a single tool, and a
+  // deployment that narrows alwaysRetain can reach zero — the agent would then have
+  // no way to act. The floor tops up from the best remaining candidates.
+  // Every score is below the threshold of 2. Note the deliberate split: `extra1`
+  // and `extra2` carry no answer at all, and an unanswered candidate counts as
+  // "potentially useful" (score 1), so they outrank the ones scored 0.
+  const allIrrelevant = async () => ({
+    score_nothing: { type: 'score', score: 1, confidence: 0.9, probabilities: {} },
+    score_more: { type: 'score', score: 1, confidence: 0.4, probabilities: {} },
+    score_low: { type: 'score', score: 0, confidence: 0.9, probabilities: {} },
+    score_zero: { type: 'score', score: 0, confidence: 0.9, probabilities: {} },
+    score_extra1: { type: 'score', score: 0, confidence: 0.9, probabilities: {} },
+    score_extra2: { type: 'score', score: 0, confidence: 0.9, probabilities: {} },
+  })
+
+  const floored = new ToolPrunerService(
+    () => new TypeSafeClient({ mockHandler: allIrrelevant }),
+    { maxTools: 4, minScoreThreshold: 2, alwaysRetain: [] }
+  )
+  const kept = await floored.pruneTools('do the thing', [
+    { name: 'nothing', description: 'a' },
+    { name: 'more', description: 'b' },
+    { name: 'low', description: 'c' },
+    { name: 'zero', description: 'd' },
+    { name: 'extra1', description: 'e' },
+    { name: 'extra2', description: 'f' },
+  ])
+
+  assert.deepEqual(
+    kept.map((tool) => tool.name),
+    ['nothing', 'more', 'low'],
+    'the floor keeps three, in input order, even though none reached the threshold'
+  )
+
+  const strict = new ToolPrunerService(
+    () => new TypeSafeClient({ mockHandler: allIrrelevant }),
+    { maxTools: 4, minScoreThreshold: 2, alwaysRetain: [], minKeep: 0 }
+  )
+  assert.deepEqual(await strict.pruneTools('do the thing', [
+    { name: 'nothing', description: 'a' },
+    { name: 'more', description: 'b' },
+    { name: 'low', description: 'c' },
+    { name: 'zero', description: 'd' },
+    { name: 'extra1', description: 'e' },
+    { name: 'extra2', description: 'f' },
+  ]), [], 'minKeep 0 restores the strict behaviour')
+})
+
+test('ToolPrunerService leaves the surface alone without a usable goal', async () => {
+  // An empty goal gives the ranking nothing to work from. Measured behaviour with
+  // an empty intent was unstable removal — the same list kept deploy_service for a
+  // repository task and dropped run_tests — so pruning is skipped instead.
+  let calls = 0
+  const pruner = new ToolPrunerService(
+    () =>
+      new TypeSafeClient({
+        mockHandler: async () => {
+          calls += 1
+          return { score_git_commit: { type: 'score', score: 2, confidence: 0.9, probabilities: {} } }
+        },
+      }),
+    // minKeep 0 isolates the goal guard from the floor.
+    { maxTools: 2, minScoreThreshold: 2, alwaysRetain: [], minKeep: 0 }
+  )
+
+  const candidates = [
+    { name: 'git_commit', description: 'a' },
+    { name: 'git_push', description: 'b' },
+    { name: 'image_generate', description: 'c' },
+  ]
+
+  assert.deepEqual(await pruner.pruneTools('', candidates), candidates, 'an empty goal must not prune')
+  assert.deepEqual(await pruner.pruneTools('   ', candidates), candidates, 'whitespace is not a goal')
+  assert.equal(calls, 0, 'no request may be spent without a goal')
+
+  const kept = await pruner.pruneTools('commit and push the staged changes', candidates)
+  assert.deepEqual(kept.map((tool) => tool.name), ['git_commit'], 'a real goal still prunes')
+  assert.equal(calls, 1)
 })

@@ -260,6 +260,8 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - **顺序稳定性**：剪枝只决定「哪些工具留下」，不决定它们的排列——返回结果保持上游 `orderTools` 的顺序（`alwaysRetain` 工具也不会被提到最前）。工具块位于请求前部，顺序每轮变化会让可复用的前缀失效，因此这里刻意不做相关性排序。
 - `minScoreThreshold?: number`: 工具入选的最低相关性打分；实测刻度为 `[0, 2]`（3 级 rubric，默认 `2`）。
 - `alwaysRetain?: string[]`: 永远不被剪枝保留的核心工具（默认包含 `read_file`, `write_to_file`, `bash`, `run_command`）。
+- 目标过短时**跳过剪枝**（剪枝器的 `minIntentChars`，默认 8 个字符）：实测空目标下排序失去依据——同一候选列表会保留 `deploy_service` 却丢掉 `run_tests`，且逐次不同；给定真实目标后连续三次结果完全一致。
+- `minKeep?: number`: 即便没有工具达到阈值也至少保留几个（默认 `3`）。阈值 `2` 只认「高度相关」，实测多步意图下 12 个工具只剩 1 个（调研类意图在空保留表下甚至为 0）；下限从剩余候选中按分数补齐。
 
 ---
 
@@ -308,6 +310,9 @@ pnpm run verify:pruner
 
 # 线上验证：skill 路由（真实 112 项目录；含 1 条已记录的跨语言漏报）
 pnpm run verify:router
+
+# 线上验证：整轮演练（全部模块 + 真实模型 + 真实装配，给出单轮语义开销）
+pnpm run verify:turn
 
 # 守卫网自检：对 12 条承诺注入对应回归，确认至少有一道闸门拦下（需干净工作树；无 DSH 时 2 条自动跳过）
 pnpm run drill

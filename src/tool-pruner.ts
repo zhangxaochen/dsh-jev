@@ -18,6 +18,20 @@ export const name = 'typesafe-tool-pruner'
 /** Max dynamic tools kept in context when the host mounts the suite. */
 export const DEFAULT_MAX_TOOLS = 8
 
+/**
+ * Fewest tools to leave in place. The threshold asks for "highly relevant" tools,
+ * which measured as a single tool on a 12-tool surface; this floor keeps the agent
+ * able to act when a deployment narrows `alwaysRetain` (docs/calibration.md §12).
+ */
+export const DEFAULT_MIN_KEEP = 3
+
+/**
+ * Shortest usable goal. Below this the ranking has nothing to work from, and the
+ * measured behaviour with an empty goal was unstable tool removal, so the pruner
+ * leaves the surface alone instead.
+ */
+export const DEFAULT_MIN_INTENT_CHARS = 8
+
 export const DEFAULT_ALWAYS_RETAIN = [
   'read_file',
   'write_to_file',
@@ -101,6 +115,14 @@ export class ToolPrunerService {
       return candidates
     }
 
+    // Without a goal there is nothing to rank against, and pruning anyway spends a
+    // request to remove tools on the strength of noise: measured with an empty
+    // intent, the same candidate list kept `deploy_service` for a repository task
+    // and dropped `run_tests`, varying between runs (docs/calibration.md §12).
+    if (userIntent.trim().length < (this.config.minIntentChars ?? DEFAULT_MIN_INTENT_CHARS)) {
+      return candidates
+    }
+
     const retainedTools: ToolDefinitionMinimal[] = []
     const evaluateCandidates: ToolDefinitionMinimal[] = []
 
@@ -157,6 +179,23 @@ export class ToolPrunerService {
         .filter((item) => item.score >= minScoreThreshold)
         .slice(0, capacity)
         .map((item) => item.tool)
+
+      // Floor: keep the agent able to act.
+      //
+      // The threshold asks for tools the model rates "highly relevant", and for a
+      // multi-step intent that can be a single tool — measured on a 12-tool surface
+      // with the shipped threshold, "research the competitors and write a PRD" kept
+      // only search_web and "fix the tests then commit" only run_tests. When a
+      // deployment narrows `alwaysRetain`, the surface can reach zero tools, which
+      // is a capability loss rather than a context saving. Top up from the best
+      // remaining candidates instead.
+      const minKeep = Math.max(0, this.config.minKeep ?? DEFAULT_MIN_KEEP)
+      if (selected.length < Math.min(minKeep, capacity)) {
+        for (const item of scoredTools) {
+          if (selected.length >= Math.min(minKeep, capacity)) break
+          if (!selected.includes(item.tool)) selected.push(item.tool)
+        }
+      }
 
       // Emit the surviving tools in their original order. Score order would
       // reshuffle the model-facing tool block every turn, and this block sits

@@ -8,6 +8,18 @@ import type { CordisContext, ToolDefinitionMinimal, ToolPrunerConfig } from './t
 export declare const name = "typesafe-tool-pruner";
 /** Max dynamic tools kept in context when the host mounts the suite. */
 export declare const DEFAULT_MAX_TOOLS = 8;
+/**
+ * Fewest tools to leave in place. The threshold asks for "highly relevant" tools,
+ * which measured as a single tool on a 12-tool surface; this floor keeps the agent
+ * able to act when a deployment narrows `alwaysRetain` (docs/calibration.md §12).
+ */
+export declare const DEFAULT_MIN_KEEP = 3;
+/**
+ * Shortest usable goal. Below this the ranking has nothing to work from, and the
+ * measured behaviour with an empty goal was unstable tool removal, so the pruner
+ * leaves the surface alone instead.
+ */
+export declare const DEFAULT_MIN_INTENT_CHARS = 8;
 export declare const DEFAULT_ALWAYS_RETAIN: string[];
 /** Minimal shape of the harness token estimator, kept structural on purpose. */
 export interface TokenEstimator {

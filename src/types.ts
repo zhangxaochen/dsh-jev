@@ -270,6 +270,10 @@ export interface ToolPrunerConfig {
   maxTools?: number
   /** Minimum relevance score to keep a tool; measured scale is [0, 2] for the 3-level rubric (default: 2) */
   minScoreThreshold?: number
+  /** Skip pruning when the goal is shorter than this (default 8). */
+  minIntentChars?: number
+  /** Fewest tools to keep even when none reach the threshold (default 3). */
+  minKeep?: number
   /** Core tools that are never pruned */
   alwaysRetain?: string[]
 }

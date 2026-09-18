@@ -24,7 +24,7 @@ import {
   DEFAULT_ASK_APPROVAL_THRESHOLD,
   DEFAULT_BLOCK_THRESHOLD,
 } from '../lib/safety-guard.js'
-import { DEFAULT_MAX_TOOLS } from '../lib/tool-pruner.js'
+import { DEFAULT_MAX_TOOLS, DEFAULT_MIN_KEEP } from '../lib/tool-pruner.js'
 import {
   DEFAULT_MAX_CANDIDATES,
   DEFAULT_MIN_CANDIDATES,
@@ -88,6 +88,7 @@ test('README documents the pruner, router and shaper defaults the code applies',
   assert.ok(README.includes('（默认 `' + ROUTER_MIN_CONFIDENCE + '`）'))
   assert.equal(documentedDefault('thresholdChars?: number'), DEFAULT_THRESHOLD_CHARS)
   assert.equal(documentedDefault('maxCandidates?: number'), DEFAULT_MAX_CANDIDATES)
+  assert.equal(documentedDefault('minKeep?: number'), DEFAULT_MIN_KEEP)
   assert.equal(documentedDefault('maxPerTurn?: number'), DEFAULT_MAX_PER_TURN)
   assert.equal(documentedDefault('minKindConfidence?: number'), DEFAULT_MIN_KIND_CONFIDENCE)
   assert.equal(documentedDefault('maxClusters?: number'), DEFAULT_MAX_CLUSTERS)
