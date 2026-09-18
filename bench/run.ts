@@ -14,6 +14,9 @@ import { join } from 'node:path'
 import { TypeSafeClient, noul, score, scoreConfidence, topBucketProbability } from '../lib/typesafe-client.js'
 import { STUCK_SEVERITY_CRITERIA } from '../lib/loop-guard.js'
 import { CREDENTIAL_CRITERIA, deterministicVerdict } from '../lib/safety-guard.js'
+import { ResultShaperService } from '../lib/result-shaper.js'
+import { ToolPrunerService } from '../lib/tool-pruner.js'
+import { SkillRouterService } from '../lib/skill-router.js'
 import type { QuestionDefinition } from '../lib/types.js'
 
 const OFFLINE = process.argv.includes('--offline')
@@ -24,12 +27,94 @@ process.env.DSH_JEV_METRICS_PATH ??= join(tmpdir(), 'jev-bench-metrics.json')
 
 interface BenchCase {
   id: string
-  module: 'loop' | 'safety'
-  expect: 'pass' | 'fire' | 'allow' | 'ask' | 'deny'
+  module: 'loop' | 'safety' | 'shaper' | 'pruner' | 'router'
+  expect: string
   note: string
   state?: unknown
   args?: Record<string, unknown>
   recorded?: Record<string, unknown>
+  /** Content for the shaper cases. */
+  content?: string
+  /** Candidate tools for the pruner cases. */
+  candidates?: Array<{ name: string; description: string }>
+  /** Catalog for the router cases. */
+  catalog?: Array<{ name: string; description: string }>
+  /** Tools or skills that must survive the decision. */
+  mustKeep?: string[]
+  /** Tools or skills that must not. */
+  mustDrop?: string[]
+}
+
+/**
+ * Run one of the service-backed cases through its shipped code path.
+ *
+ * The shaper, pruner and router own their question sets, so they are driven as
+ * services rather than by re-deriving their rules here; offline runs replay the
+ * answers recorded for the case.
+ */
+async function serviceVerdict(
+  benchCase: BenchCase,
+  liveClient: TypeSafeClient,
+  recorded: Record<string, Record<string, unknown>>
+): Promise<{ actual: string; note: string; answers?: Record<string, unknown> }> {
+  let captured: Record<string, unknown> | undefined
+  const client = OFFLINE
+    ? new TypeSafeClient({
+        mockHandler: async () => {
+          const answers = recorded[benchCase.id]
+          if (!answers) throw new Error('no recorded answers for ' + benchCase.id)
+          return answers as any
+        },
+      })
+    : liveClient
+
+  if (!OFFLINE) {
+    // Wrap the live client so the raw answers can be recorded for replay.
+    const original = client.systemOne.bind(client)
+    ;(client as any).systemOne = async (req: any, options: any) => {
+      const answers = await original(req, options)
+      captured = JSON.parse(JSON.stringify(answers))
+      return answers
+    }
+  }
+
+  if (benchCase.module === 'shaper') {
+    const shaper = new ResultShaperService(() => client, {
+      thresholdChars: 1000,
+      shapeTools: ['pwsh'],
+      keepKinds: ['warning', 'failure'],
+    })
+    const shaped = await shaper.shape(String(benchCase.content ?? ''), 'pwsh')
+    if (!shaped) return { actual: 'passthrough', note: 'declined', answers: captured }
+    const kept = (benchCase.mustKeep ?? []).every((needle) => shaped.text.includes(needle))
+    const dropped = (benchCase.mustDrop ?? []).every((needle) => !shaped.text.includes(needle))
+    return {
+      actual: kept && dropped ? 'shaped' : 'bad-shape',
+      note:
+        'kept ' + shaped.keptClusters + ' cluster(s), dropped ' + shaped.droppedLines + ' line(s), ' +
+        shaped.text.length + ' chars',
+      answers: captured,
+    }
+  }
+
+  if (benchCase.module === 'pruner') {
+    const pruner = new ToolPrunerService(() => client, { maxTools: 4, minScoreThreshold: 1, alwaysRetain: [] })
+    const selected = await pruner.pruneTools(String(benchCase.note), (benchCase.candidates ?? []) as any)
+    const names = selected.map((tool) => tool.name)
+    const kept = (benchCase.mustKeep ?? []).every((name) => names.includes(name))
+    const dropped = (benchCase.mustDrop ?? []).every((name) => !names.includes(name))
+    return { actual: kept && dropped ? 'ranked' : 'bad-rank', note: 'kept ' + names.join(','), answers: captured }
+  }
+
+  const router = new SkillRouterService(() => client, {})
+  const best = await router.route(benchCase.note, (benchCase.catalog ?? []) as any)
+  const kept = (benchCase.mustKeep ?? []).every((name) => best?.name === name)
+  const dropped = (benchCase.mustDrop ?? []).every((name) => best?.name !== name)
+  return {
+    actual: kept && dropped ? 'routed' : 'bad-route',
+    note: 'picked ' + (best?.name ?? '(none)') + ' (score ' + best?.score + ')',
+    answers: captured,
+  }
 }
 
 function loadKey(): string {
@@ -53,7 +138,7 @@ async function answersFor(benchCase: BenchCase, client: TypeSafeClient): Promise
   let state: unknown
 
   if (benchCase.module === 'loop') {
-    state = benchCase.state
+    state = benchCase.state as any
     questions.has_progress = noul(
       'Does the latest tool execution provide new, meaningful progress or fresh information towards solving the task?'
     )
@@ -87,7 +172,7 @@ async function answersFor(benchCase: BenchCase, client: TypeSafeClient): Promise
     )
   }
 
-  return (await client.systemOne({ state, questions })) as Record<string, any>
+  return (await client.systemOne({ state: state as any, questions })) as Record<string, any>
 }
 
 function probabilityOf(answers: Record<string, any>, key: string): number | undefined {
@@ -160,25 +245,35 @@ async function main(): Promise<void> {
     let actual: string
     let note = ''
     try {
-      const answers = OFFLINE
-        ? (recorded[benchCase.id] ?? (() => { throw new Error('no recorded answers for ' + benchCase.id) })())
-        : await answersFor(benchCase, client)
-      if (!OFFLINE) captured[benchCase.id] = answers
-      actual = benchCase.module === 'loop' ? loopVerdict(answers) : safetyVerdict(benchCase, answers)
-
-      if (benchCase.module === 'loop') {
-        note = 'progress=' + probabilityOf(answers, 'has_progress') +
-          ' pLoop=' + topBucketProbability(answers.stuck_severity) +
-          ' confidence=' + scoreConfidence(answers.stuck_severity)
+      // The service-backed modules own their question sets, so they run their
+      // shipped code path with either the live client or a replay of the answers
+      // recorded for this case.
+      if (benchCase.module === 'shaper' || benchCase.module === 'pruner' || benchCase.module === 'router') {
+        const result = await serviceVerdict(benchCase, client, recorded)
+        actual = result.actual
+        note = result.note
+        if (!OFFLINE && result.answers) captured[benchCase.id] = result.answers
       } else {
-        const hazard = Math.max(
-          probabilityOf(answers, 'is_destructive') ?? 0,
-          probabilityOf(answers, 'is_exfiltration') ?? 0,
-          probabilityOf(answers, 'is_jailbreak') ?? 0
-        )
-        note = deterministicVerdict({ name: 'pwsh', args: benchCase.args })
-          ? 'deterministic envelope'
-          : 'hazard=' + hazard.toFixed(2) + ' risk=' + (answers.risk_score?.score ?? 'n/a')
+        const answers = OFFLINE
+          ? (recorded[benchCase.id] ?? (() => { throw new Error('no recorded answers for ' + benchCase.id) })())
+          : await answersFor(benchCase, client)
+        if (!OFFLINE) captured[benchCase.id] = answers
+        actual = benchCase.module === 'loop' ? loopVerdict(answers) : safetyVerdict(benchCase, answers)
+
+        if (benchCase.module === 'loop') {
+          note = 'progress=' + probabilityOf(answers, 'has_progress') +
+            ' pLoop=' + topBucketProbability(answers.stuck_severity) +
+            ' confidence=' + scoreConfidence(answers.stuck_severity)
+        } else {
+          const hazard = Math.max(
+            probabilityOf(answers, 'is_destructive') ?? 0,
+            probabilityOf(answers, 'is_exfiltration') ?? 0,
+            probabilityOf(answers, 'is_jailbreak') ?? 0
+          )
+          note = deterministicVerdict({ name: 'pwsh', args: benchCase.args })
+            ? 'deterministic envelope'
+            : 'hazard=' + hazard.toFixed(2) + ' risk=' + (answers.risk_score?.score ?? 'n/a')
+        }
       }
     } catch (err) {
       actual = 'error'

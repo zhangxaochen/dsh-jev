@@ -32,6 +32,11 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # pnpm test's pretest already runs this; the explicit step keeps the failure
+      # attributable and visible in the job summary.
+      - name: Type-check the tooling (bench, tests, scripts)
+        run: pnpm run typecheck:scripts
+
       - name: Unit tests
         run: pnpm test
 

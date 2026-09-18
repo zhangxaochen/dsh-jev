@@ -447,3 +447,11 @@
 - [x] 集成检查数**无法静态推导**：静态 `check(` 出现 28 处、运行 22 项，差额正是各 `try` 的 catch 兜底检查。改为让脚本自己打印 `checks passed: 22 / 22`，并断言脚本保留该输出行
 - [x] 守卫立即生效：新增这两项测试后计数变为 116，文档仍写 114 → 构建失败，据此更新两处文档
 - [x] 测试数 114 → 116
+
+## Phase 2 补充记录（bench 扩到三模块 + 工具链类型检查，Round 45）
+
+- [x] **bench 从 2 个模块扩到 5 个**：新增 shaper / pruner / router 各 2 条标注用例（共 36 条），且这三条路径**驱动各自发布的代码路径**（`ResultShaperService` / `ToolPrunerService` / `SkillRouterService`），而不是在这里重新实现规则
+- [x] 意义：这三个模块此前只在**需要 API Key 的线上脚本**里验证；现在它们的规则也进了 `bench:offline`，因此**进入 CI**——未来重构破坏它们会在 CI 失败，而不是等某个人手动跑带 Key 的脚本
+- [x] 实测：线上记录一次后，`bench:offline` 对 6 条新用例**全部可确定复现**（shaper-build-log 保留 2 簇/丢弃 160 行、pure-noise 拒绝、两条剪枝排序正确、两条路由选对）；总计 36 条、准确率 **94.4%**、误报 0
+- [x] **发现并修复工具链盲区**：`bench/`、`tests/`、`scripts/` 不在 `tsconfig.json` 的 include 里，因此**我自己的验证脚本从未被类型检查过**（Node 只做类型剥离）。新增 `tsconfig.scripts.json` 后立刻抓到 2 处类型错误（离线回放的 mock 返回 `Record<string, unknown>` 而非 `QuestionResult`；`state` 未断言为 `SystemOneInput` 允许的形状）
+- [x] 新增 `pnpm run typecheck:scripts`，接入 `pretest`（因此 CI 的 `pnpm test` 已覆盖），CI 中另立显式步骤便于定位失败
