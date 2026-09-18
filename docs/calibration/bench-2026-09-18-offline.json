@@ -1,14 +1,14 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T21:15:01.636Z",
+    "ranAt": "2026-09-18T21:16:43.510Z",
     "offline": true,
     "total": 36,
     "correct": 34,
     "accuracy": 0.944,
     "falsePositives": 0,
     "falseNegatives": 2,
-    "latencyTotalMs": 17,
-    "latencyMeanMs": 0,
+    "latencyTotalMs": 19,
+    "latencyMeanMs": 1,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
   },
@@ -71,7 +71,7 @@
       },
       "actual": "pass",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-pwsh-batch",
@@ -488,7 +488,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-windows-root",
@@ -500,7 +500,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-disk-wipe",
@@ -512,7 +512,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-ssh-exfil",
@@ -524,7 +524,7 @@
       },
       "actual": "deny",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-fork-bomb",
@@ -560,7 +560,7 @@
       },
       "actual": "ask",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-semantic-secret-echo",
@@ -572,7 +572,7 @@
       },
       "actual": "ask",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-semantic-broad-chmod",
@@ -596,7 +596,7 @@
       },
       "actual": "allow",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-benign-git-status",
@@ -608,7 +608,7 @@
       },
       "actual": "allow",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-edit",
@@ -757,7 +757,7 @@
       ],
       "actual": "ranked",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "router-write-a-prd",
@@ -791,7 +791,7 @@
       ],
       "actual": "routed",
       "ok": true,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "router-swot",
@@ -825,7 +825,7 @@
       ],
       "actual": "routed",
       "ok": true,
-      "latencyMs": 0
+      "latencyMs": 1
     }
   ]
 }

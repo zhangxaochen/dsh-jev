@@ -115,11 +115,10 @@ async function serviceVerdict(
   client: TypeSafeClient
 ): Promise<{ actual: string; note: string }> {
   if (benchCase.module === 'shaper') {
-    const shaper = new ResultShaperService(() => client, {
-      thresholdChars: 1000,
-      shapeTools: ['pwsh'],
-      keepKinds: ['warning', 'failure'],
-    })
+    // thresholdChars and shapeTools only make the case reachable; the policy
+    // defaults (which kinds survive) are deliberately left to the shipped module,
+    // so a regression in those defaults fails here too.
+    const shaper = new ResultShaperService(() => client, { thresholdChars: 1000, shapeTools: ['pwsh'] })
     const shaped = await shaper.shape(String(benchCase.content ?? ''), 'pwsh')
     if (!shaped) return { actual: 'passthrough', note: 'declined' }
     const kept = (benchCase.mustKeep ?? []).every((needle) => shaped.text.includes(needle))
