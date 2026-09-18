@@ -9,7 +9,8 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import vm from 'node:vm'
 import {
@@ -284,4 +285,36 @@ test('the shipped bundle leaves the experimental shaper off', () => {
   // enables it would contradict both the README and the module's own contract.
   assert.doesNotMatch(PATCH, /^\s*resultShaper:/m, 'the shipped patch must not enable resultShaper')
   assert.doesNotMatch(PATCH, /^\s*askTools:/m, 'the shipped patch should lean on the code default here')
+})
+
+test('the published tarball carries everything the host loads and nothing else', () => {
+  // The host loads three things from the package: the plugin entry, the settings
+  // panel bundle, and the patch file `dsh.bundle.patch` points at. The repository
+  // assertions above only prove those exist here; the tarball is what users get, and
+  // a `files` edit that dropped the patch would break the bundle mount silently.
+  const packed = JSON.parse(
+    // Windows exposes npm as a .cmd shim, so the pack call needs a shell.
+    execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd: ROOT, encoding: 'utf8', shell: true })
+  )[0].files.map((entry: { path: string }) => entry.path) as string[]
+
+  const required = [
+    'package.json',
+    pkg.main.replace(/^\.\//, ''),
+    pkg.types.replace(/^\.\//, ''),
+    pkg.dsh.bundle.patch.replace(/^\.\//, ''),
+    'lib/client.js',
+    'README.md',
+    'CHANGELOG.md',
+  ]
+  const missing = required.filter((file) => !packed.includes(file))
+  assert.deepEqual(missing, [], 'the tarball is missing files the host needs')
+
+  // Everything the build produces must ship, so a new module cannot be forgotten.
+  const built = readdirSync(join(ROOT, 'lib')).filter((name) => name.endsWith('.js'))
+  const missingModules = built.filter((name) => !packed.includes('lib/' + name))
+  assert.deepEqual(missingModules, [], 'the tarball omits built modules')
+
+  // Tests, scratch files and the bench are development-only.
+  const noise = packed.filter((file) => /^(tests|tmp|bench|scripts|src|\.github)\//.test(file))
+  assert.deepEqual(noise, [], 'the tarball ships development files')
 })

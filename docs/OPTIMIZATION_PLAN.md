@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 9 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 12 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **154** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
+合计 **155** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、30 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -719,3 +719,12 @@
 - [x] 自查纠正：守卫首版把语料例数计成 0（正则只匹配字符串 `expect`，而前置检查语料是布尔）→ 改为按条目缩进计数，实测 92 / 16
 - [x] **牙齿验证**：把报告里的 drill 计数改回 21 → 该守卫失败；已加演练条目
 - [x] 测试数 153 → 154
+
+## Phase 5 补充记录（发布物内容，Round 74）
+
+- [x] 转向**非自我指涉**的检查：打包后的 tarball 里到底有什么。此前 CI 只断言 9 个 lib 模块在内、打包用例只断言**仓库里**存在补丁文件——而宿主加载的三样东西里，`cordis.patch.yml`（`dsh.bundle.patch` 的指向）若被 `files` 字段漏掉，**所有用户的 Bundle 挂载都会失败**，且没有任何闸门会发现
+- [x] 实测 tarball：57 项、52 个 `lib/*`、含 `package.json`/`lib/index.js`/`cordis.patch.yml`/README/CHANGELOG、**无** `tests|tmp|bench|scripts|src|.github` 噪声——当前正确
+- [x] 提升为单测（本地与 CI 同一处）：断言宿主需要的每一项都在包内、**每个构建产物模块都在包内**（新增模块无法被遗忘）、且不含任何开发文件
+- [x] 撤掉 CI 中重复且较弱的 `Packed contents include every built module` 步骤（单测在 CI 的 Unit tests 步骤里已跑，且检查更多）；CI 现有 7 个 run 步骤
+- [x] 两处自查修正：Windows 上 `npm` 是 `npm.cmd`，`execFileSync` 需 `shell: true`；替换注释时 `\n` 陷阱导致调用被并入注释行
+- [x] 测试数 154 → 155

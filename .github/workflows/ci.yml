@@ -58,13 +58,6 @@ jobs:
       - name: DSH integration checks (skip when no runtime)
         run: pnpm run verify:dsh
 
-      - name: Packed contents include every built module
-        run: |
-          node -e "
-          const { execSync } = require('node:child_process');
-          const files = JSON.parse(execSync('npm pack --dry-run --json', { encoding: 'utf8' }))[0].files.map((f) => f.path);
-          const required = ['lib/index.js','lib/loop-guard.js','lib/safety-guard.js','lib/metrics.js','lib/decisions.js','lib/ask-tools.js','lib/skill-router.js','lib/result-shaper.js','lib/bench-summary.js'];
-          const missing = required.filter((p) => !files.includes(p));
-          if (missing.length > 0) { console.error('missing from package: ' + missing.join(', ')); process.exit(1); }
-          console.log('packed files: ' + files.length);
-          "
+      # The packed tarball is asserted by tests/packaging.spec.ts, which runs in the
+      # unit step above and checks more: the patch file the host loads, every built
+      # module, and that no development file ships.
