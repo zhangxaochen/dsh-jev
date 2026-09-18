@@ -172,6 +172,36 @@ const drills = [
     command: ['scripts/verify-host.mjs'],
   },
   {
+    // Each live script must be able to fail: one that cannot is decoration. These
+    // four mutate the behaviour their script claims to verify.
+    name: 'the shaper stops shaping anything',
+    file: 'src/result-shaper.ts',
+    from: 'if (clusters.length < 2) return undefined',
+    to: 'if (clusters.length >= 0) return undefined',
+    command: ['--experimental-strip-types', 'tests/live-shaper.ts'],
+  },
+  {
+    name: 'the pruner stops pruning',
+    file: 'src/tool-pruner.ts',
+    from: 'const finalTools = candidates.filter((tool) => keep.has(tool))',
+    to: 'const finalTools = candidates',
+    command: ['--experimental-strip-types', 'tests/live-pruner.ts'],
+  },
+  {
+    name: 'the router stops routing',
+    file: 'src/skill-router.ts',
+    from: 'return best',
+    to: 'return undefined',
+    command: ['--experimental-strip-types', 'tests/live-router.ts'],
+  },
+  {
+    name: 'the rank primitive orders candidates the wrong way',
+    file: 'src/ask-tools.ts',
+    from: '.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))',
+    to: '.sort((a, b) => (a.score ?? -1) - (b.score ?? -1))',
+    command: ['--experimental-strip-types', 'tests/live-tools.ts'],
+  },
+  {
     // The manifest is what the host resolves; pointing `main` at a file that is not
     // in the package must fail the published-artifact smoke test.
     name: 'the manifest points at a file the package does not ship',
