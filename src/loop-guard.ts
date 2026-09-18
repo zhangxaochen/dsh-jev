@@ -1,11 +1,17 @@
 /**
  * Loop guard plugin for semantic loop and stagnation interception.
  * Observes tools/post-execute to detect cyclical agent behavior and prompt plan adaptation.
+ *
+ * Division of labour (measured 2026-09-18, see docs/calibration.md):
+ * - exact repeats of the same tool + arguments are DSH's `repeat-tool-reminder` job
+ *   (thresholds 3/5/8, canonicalized arguments). This guard defers to it.
+ * - this guard judges *near-identical / semantically stagnant* trajectories, and only
+ *   when the answer carries enough probability mass and confidence to justify it.
  * @module dsh-jev/loop-guard
  */
 
 import { randomUUID } from 'node:crypto'
-import { noul, score, TypeSafeClient } from './typesafe-client.js'
+import { noul, resolveClientFrom, score, scoreConfidence, topBucketProbability, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,
@@ -18,28 +24,72 @@ import type {
 
 export const name = 'typesafe-loop-guard'
 
+/** Buckets of the stuck-severity rubric; index 2 is the "definite dead loop" bucket. */
+export const STUCK_SEVERITY_CRITERIA = [
+  'Normal progress or healthy exploration',
+  'Marginal repeat or stagnant exploration',
+  'Definite dead loop, circular failures, or unrecoverable repetition',
+]
+const TOP_BUCKET_INDEX = STUCK_SEVERITY_CRITERIA.length - 1
+
 interface StepRecord {
   tool: string
-  args: string
-  contentPreview: string
+  argsKey: string
+  contentHash: string
   timestamp: number
+}
+
+interface AgentChain {
+  history: StepRecord[]
+  /** Consecutive steps without measured progress. */
+  noProgressStreak: number
+  /** Steps remaining before another notice may fire. */
+  cooldown: number
+}
+
+/** FNV-1a over a string; used only to detect identical outputs cheaply. */
+function hashString(value: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16)
+}
+
+/** Canonical argument identity: key order must not create a false "new" call. */
+function canonicalArgs(args: unknown): string {
+  const normalise = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(normalise)
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1))
+      return entries.map(([k, v]) => [k, normalise(v)])
+    }
+    return value
+  }
+  try {
+    return JSON.stringify(normalise(args ?? {}))
+  } catch {
+    return String(args)
+  }
 }
 
 export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
   const triggerThreshold = config.triggerThreshold ?? 2
   const noProgressThreshold = config.noProgressThreshold ?? 0.3
-  const stuckSeverityThreshold = config.stuckSeverityThreshold ?? 2
+  const pLoopThreshold = config.pLoopThreshold ?? 0.6
+  const minConfidence = config.minConfidence ?? 0.5
+  const cooldownSteps = config.cooldownSteps ?? 3
+  const maxHistory = config.maxHistory ?? 8
+  const deferExactRepeats = config.deferExactRepeats ?? true
   const include = config.include ?? []
   const exclude = config.exclude ?? []
 
-  const historyByAgent = new Map<string, StepRecord[]>()
+  // Keyed by the agent object so an entry dies with its agent and ids never collide.
+  const chains = new WeakMap<object, AgentChain>()
 
   function getClient(): TypeSafeClient {
-    const client = typeof ctx.get === 'function' ? ctx.get('typesafe') : undefined
-    if (client instanceof TypeSafeClient) {
-      return client
-    }
-    return new TypeSafeClient()
+    return resolveClientFrom(ctx)
   }
 
   function shouldTrack(toolName: string): boolean {
@@ -47,6 +97,26 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
     if (include.length > 0 && !include.includes(toolName)) return false
     return true
   }
+
+  function chainFor(agent: object): AgentChain {
+    let chain = chains.get(agent)
+    if (!chain) {
+      chain = { history: [], noProgressStreak: 0, cooldown: 0 }
+      chains.set(agent, chain)
+    }
+    return chain
+  }
+
+  /**
+   * Reset per-agent state on a new user instruction, matching
+   * `dsh-repeat-tool-reminder`: a fresh instruction is never a loop.
+   */
+  const unsubscribePreStep = ctx.on('agent/pre-step', (...hookArgs: any[]) => {
+    const agent = hookArgs[0]?.agent ?? hookArgs[0]
+    if (agent && typeof agent === 'object') {
+      chains.delete(agent)
+    }
+  })
 
   const unsubscribe = ctx.on(
     'tools/post-execute',
@@ -76,81 +146,122 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
         return next()
       }
 
-      const agentKey = exec.agent?.id || 'default'
-      let history = historyByAgent.get(agentKey)
-      if (!history) {
-        history = []
-        historyByAgent.set(agentKey, history)
-      }
-
-      const contentStr = typeof result?.content === 'string'
-        ? result.content
-        : JSON.stringify(result?.content ?? result?.error ?? '')
-
-      const currentRecord: StepRecord = {
-        tool: exec.name,
-        args: JSON.stringify(exec.arguments ?? exec.args ?? {}),
-        contentPreview: contentStr.slice(0, 1500),
-        timestamp: Date.now(),
-      }
-
-      history.push(currentRecord)
-
-      // Only check when history length meets triggerThreshold
-      if (history.length < triggerThreshold) {
+      const agent = exec.agent && typeof exec.agent === 'object' ? exec.agent : undefined
+      if (!agent) {
+        // No agent to remind; nothing to key on.
         return next()
       }
 
-      // Prepare state context describing recent tool history
-      const recentSteps = history.slice(-triggerThreshold)
+      const contentStr =
+        typeof result?.content === 'string'
+          ? result.content
+          : JSON.stringify(result?.content ?? result?.error ?? '')
+
+      const argsKey = canonicalArgs(exec.arguments ?? exec.args)
+      const chain = chainFor(agent)
+
+      if (chain.cooldown > 0) chain.cooldown -= 1
+
+      const previous = chain.history[chain.history.length - 1]
+      const isExactRepeat =
+        previous !== undefined &&
+        previous.tool === exec.name &&
+        previous.argsKey === argsKey &&
+        previous.contentHash === hashString(contentStr)
+
+      chain.history.push({
+        tool: exec.name,
+        argsKey,
+        contentHash: hashString(contentStr),
+        timestamp: Date.now(),
+      })
+      if (chain.history.length > maxHistory) {
+        chain.history.splice(0, chain.history.length - maxHistory)
+      }
+
+      // Exact repeats belong to dsh-repeat-tool-reminder (thresholds 3/5/8).
+      if (deferExactRepeats && isExactRepeat) {
+        return next()
+      }
+
+      // Cheap shell first: only escalate to Jev once the streak is long enough.
+      if (chain.noProgressStreak + 1 < triggerThreshold) {
+        chain.noProgressStreak += 1
+        return next()
+      }
+      if (chain.cooldown > 0) {
+        return next()
+      }
+
+      const recentSteps = chain.history.slice(-triggerThreshold)
       const state = {
         currentTool: exec.name,
         currentArgs: exec.arguments ?? exec.args,
-        currentOutputSample: currentRecord.contentPreview,
+        currentOutputSample: contentStr.slice(0, 1500),
+        /** Bounded window size, so the cap is visible in traces and tests. */
+        historyDepth: chain.history.length,
         recentTrajectory: recentSteps.map((s, idx) => ({
           step: idx + 1,
           tool: s.tool,
-          args: s.args,
-          outputPreview: s.contentPreview.slice(0, 300),
+          args: s.argsKey.slice(0, 300),
+          outputHash: s.contentHash,
         })),
       }
 
       try {
         const client = getClient()
-        const evalResults = await client.systemOne({
-          state,
-          questions: {
-            has_progress: noul(
-              'Does the latest tool execution provide new, meaningful progress or fresh information towards solving the task?'
-            ),
-            stuck_severity: score(
-              'Rate how severely this execution sequence is stuck in a repetitive loop or stagnation without progress',
-              [
-                'Normal progress or healthy exploration',
-                'Marginal repeat or stagnant exploration',
-                'Definite dead loop, circular failures, or unrecoverable repetition',
-              ]
-            ),
+        const evalResults = await client.systemOne(
+          {
+            state,
+            questions: {
+              has_progress: noul(
+                'Does the latest tool execution provide new, meaningful progress or fresh information towards solving the task?'
+              ),
+              stuck_severity: score(
+                'Rate how severely this execution sequence is stuck in a repetitive loop or stagnation without progress',
+                STUCK_SEVERITY_CRITERIA
+              ),
+            },
           },
-        })
+          { timeoutMs: client.pathTimeoutMs }
+        )
 
         const progressResult = evalResults.has_progress as NoulResult | undefined
         const stuckResult = evalResults.stuck_severity as ScoreResult | undefined
 
-        const progressProb = progressResult ? (progressResult.probability ?? progressResult.noul) : 1
-        const hasProgress = progressProb >= noProgressThreshold
-        const scoreVal = stuckResult?.score ?? 0
-        const isSeverelyStuck = scoreVal >= (stuckSeverityThreshold > 1.5 ? 1.4 : stuckSeverityThreshold)
+        const progressProb = progressResult?.unknown
+          ? undefined
+          : typeof progressResult?.probability === 'number'
+            ? progressResult.probability
+            : typeof progressResult?.noul === 'number'
+              ? progressResult.noul
+              : undefined
+        const pLoop = topBucketProbability(stuckResult)
+        const confidence = scoreConfidence(stuckResult)
 
-        if (!hasProgress && isSeverelyStuck) {
-          const outcome = scoreVal >= 2.5 ? 'interrupt' : 'warn'
+        if (progressProb === undefined || pLoop === undefined || confidence === undefined) {
+          // Unknown answer is not evidence of a loop; stay silent and record it.
+          defaultMetrics.recordDecisionError()
+          defaultMetrics.recordLoopCheck('normal')
+          chain.noProgressStreak += 1
+          return next()
+        }
+
+        const madeNoProgress = progressProb < noProgressThreshold
+        const confident = confidence >= minConfidence
+        const definitivelyStuck = pLoop >= pLoopThreshold
+
+        if (madeNoProgress && definitivelyStuck && confident) {
+          chain.noProgressStreak = 0
+          chain.cooldown = cooldownSteps
+          const outcome = pLoop >= 0.85 ? 'interrupt' : 'warn'
           defaultMetrics.recordLoopCheck(outcome)
 
-          const confidenceInfo = stuckResult?.confidence ? ` (confidence: ${(stuckResult.confidence * 100).toFixed(0)}%)` : ''
           const reminderText =
             `[TypeSafe LoopGuard] Potential loop or stagnation detected on tool "${exec.name}". ` +
-            `Evaluated progress probability is only ${(progressResult?.probability ?? 0) * 100}%, ` +
-            `and stall severity is rated ${stuckResult?.score}/3${confidenceInfo}. ` +
+            `Progress probability is ${(progressProb * 100).toFixed(0)}%, ` +
+            `dead-loop probability ${(pLoop * 100).toFixed(0)}% ` +
+            `(severity ${stuckResult?.score?.toFixed?.(2) ?? '?'}/${TOP_BUCKET_INDEX}, confidence ${(confidence * 100).toFixed(0)}%). ` +
             `Please review your recent results and adjust your plan rather than repeating similar queries or unguided retries.`
 
           const baseDecision = await next()
@@ -167,6 +278,8 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
               form: 'notice',
               tool: exec.name,
               severity: stuckResult?.score,
+              pLoop,
+              confidence,
             },
             content: [{ type: 'text' as const, text: reminderText }],
           }
@@ -187,11 +300,12 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
           }
 
           return decisionResult
-        } else {
-          defaultMetrics.recordLoopCheck('normal')
         }
+
+        chain.noProgressStreak = madeNoProgress ? chain.noProgressStreak + 1 : 0
+        defaultMetrics.recordLoopCheck('normal')
       } catch (err) {
-        // Loop guard fails open (safe against guard crashes)
+        // Advisory path: a failed decision never blocks or delays the agent.
         console.warn('[TypeSafe LoopGuard] Evaluation failed, continuing without intervention:', err)
       }
 
@@ -200,7 +314,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
   )
 
   return () => {
-    historyByAgent.clear()
+    unsubscribePreStep()
     unsubscribe()
   }
 }

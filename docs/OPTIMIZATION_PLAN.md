@@ -31,28 +31,28 @@
 
 ## Phase 1 — 正确性与失败模式
 
-- [ ] `src/loop-guard.ts`：删除反向三元阈值（原 `:143`），改用桶概率 + `minConfidence`（默认 0.5）
-- [ ] `src/loop-guard.ts`：`Map<string, StepRecord[]>` → `WeakMap<agent, Chain>`，加 `maxHistory`（默认 8）
-- [ ] `src/loop-guard.ts`：agent key 用对象，不用 `id ?? 'default'`
-- [ ] `src/loop-guard.ts`：监听 `agent/pre-step`，新用户消息清链
-- [ ] `src/loop-guard.ts`：触发条件改为「连续无进展步数」
-- [ ] `src/loop-guard.ts`：新增 `cooldownSteps`（默认 3）
-- [ ] `src/loop-guard.ts`：新增 `deferExactRepeats`（默认 true），精确重复让位内置 remonder
-- [ ] `src/loop-guard.ts`：progress 缺失不再默认 1，unknown 即不动作
-- [ ] `src/safety-guard.ts`：新增 `onError` / `onUncertain`（guarded 默认 deny）
-- [ ] `src/safety-guard.ts`：headless 下 `ask` → `deny`（guardedTools）
-- [ ] `src/safety-guard.ts`：缺失/NaN 概率走 unknown 分支，不再当 0
-- [ ] `src/safety-guard.ts`：确定性硬拒集注册到 `ctx.tools.guard()`
-- [ ] `src/safety-guard.ts`：`rules: [{ id, question, threshold, action }]` 自定义规则
-- [ ] `src/safety-guard.ts`：凭据类别 Noul（4 组），避免 `read .env` 一律高危
-- [ ] `src/typesafe-client.ts`：`normalizeAnswers` 保留 unknown
-- [ ] `src/typesafe-client.ts`：输入字节数/费用记账钩子
-- [ ] `src/typesafe-client.ts`：`systemOneCached`（指纹 + TTL）
-- [ ] `src/typesafe-client.ts`：`pathTimeoutMs`（默认 800），`timeoutMs` 默认降到 2000
-- [ ] `src/types.ts` / `cordis.patch.yml` / `README.md`：修默认值不一致（`minScoreThreshold`、`maxTools`）
-- [ ] `tests/resilience.spec.ts`：断言改为 guarded fail-closed / 非 guarded fail-open，保留 `onError: 'allow'` 兼容
-- [ ] `tests/loop-guard.spec.ts`：新增低置信度、精确重复、清链、内存上限、unknown 用例
-- [ ] `tests/safety-guard.spec.ts`：新增缺失概率、headless ask、硬拒集、自定义规则用例
+- [x] `src/loop-guard.ts`：删除反向三元阈值（原 `:143`），改用桶概率 + `minConfidence`（默认 0.5）
+- [x] `src/loop-guard.ts`：`Map<string, StepRecord[]>` → `WeakMap<agent, Chain>`，加 `maxHistory`（默认 8）
+- [x] `src/loop-guard.ts`：agent key 用对象，不用 `id ?? 'default'`
+- [x] `src/loop-guard.ts`：监听 `agent/pre-step`，新用户消息清链
+- [x] `src/loop-guard.ts`：触发条件改为「连续无进展步数」
+- [x] `src/loop-guard.ts`：新增 `cooldownSteps`（默认 3）
+- [x] `src/loop-guard.ts`：新增 `deferExactRepeats`（默认 true），精确重复让位内置 remonder
+- [x] `src/loop-guard.ts`：progress 缺失不再默认 1，unknown 即不动作
+- [x] `src/safety-guard.ts`：新增 `onError` / `onUncertain`（guarded 默认 deny）
+- [x] `src/safety-guard.ts`：headless 下 `ask` → `deny`（guardedTools）
+- [x] `src/safety-guard.ts`：缺失/NaN 概率走 unknown 分支，不再当 0
+- [x] `src/safety-guard.ts`：确定性硬拒集注册到 `ctx.tools.guard()`
+- [x] `src/safety-guard.ts`：`rules: [{ id, question, threshold, action }]` 自定义规则
+- [x] `src/safety-guard.ts`：凭据类别 Noul（4 组），避免 `read .env` 一律高危
+- [x] `src/typesafe-client.ts`：`normalizeAnswers` 保留 unknown
+- [x] `src/typesafe-client.ts`：输入字节数/费用记账钩子
+- [x] `src/typesafe-client.ts`：`systemOneCached`（指纹 + TTL）
+- [x] `src/typesafe-client.ts`：`pathTimeoutMs`（默认 800），`timeoutMs` 默认降到 2000
+- [x] `src/types.ts` / `cordis.patch.yml` / `README.md`：修默认值不一致（`minScoreThreshold`、`maxTools`）
+- [x] `tests/resilience.spec.ts`：断言改为 guarded fail-closed / 非 guarded fail-open，保留 `onError: 'allow'` 兼容
+- [x] `tests/loop-guard.spec.ts`：新增低置信度、精确重复、清链、内存上限、unknown 用例
+- [x] `tests/safety-guard.spec.ts`：新增缺失概率、headless ask、硬拒集、自定义规则用例
 
 ## Phase 2 — 实测度量与标定
 

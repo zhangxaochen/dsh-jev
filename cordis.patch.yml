@@ -8,10 +8,16 @@
         loopGuard:
           triggerThreshold: 2
           noProgressThreshold: 0.3
-          stuckSeverityThreshold: 2
+          pLoopThreshold: 0.6
+          minConfidence: 0.5
+          cooldownSteps: 3
+          maxHistory: 8
+          deferExactRepeats: true
         safetyGuard:
           blockThreshold: 0.85
           askApprovalThreshold: 0.5
+          onError: deny-guarded
+          onUncertain: deny-guarded
           guardedTools:
             - bash
             - pwsh

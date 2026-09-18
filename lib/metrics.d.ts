@@ -29,7 +29,23 @@ export interface JevMetricsData {
         totalLatencyMs: number;
         avgLatencyMs: number;
         errors: number;
+        /** Billed input bytes sent to System One (cache hits cost nothing). */
+        inputBytes: number;
+        /** Estimated USD cost at $0.042 per million input tokens; output is free. */
+        estimatedCostUsd: number;
+        /** Decisions served from the identical-payload cache. */
+        cacheHits: number;
+        /** Decisions whose answer came back unusable (missing or malformed). */
+        decisionErrors: number;
     };
+}
+/** Accounting facts attached to one System One call. */
+export interface CallAccounting {
+    inputBytes?: number;
+    estimatedCostUsd?: number;
+    latencyMs?: number;
+    cacheHit?: boolean;
+    decisionError?: boolean;
 }
 /** Estimated tokens per pruned MCP/system tool schema */
 export declare const TOKENS_PER_PRUNED_TOOL = 150;
@@ -59,7 +75,9 @@ export declare class MetricsCollector {
     /**
      * Record a System One API call latency.
      */
-    recordCall(latencyMs: number, success?: boolean): void;
+    recordCall(latencyMs: number, success?: boolean, accounting?: CallAccounting): void;
+    /** Record a decision whose answer was unusable (missing or malformed). */
+    recordDecisionError(): void;
     /**
      * Return an immutable snapshot of current metrics.
      */

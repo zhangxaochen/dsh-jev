@@ -2,150 +2,161 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { apply } from '../lib/loop-guard.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
-import type {
-  CordisContext,
-  PostToolDecision,
-  ToolExecution,
-} from '../lib/types.js'
+import type { CordisContext, PostToolDecision, ToolExecution } from '../lib/types.js'
 
-test('TypeSafeLoopGuard injects advisory notice when stagnation detected', async () => {
-  let postExecuteHandler: any
+const STUCK_FORESEEABLE = {
+  has_progress: { type: 'noul', noul: 0.11 },
+  stuck_severity: { type: 'score', score: 1.85, confidence: 0.78, probabilities: { '0': 0, '1': 0.14, '2': 0.86 } },
+}
 
-  const fakeContext: CordisContext = {
+const HEALTHY = {
+  has_progress: { type: 'noul', noul: 0.62 },
+  stuck_severity: { type: 'score', score: 0.06, confidence: 0.92, probabilities: { '0': 0.95, '1': 0.05, '2': 0 } },
+}
+
+const MARGINAL_LOW_CONFIDENCE = {
+  has_progress: { type: 'noul', noul: 0.2 },
+  stuck_severity: { type: 'score', score: 1.4, confidence: 0.28, probabilities: { '0': 0, '1': 0.6, '2': 0.4 } },
+}
+
+function harness(mock: () => Promise<Record<string, unknown>>, config: Record<string, unknown> = {}) {
+  let postHandler: any
+  let preStepHandler: any
+  const ctx: CordisContext = {
     on: (event: string, callback: any) => {
-      if (event === 'tools/post-execute') {
-        postExecuteHandler = callback
-      }
+      if (event === 'tools/post-execute') postHandler = callback
+      if (event === 'agent/pre-step') preStepHandler = callback
       return () => {}
     },
-    typesafe: new TypeSafeClient({
-      mockHandler: async () => ({
-        has_progress: { type: 'noul', probability: 0.1 },
-        stuck_severity: {
-          type: 'score',
-          score: 3,
-          probabilities: { 1: 0.05, 2: 0.15, 3: 0.8 },
-          confidence: 0.95,
-        },
-      }),
-    }),
+    typesafe: new TypeSafeClient({ mockHandler: mock }),
   }
-
-  // Setup loop guard with triggerThreshold 2
-  apply(fakeContext, {
-    triggerThreshold: 2,
-    noProgressThreshold: 0.3,
-    stuckSeverityThreshold: 2,
-  })
-
-  assert.ok(postExecuteHandler, 'Handler should be registered')
-
-  const toolExec: ToolExecution = {
-    name: 'bash',
-    args: { command: 'cat missing.txt' },
-    agent: { id: 'agent-1' },
+  apply(ctx, config)
+  return {
+    ctx,
+    preStep: (agent: unknown) => preStepHandler?.({ agent }),
+    // Mirrors the DSH waterfall contract: (exec, result, next) where next takes no arguments.
+    step: async (exec: ToolExecution, content = 'same output') =>
+      postHandler(exec, { content }, async () => ({ kind: 'accept', action: 'accept' })) as Promise<
+        PostToolDecision & { additionalContexts?: any[] }
+      >,
   }
+}
 
-  // First execution - below triggerThreshold (1 < 2)
-  const d1 = await postExecuteHandler(
-    { action: 'accept', content: 'file not found' },
-    toolExec,
-    (d: PostToolDecision) => d
-  )
-  assert.equal(d1.additionalContexts, undefined)
+const agent = { id: 'agent-under-test' }
 
-  // Second execution - reaches triggerThreshold 2, triggers TypeSafe evaluation
-  const d2 = await postExecuteHandler(
-    { action: 'accept', content: 'file not found again' },
-    toolExec,
-    (d: PostToolDecision) => d
-  )
+test('LoopGuard reports a genuinely stuck trajectory', async () => {
+  const h = harness(async () => STUCK_FORESEEABLE)
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
 
-  assert.ok(d2.additionalContexts)
-  assert.equal(d2.additionalContexts.length, 1)
-  assert.equal(d2.additionalContexts[0]?.role, 'user')
-  assert.equal(d2.additionalContexts[0]?.source.plugin, 'typesafe-loop-guard')
-  assert.match(
-    d2.additionalContexts[0]?.content[0]?.text ?? '',
-    /Potential loop or stagnation detected/
-  )
-  // DSH invariant: cannot have both 'content' and 'value' as own properties
-  assert.equal(Object.hasOwn(d2, 'content') && Object.hasOwn(d2, 'value'), false)
+  const first = await h.step(exec, 'error: cannot find module foo')
+  assert.equal(first.additionalContexts, undefined, 'nothing to say on the first step')
 
-  // Third execution with plain { kind: 'accept' }
-  const d3 = await postExecuteHandler(
-    { kind: 'accept', action: 'accept' },
-    toolExec,
-    (d: PostToolDecision) => d
-  )
-  assert.equal(Object.hasOwn(d3, 'content'), false)
-  assert.equal(Object.hasOwn(d3, 'value'), false)
+  const second = await h.step(exec, 'error: cannot find module foo 2nd attempt')
+  assert.ok(second.additionalContexts, 'second no-progress step must be evaluated')
+  const text = second.additionalContexts![0]?.content[0]?.text ?? ''
+  assert.match(text, /Potential loop or stagnation detected/)
+  assert.match(text, /dead-loop probability 86%/)
+  assert.match(text, /severity 1\.85\/2/)
+  assert.match(text, /confidence 78%/)
 })
 
-test('TypeSafeLoopGuard does not intervene when progress is healthy', async () => {
-  let postExecuteHandler: any
+test('LoopGuard stays silent on healthy exploration', async () => {
+  const h = harness(async () => HEALTHY)
+  const exec: ToolExecution = { name: 'read_file', args: { path: 'a.ts' }, agent }
 
-  const fakeContext: CordisContext = {
-    on: (event: string, callback: any) => {
-      if (event === 'tools/post-execute') {
-        postExecuteHandler = callback
-      }
-      return () => {}
-    },
-    typesafe: new TypeSafeClient({
-      mockHandler: async () => ({
-        has_progress: { type: 'noul', probability: 0.9 },
-        stuck_severity: {
-          type: 'score',
-          score: 1,
-          probabilities: { 1: 0.9, 2: 0.1, 3: 0.0 },
-          confidence: 0.98,
-        },
-      }),
-    }),
-  }
-
-  apply(fakeContext, { triggerThreshold: 2 })
-
-  const toolExec: ToolExecution = {
-    name: 'read_file',
-    args: { path: 'index.ts' },
-    agent: { id: 'agent-2' },
-  }
-
-  await postExecuteHandler({ action: 'accept', content: 'code 1' }, toolExec, (d: PostToolDecision) => d)
-  const d2 = await postExecuteHandler({ action: 'accept', content: 'code 2' }, toolExec, (d: PostToolDecision) => d)
-
-  assert.equal(d2.additionalContexts, undefined)
+  await h.step(exec, 'code 1')
+  const second = await h.step(exec, { name: 'read_file', args: { path: 'b.ts' }, agent }, 'code 2')
+  assert.equal(second.additionalContexts, undefined)
 })
 
-test('TypeSafeLoopGuard honors exclude list', async () => {
-  let postExecuteHandler: any
+test('LoopGuard ignores a low-confidence or ambiguous verdict', async () => {
+  const h = harness(async () => MARGINAL_LOW_CONFIDENCE)
+  const exec: ToolExecution = { name: 'pwsh', args: { command: 'echo x' }, agent }
 
-  const fakeContext: CordisContext = {
-    on: (event: string, callback: any) => {
-      if (event === 'tools/post-execute') {
-        postExecuteHandler = callback
-      }
-      return () => {}
+  await h.step(exec, 'out 1')
+  const second = await h.step({ name: 'pwsh', args: { command: 'echo y' }, agent }, 'out 2')
+  assert.equal(second.additionalContexts, undefined, 'confidence 0.28 must not trigger a notice')
+})
+
+test('LoopGuard ignores an unusable answer instead of guessing', async () => {
+  const h = harness(async () => ({}))
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+
+  await h.step(exec, 'a')
+  const second = await h.step({ name: 'bash', args: { command: 'npm test -- --watch' }, agent }, 'b')
+  assert.equal(second.additionalContexts, undefined)
+})
+
+test('LoopGuard defers exact repeats to repeat-tool-reminder', async () => {
+  const h = harness(async () => STUCK_FORESEEABLE)
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+
+  await h.step(exec, 'identical output')
+  const repeated = await h.step({ name: 'bash', args: { command: 'npm test' }, agent }, 'identical output')
+  assert.equal(repeated.additionalContexts, undefined)
+
+  const strict = harness(async () => STUCK_FORESEEABLE, { deferExactRepeats: false })
+  await strict.step(exec, 'identical output')
+  const judged = await strict.step({ name: 'bash', args: { command: 'npm test' }, agent }, 'identical output')
+  assert.ok(judged.additionalContexts, 'with the deferral disabled the semantic verdict applies')
+})
+
+test('LoopGuard honours the cooldown after a notice', async () => {
+  const h = harness(async () => STUCK_FORESEEABLE, { cooldownSteps: 2 })
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+
+  await h.step(exec, 'a')
+  const fired = await h.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
+  assert.ok(fired.additionalContexts)
+
+  const cooled = await h.step({ name: 'bash', args: { command: 'npm test -- -x' }, agent }, 'c')
+  assert.equal(cooled.additionalContexts, undefined, 'cooldown must suppress repeated notices')
+})
+
+test('LoopGuard resets its chain on a new user instruction', async () => {
+  const h = harness(async () => STUCK_FORESEEABLE)
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+
+  await h.step(exec, 'a')
+  h.preStep(agent)
+
+  const afterReset = await h.step({ name: 'bash', args: { command: 'npm test' }, agent }, 'b')
+  assert.equal(afterReset.additionalContexts, undefined, 'a fresh instruction is never a loop')
+})
+
+test('LoopGuard keeps its per-agent history bounded', async () => {
+  const depths: number[] = []
+  const h = harness(
+    async (req: any) => {
+      depths.push(Number(req?.state?.historyDepth ?? 0))
+      return HEALTHY
     },
-    typesafe: new TypeSafeClient({
-      mockHandler: async () => {
-        throw new Error('Should not be called for excluded tool')
-      },
-    }),
+    { maxHistory: 4, triggerThreshold: 2 }
+  )
+
+  for (let i = 0; i < 30; i += 1) {
+    await h.step({ name: 'read_file', args: { path: 'f' + i + '.ts' }, agent }, 'output ' + i)
   }
 
-  apply(fakeContext, {
-    triggerThreshold: 1,
-    exclude: ['status_ping'],
-  })
+  assert.ok(depths.length > 0, 'the semantic layer must have been consulted')
+  assert.ok(
+    depths.every((depth) => depth <= 4),
+    'history window must never exceed maxHistory, saw ' + JSON.stringify(depths)
+  )
+})
 
-  const toolExec: ToolExecution = {
-    name: 'status_ping',
-    args: {},
-  }
+test('LoopGuard honours the exclude list and ignores agent-less calls', async () => {
+  let modelCalls = 0
+  const h = harness(async () => {
+    modelCalls += 1
+    return STUCK_FORESEEABLE
+  }, { exclude: ['status_ping'] })
 
-  const d = await postExecuteHandler({ action: 'accept' }, toolExec, (res: PostToolDecision) => res)
-  assert.equal(d.additionalContexts, undefined)
+  await h.step({ name: 'status_ping', args: {}, agent }, 'a')
+  await h.step({ name: 'status_ping', args: {}, agent }, 'b')
+  assert.equal(modelCalls, 0)
+
+  await h.step({ name: 'bash', args: { command: 'npm test' } }, 'c')
+  await h.step({ name: 'bash', args: { command: 'npm test' } }, 'd')
+  assert.equal(modelCalls, 0, 'calls without an agent have nobody to remind')
 })

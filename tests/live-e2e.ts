@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { TypeSafeClient, noul, choice, score } from '../lib/client.js'
+import { TypeSafeClient, noul, choice, score } from '../lib/typesafe-client.js'
 import { ToolPrunerService } from '../lib/tool-pruner.js'
 
 function loadKey(): string {

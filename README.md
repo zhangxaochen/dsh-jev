@@ -73,10 +73,13 @@ dsh plugin --profile headless add github:zhangxaochen/dsh-jev
         loopGuard:
           triggerThreshold: 2
           noProgressThreshold: 0.3
-          stuckSeverityThreshold: 2
+          pLoopThreshold: 0.6
+          minConfidence: 0.5
         safetyGuard:
           blockThreshold: 0.85
           askApprovalThreshold: 0.5
+          onError: deny-guarded
+          onUncertain: deny-guarded
           guardedTools:
             - bash
             - pwsh
@@ -146,20 +149,27 @@ ctx.plugin(SafetyGuard, {
 - `mockHandler?: MockHandler`: 自定义离线 Mock 处理器，常用于自动化测试或离线断网环境。
 
 ### `LoopGuardConfig`
-- `triggerThreshold?: number`: 触发语义评估的连续动作最小步数（默认 `2`）。
-- `noProgressThreshold?: number`: 认定为“缺乏进展”的置信度阈值，范围 0~1（默认 `0.3`）。
-- `stuckSeverityThreshold?: number`: 卡死严重度打分阈值，范围 1~3（默认 `2`）。
+- `triggerThreshold?: number`: 连续无进展步数达到该值后开始语义评估（默认 `2`）。
+- `noProgressThreshold?: number`: `has_progress` 概率低于该值即视为无进展，范围 0~1（默认 `0.3`）。
+- `pLoopThreshold?: number`: 「确定死循环」桶的概率质量阈值，范围 0~1（默认 `0.6`）。实测：真循环 `0.86`、正常探索 `0.00`、误报样本约 `0.4`。
+- `minConfidence?: number`: 答案置信度低于该值则不动作，范围 0~1（默认 `0.5`）。
+- `cooldownSteps?: number`: 一次提示后的静默步数（默认 `3`）。
+- `maxHistory?: number`: 每 agent 保留的历史窗口（默认 `8`）。
+- `deferExactRepeats?: boolean`: 完全相同（工具+参数+输出）的重复交给 DSH 内置 `repeat-tool-reminder` 处理，不走语义判定（默认 `true`）。
 - `include?: string[]`: 跟踪的特定工具列表（为空则跟踪所有）。
 - `exclude?: string[]`: 忽略的工具列表。
 
 ### `SafetyGuardConfig`
-- `blockThreshold?: number`: 阻断执行（返回 `deny`）的危害概率阈值（默认 `0.7`）。
-- `askApprovalThreshold?: number`: 请求人工审批（返回 `ask`）的风险概率阈值（默认 `0.4`）。
+- `blockThreshold?: number`: 阻断执行（返回 `deny`）的危害概率阈值（默认 `0.85`）。
+- `askApprovalThreshold?: number`: 请求人工审批（返回 `ask`）的风险概率阈值（默认 `0.5`）。
+- `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: 判定无法获得（API 报错/超时）时的策略，默认 `deny-guarded`（受保护工具 fail-closed，其余工具放行）。需要旧的「出错即放行」行为时显式设为 `allow`。
+- `onUncertain?: 'deny-guarded' | 'deny-all' | 'allow'`: 拿到了答案但没有可用概率时的策略，默认 `deny-guarded`。
+- `rules?: Array<{ id, question, threshold?, action? }>`: 用户自定义语义规则，与内置问题同一次请求评估；`action` 可取 `deny` / `ask` / `warn`。
 - `guardedTools?: string[]`: 受到审查保护的高危工具列表（默认包含 `bash`, `run_command`, `run_code`, `write_to_file`, `replace_file_content`）。
 
 ### `ToolPrunerConfig`
-- `maxTools?: number`: 上下文中最多保留的动态工具数量（默认 `5`）。
-- `minScoreThreshold?: number`: 工具入选的最低相关性打分（1~3 分制，默认 `2`）。
+- `maxTools?: number`: 上下文中最多保留的动态工具数量（默认 `8`）。
+- `minScoreThreshold?: number`: 工具入选的最低相关性打分；实测刻度为 `[0, 2]`（3 级 rubric，默认 `2`）。
 - `alwaysRetain?: string[]`: 永远不被剪枝保留的核心工具（默认包含 `read_file`, `write_to_file`, `bash`, `run_command`）。
 
 ---

@@ -4,7 +4,7 @@
  * @module dsh-jev/tool-pruner
  */
 
-import { score, TypeSafeClient } from './typesafe-client.js'
+import { resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import type {
   CordisContext,
@@ -126,11 +126,7 @@ export class ToolPrunerService {
 
 export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
   function getClient(): TypeSafeClient {
-    const client = typeof ctx.get === 'function' ? ctx.get('typesafe') : undefined
-    if (client instanceof TypeSafeClient) {
-      return client
-    }
-    return new TypeSafeClient()
+    return resolveClientFrom(ctx)
   }
 
   const pruner = new ToolPrunerService(getClient, config)

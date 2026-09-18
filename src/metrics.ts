@@ -34,7 +34,24 @@ export interface JevMetricsData {
     totalLatencyMs: number
     avgLatencyMs: number
     errors: number
+    /** Billed input bytes sent to System One (cache hits cost nothing). */
+    inputBytes: number
+    /** Estimated USD cost at $0.042 per million input tokens; output is free. */
+    estimatedCostUsd: number
+    /** Decisions served from the identical-payload cache. */
+    cacheHits: number
+    /** Decisions whose answer came back unusable (missing or malformed). */
+    decisionErrors: number
   }
+}
+
+/** Accounting facts attached to one System One call. */
+export interface CallAccounting {
+  inputBytes?: number
+  estimatedCostUsd?: number
+  latencyMs?: number
+  cacheHit?: boolean
+  decisionError?: boolean
 }
 
 /** Estimated tokens per pruned MCP/system tool schema */
@@ -70,6 +87,10 @@ function createEmptyMetrics(): JevMetricsData {
       totalLatencyMs: 0,
       avgLatencyMs: 0,
       errors: 0,
+      inputBytes: 0,
+      estimatedCostUsd: 0,
+      cacheHits: 0,
+      decisionErrors: 0,
     },
   }
 }
@@ -156,8 +177,12 @@ export class MetricsCollector {
   /**
    * Record a System One API call latency.
    */
-  recordCall(latencyMs: number, success = true): void {
+  recordCall(latencyMs: number, success = true, accounting: CallAccounting = {}): void {
     this.data.systemOne.totalCalls += 1
+    this.data.systemOne.inputBytes += accounting.inputBytes ?? 0
+    this.data.systemOne.estimatedCostUsd += accounting.estimatedCostUsd ?? 0
+    if (accounting.cacheHit) this.data.systemOne.cacheHits += 1
+    if (accounting.decisionError) this.data.systemOne.decisionErrors += 1
     if (success) {
       this.data.systemOne.totalLatencyMs += latencyMs
       this.data.systemOne.avgLatencyMs = Math.round(
@@ -166,6 +191,12 @@ export class MetricsCollector {
     } else {
       this.data.systemOne.errors += 1
     }
+    this.persist()
+  }
+
+  /** Record a decision whose answer was unusable (missing or malformed). */
+  recordDecisionError(): void {
+    this.data.systemOne.decisionErrors += 1
     this.persist()
   }
 

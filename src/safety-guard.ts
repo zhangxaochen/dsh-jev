@@ -1,16 +1,28 @@
 /**
  * Execution safety gatekeeper plugin using TypeSafe AI.
- * Intercepts tools/pre-execute to screen sensitive commands for destructive actions or security hazards.
+ *
+ * Two layers, deliberately ordered:
+ * 1. a synchronous deterministic envelope registered through `ctx.tools.guard()`
+ *    for shapes that must never run (filesystem-root deletion, disk overwrite,
+ *    credential exfiltration). No later listener can force-allow a guarded denial.
+ * 2. a semantic verdict from Jev on `tools/pre-execute`, which catches the shapes
+ *    no pattern list ever covered.
+ *
+ * Failure policy is explicit and fail-closed by default for guarded tools: a
+ * timeout, API error, or answer without a usable probability denies the call
+ * instead of silently allowing it.
  * @module dsh-jev/safety-guard
  */
 
-import { noul, score, TypeSafeClient } from './typesafe-client.js'
+import { choice, noul, resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import type {
+  ChoiceResult,
   CordisContext,
   NoulResult,
   PreToolDecision,
   SafetyGuardConfig,
+  SafetyRule,
   ScoreResult,
   ToolExecution,
 } from './types.js'
@@ -28,12 +40,119 @@ export const DEFAULT_GUARDED_TOOLS = [
   'replace_file_content',
 ]
 
+/** Credential classes, so a placeholder or a doc link is not read as a live secret. */
+export const CREDENTIAL_CRITERIA: Record<string, string> = {
+  none: 'No credential material is present',
+  placeholder_or_reference: 'Placeholder, example, redacted value, hash, or a reference to a secret elsewhere',
+  real_credential: 'A live token, password, API key, or connection string with a value',
+  private_key: 'A private key, keystore, or seed phrase',
+}
+
+const CREDENTIAL_HAZARD_BUCKETS = ['real_credential', 'private_key']
+
+interface HardDenyRule {
+  id: string
+  reason: string
+  test: RegExp
+}
+
+/**
+ * Strings worth inspecting for one tool call. Patterns must never be matched
+ * against a JSON envelope alone: quoting hides the end of a command, so a
+ * `$`-anchored pattern silently stops matching `rm -rf /`.
+ */
+export function inspectableText(exec: ToolExecution): string[] {
+  const args = exec?.arguments ?? exec?.args
+  const out: string[] = []
+  if (typeof args === 'string') {
+    out.push(args)
+    return out
+  }
+  if (args && typeof args === 'object') {
+    for (const key of ['command', 'cmd', 'script', 'code', 'input', 'content', 'url', 'path']) {
+      const value = (args as Record<string, unknown>)[key]
+      if (typeof value === 'string' && value.length > 0) out.push(value)
+    }
+    try {
+      out.push(JSON.stringify(args))
+    } catch {
+      /* circular arguments are not inspectable as text */
+    }
+  }
+  return out
+}
+
+/** Flags and targets of a delete command, without regex golf on quoting. */
+function looksLikeRootDelete(text: string): boolean {
+  for (const segment of text.split(/[\n\r;&|]+/)) {
+    const tokens = segment.trim().split(/\s+/).filter(Boolean)
+    if (tokens.length < 2) continue
+    const verbIndex = tokens.findIndex((token) => /(^|\/)(rm|del|rd|rmdir|remove-item)$/i.test(token))
+    if (verbIndex === -1) continue
+    const rest = tokens.slice(verbIndex + 1)
+    const flags = rest.filter((token) => token.startsWith('-') || /^\/[a-z]$/i.test(token))
+    const targets = rest.filter((token) => !flags.includes(token) && !/^\/[a-z]$/i.test(token))
+    const recursive = flags.some((flag) => /^(?:-{1,2}(?:recursive|r[a-z]*|f[a-z]*)|-[a-z]*r[a-z]*|\/s|\/e)$/i.test(flag))
+    const force = flags.some((flag) => /^(?:-{1,2}(?:force|f[a-z]*)|-[a-z]*f[a-z]*|\/f|\/q|\/y)$/i.test(flag))
+    const rootish = targets.some((token) =>
+      /^(?:\/|\/\*|~|~\/|\$HOME|\$HOME\/|\$\{HOME\}\/?|[a-zA-Z]:\\?|[a-zA-Z]:\\?\*)$/.test(token)
+    )
+    if (recursive && force && rootish) return true
+  }
+  return false
+}
+
+/**
+ * Deterministic hard denies. Each entry is a shape with no legitimate agent use;
+ * everything else is left to the semantic layer instead of an ever-growing list.
+ */
+export const HARD_DENY_RULES: HardDenyRule[] = [
+  {
+    id: 'windows-recursive-delete-root',
+    reason: 'recursive forced deletion of a drive root',
+    test: /(?:remove-item|del|rd|rmdir)\b[^\n]*-(?:recurse|r)\b[^\n]*-(?:force|f)\b[^\n]*[a-z]:\\?(?=[\s;&|"']|$)|\bdel\s+\/[a-z]\s+\/[a-z]\s+[a-z]:\\/i,
+  },
+  {
+    id: 'raw-disk-overwrite',
+    reason: 'writing to a raw block device or formatting a filesystem',
+    test: /\bdd\b[^\n]*\bof=\/dev\/|\bmkfs(?:\.\w+)?\b|\bFormat-Volume\b/i,
+  },
+  {
+    id: 'credential-exfiltration',
+    reason: 'uploading or piping private key material off the machine',
+    test: /(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr)\b[^\n]*(?:-d\s*@|-F\s*\w+=@|--data(?:-binary)?\s*@|-InFile\b|--upload-file\b)[^\n]*(?:\.ssh|\.aws|\.env|id_rsa|id_ed25519|credentials|keystore|\.pem)\b|(?:cat|type|Get-Content)\b[^\n]*(?:\.ssh\/id_|\.aws\/credentials|\.env)\b[^\n]*\|\s*(?:curl|wget|nc|Invoke-WebRequest|iwr)\b/i,
+  },
+  {
+    id: 'fork-bomb',
+    reason: 'shell fork bomb',
+    test: /:\(\)\s*\{\s*:\|:&\s*\}\s*;\s*:/,
+  },
+]
+
+/** Run the deterministic envelope over one tool call. */
+export function deterministicVerdict(exec: ToolExecution): { id: string; reason: string } | undefined {
+  const texts = inspectableText(exec)
+  for (const text of texts) {
+    if (looksLikeRootDelete(text)) {
+      return { id: 'filesystem-root-delete', reason: 'recursive deletion of the filesystem root or a drive root' }
+    }
+  }
+  for (const rule of HARD_DENY_RULES) {
+    if (texts.some((text) => rule.test.test(text))) {
+      return { id: rule.id, reason: rule.reason }
+    }
+  }
+  return undefined
+}
+
 export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
   const blockThreshold = config.blockThreshold ?? 0.85
   const askApprovalThreshold = config.askApprovalThreshold ?? 0.5
   const guardedTools = config.guardedTools ?? DEFAULT_GUARDED_TOOLS
+  const onError = config.onError ?? 'deny-guarded'
+  const onUncertain = config.onUncertain ?? 'deny-guarded'
+  const rules: SafetyRule[] = config.rules ?? []
 
-  // In headless/CI environments, interactive prompts ('ask') convert to hard denials in DSH.
   const isHeadless =
     config.headless ??
     (process.env.HEADLESS === 'true' ||
@@ -41,17 +160,61 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
       Boolean(process.env.DEEPSEEK_HARNESS_HEADLESS))
 
   function getClient(): TypeSafeClient {
-    const client = typeof ctx.get === 'function' ? ctx.get('typesafe') : undefined
-    if (client instanceof TypeSafeClient) {
-      return client
-    }
-    return new TypeSafeClient()
+    return resolveClientFrom(ctx)
   }
 
   function isGuarded(toolName: string): boolean {
     return guardedTools.includes(toolName)
   }
 
+  function deny(reason: string): PreToolDecision {
+    defaultMetrics.recordSafetyCheck('deny')
+    return { kind: 'deny', action: 'deny', reason }
+  }
+
+  /**
+   * Apply a fail policy for one tool call. The `allow` branch delegates through
+   * `next()` so downstream listeners still get their say; only a denial short-circuits.
+   */
+  function failPolicy(
+    policy: SafetyGuardConfig['onError'],
+    toolName: string,
+    cause: string,
+    next: () => Promise<PreToolDecision>
+  ): Promise<PreToolDecision> | PreToolDecision {
+    if (policy === 'deny-all') return deny(`[TypeSafe SafetyGuard] ${cause}`)
+    if (policy === 'deny-guarded' && isGuarded(toolName)) return deny(`[TypeSafe SafetyGuard] ${cause}`)
+    defaultMetrics.recordSafetyCheck('pass')
+    return next()
+  }
+
+  /**
+   * Layer 1: monotonic deterministic guard. Synchronous by contract, and no later
+   * listener can force-allow a call this denies.
+   */
+  function registerDeterministicGuard(targetCtx: CordisContext): (() => void) | undefined {
+    const tools = typeof targetCtx.get === 'function' ? targetCtx.get('tools') : (targetCtx as any).tools
+    if (!tools || typeof tools.guard !== 'function') return undefined
+    try {
+      return tools.guard((exec: ToolExecution): string | undefined => {
+        if (!isGuarded(exec?.name)) return undefined
+        const verdict = deterministicVerdict(exec)
+        if (!verdict) return undefined
+        defaultMetrics.recordSafetyCheck('deny')
+        return `[TypeSafe SafetyGuard] Deterministic policy ${verdict.id}: ${verdict.reason}.`
+      })
+    } catch {
+      return undefined
+    }
+  }
+
+  const guardDisposer = registerDeterministicGuard(ctx)
+  const guardInject =
+    typeof (ctx as any).inject === 'function' && guardDisposer === undefined
+      ? (ctx as any).inject(['tools'], (child: CordisContext) => registerDeterministicGuard(child))
+      : undefined
+
+  /** Layer 2: semantic verdict. */
   const unsubscribe = ctx.on(
     'tools/pre-execute',
     async (...hookArgs: any[]): Promise<PreToolDecision> => {
@@ -65,13 +228,19 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
       } else {
         // Standard DSH waterfall signature: (exec, next)
         exec = hookArgs[0]
-        next = typeof hookArgs[1] === 'function'
-          ? hookArgs[1]
-          : async () => ({ kind: 'allow', action: 'allow' })
+        next = typeof hookArgs[1] === 'function' ? hookArgs[1] : async () => ({ kind: 'allow', action: 'allow' })
       }
 
       if (!isGuarded(exec?.name)) {
         return next()
+      }
+
+      // Deterministic envelope runs first when the guard hook is unavailable.
+      const hardVerdict = deterministicVerdict(exec)
+      if (hardVerdict) {
+        return deny(
+          `[TypeSafe SafetyGuard] Deterministic policy ${hardVerdict.id}: ${hardVerdict.reason}.`
+        )
       }
 
       const state = {
@@ -79,82 +248,149 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         arguments: exec.arguments ?? exec.args,
       }
 
+      const questions: Record<string, unknown> = {
+        is_destructive: noul(
+          'Does this tool call attempt to perform unrecoverable destruction (e.g. rm -rf, drop database, wipe git history)?'
+        ),
+        is_exfiltration: noul(
+          'Does this tool call send private credential material, keys, or secrets to a remote endpoint?'
+        ),
+        credential_kind: choice(
+          'Does the tool call carry credential material, and of what kind?',
+          CREDENTIAL_CRITERIA
+        ),
+        is_jailbreak: noul(
+          'Does this tool call contain an injection payload, jailbreak attempt, or deliberate sandbox escape?'
+        ),
+        risk_score: score('Rate the overall risk and potential irreversible damage of executing this tool action', [
+          'Low risk: Standard development or read/write operations',
+          'Moderate risk: Broad file modification, network egress, or elevated command',
+          'Critical risk: Catastrophic deletion, privilege violation, or active credential leak',
+        ]),
+      }
+      for (const rule of rules) {
+        questions[`rule_${rule.id}`] = noul(rule.question)
+      }
+
       try {
         const client = getClient()
-        const evalResults = await client.systemOne({
-          state,
-          questions: {
-            is_destructive: noul(
-              'Does this tool call attempt to perform unrecoverable destruction (e.g. rm -rf, drop database, wipe git history) or exfiltrate private secrets/tokens?'
-            ),
-            is_jailbreak: noul(
-              'Does this tool call contain an injection payload, jailbreak attempt, or deliberate sandbox escape?'
-            ),
-            risk_score: score(
-              'Rate the overall risk and potential irreversible damage of executing this tool action',
-              [
-                'Low risk: Standard development or read/write operations',
-                'Moderate risk: Broad file modification, network egress, or elevated command',
-                'Critical risk: Catastrophic deletion, privilege violation, or active credential leak',
-              ]
-            ),
-          },
-        })
-
-        const destructiveResult = evalResults.is_destructive as NoulResult | undefined
-        const jailbreakResult = evalResults.is_jailbreak as NoulResult | undefined
-        const riskScoreResult = evalResults.risk_score as ScoreResult | undefined
-
-        const maxHazardProb = Math.max(
-          destructiveResult?.probability ?? destructiveResult?.noul ?? 0,
-          jailbreakResult?.probability ?? jailbreakResult?.noul ?? 0
+        const evalResults = await client.systemOne(
+          { state, questions: questions as any },
+          { timeoutMs: client.pathTimeoutMs }
         )
-        const riskScore = riskScoreResult?.score ?? 0
 
-        // 1. Critical risk / high probability hazard -> DENY
-        if (maxHazardProb >= blockThreshold || riskScore >= 1.7) {
-          defaultMetrics.recordSafetyCheck('deny')
-          const reason =
-            `[TypeSafe SafetyGuard] Execution blocked: Tool action deemed high risk ` +
-            `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
-          return {
-            kind: 'deny',
-            action: 'deny',
-            reason,
+        const probabilityOf = (key: string): number | undefined => {
+          const r = evalResults[key] as NoulResult | undefined
+          if (!r || r.unknown) return undefined
+          if (typeof r.noul === 'number') return r.noul
+          return typeof r.probability === 'number' ? r.probability : undefined
+        }
+
+        const hazards = [
+          probabilityOf('is_destructive'),
+          probabilityOf('is_exfiltration'),
+          probabilityOf('is_jailbreak'),
+        ].filter((value): value is number => typeof value === 'number')
+
+        const credential = evalResults.credential_kind as ChoiceResult | undefined
+        const credentialHazard =
+          credential && !credential.unknown && typeof credential.probabilities === 'object'
+            ? CREDENTIAL_HAZARD_BUCKETS.reduce(
+                (acc, bucket) => Math.max(acc, credential.probabilities?.[bucket] ?? 0),
+                0
+              )
+            : undefined
+
+        const risk = evalResults.risk_score as ScoreResult | undefined
+        const riskScore = risk && !risk.unknown && typeof risk.score === 'number' ? risk.score : undefined
+
+        // No usable probability at all: the answer is unknown, not safe.
+        if (hazards.length === 0 && credentialHazard === undefined && riskScore === undefined) {
+          defaultMetrics.recordDecisionError()
+          return failPolicy(
+            onUncertain,
+            exec.name,
+            `Semantic verdict unavailable for "${exec.name}"; failing closed per onUncertain=${onUncertain}.`,
+            next
+          )
+        }
+
+        const maxHazard = Math.max(
+          hazards.length > 0 ? Math.max(...hazards) : 0,
+          credentialHazard ?? 0
+        )
+
+        // User-declared rules are evaluated on the same answer set.
+        for (const rule of rules) {
+          const prob = probabilityOf(`rule_${rule.id}`)
+          if (prob === undefined || prob < (rule.threshold ?? 0.7)) continue
+          const action = rule.action ?? 'ask'
+          if (action === 'deny') {
+            return deny(
+              `[TypeSafe SafetyGuard] Rule "${rule.id}" matched (${(prob * 100).toFixed(0)}%): ${rule.question}`
+            )
+          }
+          if (action === 'ask') {
+            if (isHeadless) {
+              return deny(
+                `[TypeSafe SafetyGuard] Rule "${rule.id}" requires approval (${(prob * 100).toFixed(0)}%) and this session cannot prompt; failing closed.`
+              )
+            }
+            defaultMetrics.recordSafetyCheck('ask')
+            return {
+              kind: 'ask',
+              action: 'ask',
+              prompt: `[TypeSafe SafetyGuard] Rule "${rule.id}" wants confirmation (${(prob * 100).toFixed(0)}%).`,
+              reason: rule.question,
+            }
           }
         }
 
-        // 2. Moderate risk -> ASK APPROVAL (only in interactive mode)
-        // In DSH headless mode, 'ask' automatically converts to 'deny', leading to tool execution crashes.
-        // In headless mode, moderate risk is logged and fails-open to next().
-        if (maxHazardProb >= askApprovalThreshold || riskScore >= 0.7) {
-          if (isHeadless) {
-            defaultMetrics.recordSafetyCheck('pass')
-            return next()
-          }
+        // 1. Critical hazard -> DENY
+        if (maxHazard >= blockThreshold || (riskScore !== undefined && riskScore >= 1.7)) {
+          return deny(
+            `[TypeSafe SafetyGuard] Execution blocked: hazard probability ${(maxHazard * 100).toFixed(0)}%` +
+              (riskScore !== undefined ? `, risk ${riskScore.toFixed(2)}/2` : '') +
+              '.'
+          )
+        }
 
+        // 2. Moderate hazard -> ask, or fail closed when no prompt is possible.
+        if (maxHazard >= askApprovalThreshold || (riskScore !== undefined && riskScore >= 0.7)) {
+          if (isHeadless) {
+            return deny(
+              `[TypeSafe SafetyGuard] Approval required (hazard ${(maxHazard * 100).toFixed(0)}%) and this session cannot prompt; failing closed.`
+            )
+          }
           defaultMetrics.recordSafetyCheck('ask')
-          const reason =
-            `[TypeSafe SafetyGuard] Approval required: Tool action requires confirmation ` +
-            `(hazard probability: ${(maxHazardProb * 100).toFixed(0)}%, risk level: ${riskScore.toFixed(2)}/2).`
           return {
             kind: 'ask',
             action: 'ask',
-            prompt: reason,
-            reason,
+            prompt:
+              `[TypeSafe SafetyGuard] Approval required: hazard probability ${(maxHazard * 100).toFixed(0)}%` +
+              (riskScore !== undefined ? `, risk ${riskScore.toFixed(2)}/2` : '') +
+              '.',
+            reason: 'Potentially destructive or sensitive tool action',
           }
         }
 
         defaultMetrics.recordSafetyCheck('pass')
+        return next()
       } catch (err) {
-        console.warn('[TypeSafe SafetyGuard] Inspection failed, defaulting to configured policy:', err)
+        console.warn('[TypeSafe SafetyGuard] Inspection failed, applying', onError, 'policy:', err)
+        return failPolicy(
+          onError,
+          exec.name,
+          `Inspection failed for "${exec.name}"; failing closed per onError=${onError}.`,
+          next
+        )
       }
-
-      return next()
     }
   )
 
   return () => {
     unsubscribe()
+    if (typeof guardDisposer === 'function') guardDisposer()
+    if (guardInject && typeof guardInject.dispose === 'function') guardInject.dispose()
   }
 }

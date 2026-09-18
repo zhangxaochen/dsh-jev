@@ -63,3 +63,17 @@
 | `safetyGuard.blockThreshold` | 0.85 | 破坏性样本 `is_destructive=0.98`，良性 0.01，中间地带足够宽 |
 | `safetyGuard.askApprovalThreshold` | 0.5 | 同上 |
 | `client.pathTimeoutMs` | 800 | §1.5 热调用 250–300ms，留 2.5x 余量 |
+
+## 3. Phase 1 线上验证（`node --experimental-strip-types tests/live-verify.ts`）
+
+用**真实 API** 回放本会话产生误报的轨迹形态，套用修复后的判定规则（`progress < 0.3 && pLoop >= 0.6 && confidence >= 0.5`）：
+
+| 场景 | progress | pLoop | confidence | score | 判定 | 期望 |
+|---|---|---|---|---|---|---|
+| 并行检索（doctor + repo 搜索 + 代码搜索） | 0.75 | 0.00 | 0.96 | 0.03 | 不触发 | 不触发 ✓ |
+| `read` 紧跟 `pwsh`（**正是本会话误报形态**） | 0.71 | 0.00 | 0.98 | 0.01 | 不触发 | 不触发 ✓ |
+| 同一失败命令重复且输出相同 | 0.11 | 0.84 | 0.76 | 1.84 | 触发 | 触发 ✓ |
+
+结论：修复前生效阈值 1.4 会命中的两类健康轨迹，其 `pLoop` 实测为 **0**；真正的死循环 `pLoop=0.84`、`confidence=0.76`。用 `pLoop + confidence` 取代 `score` 刻度比较后，误报消失且召回保留。
+
+延迟：668–721ms（含冷启动），真循环 393ms。

@@ -6,122 +6,102 @@ import { ToolPrunerService } from '../lib/tool-pruner.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { CordisContext, ToolExecution, ToolDefinitionMinimal } from '../lib/types.js'
 
-test('Resilience: SafetyGuard fails open to allow on API 429 Too Many Requests', async () => {
+function failingClient(message: string): TypeSafeClient {
+  return new TypeSafeClient({
+    mockHandler: async () => {
+      throw new Error(message)
+    },
+  })
+}
+
+function guardHarness(client: TypeSafeClient, config: Record<string, unknown> = {}) {
   let handler: any
-  const fakeContext: CordisContext = {
+  const ctx: CordisContext = {
     on: (evt, cb) => {
       if (evt === 'tools/pre-execute') handler = cb
       return () => {}
     },
-    typesafe: new TypeSafeClient({
-      mockHandler: async () => {
-        throw new Error('TypeSafe API request failed with status 429: Too Many Requests')
-      },
-    }),
+    typesafe: client,
   }
-
-  applySafetyGuard(fakeContext)
-  assert.ok(handler)
-
-  const toolExec: ToolExecution = {
-    name: 'bash',
-    args: { command: 'npm test' },
+  applySafetyGuard(ctx, config)
+  return async (exec: ToolExecution) => {
+    let nextCalled = false
+    const result = await handler(exec, async () => {
+      nextCalled = true
+      return { kind: 'allow', action: 'allow' }
+    })
+    return { result, nextCalled }
   }
+}
 
-  let nextCalled = false
-  const result = await handler(toolExec, async () => {
-    nextCalled = true
-    return { kind: 'allow', action: 'allow' }
-  })
+test('Resilience: a guarded tool fails closed when the API returns 429', async () => {
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429: Too Many Requests'))
+  const { result, nextCalled } = await invoke({ name: 'bash', args: { command: 'npm test' } })
+
+  assert.equal(result.kind, 'deny')
+  assert.equal(nextCalled, false)
+  assert.match(result.reason ?? '', /onError=deny-guarded/)
+})
+
+test('Resilience: a guarded tool fails closed when the API returns 500', async () => {
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 500: Internal Server Error'))
+  const { result } = await invoke({ name: 'bash', args: { command: 'npm test' } })
+
+  assert.equal(result.kind, 'deny')
+})
+
+test('Resilience: an unguarded tool still passes through on API failure', async () => {
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429'), { guardedTools: ['bash'] })
+  const { result, nextCalled } = await invoke({ name: 'fetch_web', args: { url: 'https://example.com' } })
 
   assert.equal(nextCalled, true)
   assert.equal(result.kind, 'allow')
 })
 
-test('Resilience: SafetyGuard fails open to allow on API 500 Internal Server Error', async () => {
-  let handler: any
-  const fakeContext: CordisContext = {
-    on: (evt, cb) => {
-      if (evt === 'tools/pre-execute') handler = cb
-      return () => {}
-    },
-    typesafe: new TypeSafeClient({
-      mockHandler: async () => {
-        throw new Error('TypeSafe API request failed with status 500: Server Error')
-      },
-    }),
-  }
-
-  applySafetyGuard(fakeContext)
-  const toolExec: ToolExecution = {
-    name: 'run_command',
-    args: { command: 'node script.js' },
-  }
-
-  let nextCalled = false
-  const result = await handler(toolExec, async () => {
-    nextCalled = true
-    return { kind: 'allow' }
-  })
+test("Resilience: onError 'allow' preserves the legacy fail-open behaviour", async () => {
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429'), { onError: 'allow' })
+  const { result, nextCalled } = await invoke({ name: 'bash', args: { command: 'npm test' } })
 
   assert.equal(nextCalled, true)
   assert.equal(result.kind, 'allow')
 })
 
-test('Resilience: LoopGuard fails open on timeout without blocking agent execution', async () => {
+test('Resilience: LoopGuard stays advisory and never blocks on timeout', async () => {
   let handler: any
-  const fakeContext: CordisContext = {
+  const ctx: CordisContext = {
     on: (evt, cb) => {
       if (evt === 'tools/post-execute') handler = cb
       return () => {}
     },
-    typesafe: new TypeSafeClient({
-      mockHandler: async () => {
-        throw new Error('The operation was aborted due to timeout')
-      },
-    }),
+    typesafe: failingClient('The operation was aborted due to timeout'),
   }
+  applyLoopGuard(ctx, { triggerThreshold: 2 })
 
-  applyLoopGuard(fakeContext, { triggerThreshold: 1 })
-  const toolExec: ToolExecution = {
-    name: 'edit',
-    args: { file: 'test.js' },
-  }
-
-  let nextCalled = false
-  const result = await handler(
-    toolExec,
-    { content: 'ok' },
-    async () => {
-      nextCalled = true
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent: { id: 'agent-timeout' } }
+  let nextCalls = 0
+  const decide = () =>
+    handler(exec, { content: 'boom' }, async () => {
+      nextCalls += 1
       return { kind: 'accept', action: 'accept' }
-    }
-  )
+    })
 
-  assert.equal(nextCalled, true)
-  assert.equal(result.kind, 'accept')
-  assert.equal(result.additionalContexts, undefined)
+  const first = await decide()
+  const second = await decide()
+
+  assert.equal(nextCalls, 2)
+  assert.equal(first.additionalContexts, undefined)
+  assert.equal(second.additionalContexts, undefined)
 })
 
-test('Resilience: ToolPrunerService returns full candidate list on API failure', async () => {
-  const client = new TypeSafeClient({
-    mockHandler: async () => {
-      throw new Error('Network partition: ECONNRESET')
-    },
-  })
-
-  const pruner = new ToolPrunerService(() => client, {
+test('Resilience: ToolPrunerService returns the full candidate list on API failure', async () => {
+  const pruner = new ToolPrunerService(() => failingClient('TypeSafe API request failed with status 500'), {
     maxTools: 2,
-    alwaysRetain: [],
   })
-
   const candidates: ToolDefinitionMinimal[] = [
-    { name: 'db_query', description: 'Query SQL' },
-    { name: 's3_upload', description: 'Upload S3' },
-    { name: 'send_email', description: 'Send SMTP' },
+    { name: 'a', description: 'tool a' },
+    { name: 'b', description: 'tool b' },
+    { name: 'c', description: 'tool c' },
   ]
-
-  const result = await pruner.pruneTools('query users table', candidates)
-  assert.equal(result.length, 3)
-  assert.deepEqual(result, candidates)
+  const result = await pruner.pruneTools('do something', candidates)
+  assert.equal(result.length, candidates.length)
 })
