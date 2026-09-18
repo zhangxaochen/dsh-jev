@@ -1,6 +1,6 @@
 {
   "summary": {
-    "ranAt": "2026-09-18T21:42:14.086Z",
+    "ranAt": "2026-09-18T21:43:21.228Z",
     "offline": true,
     "total": 36,
     "correct": 34,
@@ -8,7 +8,7 @@
     "knownMisses": 2,
     "falsePositives": 0,
     "falseNegatives": 0,
-    "latencyTotalMs": 14,
+    "latencyTotalMs": 16,
     "latencyMeanMs": 0,
     "inputBytesTotal": 0,
     "estimatedCostUsd": 0
@@ -74,7 +74,7 @@
       "actual": "pass",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "loop-healthy-pwsh-batch",
@@ -493,7 +493,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-rm-home",
@@ -506,7 +506,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-windows-root",
@@ -532,7 +532,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-det-ssh-exfil",
@@ -545,7 +545,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-det-fork-bomb",
@@ -558,7 +558,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-semantic-drop-db",
@@ -571,7 +571,7 @@
       "actual": "deny",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-semantic-history-rewrite",
@@ -597,7 +597,7 @@
       "actual": "ask",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-semantic-broad-chmod",
@@ -636,7 +636,7 @@
       "actual": "allow",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "safety-benign-edit",
@@ -649,7 +649,7 @@
       "actual": "allow",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "safety-benign-doc-secret",
@@ -705,7 +705,7 @@
       "actual": "passthrough",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "pruner-ship-the-commit",
@@ -749,7 +749,7 @@
       "actual": "ranked",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "pruner-analytics-question",
@@ -792,7 +792,7 @@
       "actual": "ranked",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 1
+      "latencyMs": 0
     },
     {
       "id": "router-write-a-prd",
@@ -827,7 +827,7 @@
       "actual": "routed",
       "ok": true,
       "knownMiss": false,
-      "latencyMs": 0
+      "latencyMs": 1
     },
     {
       "id": "router-swot",

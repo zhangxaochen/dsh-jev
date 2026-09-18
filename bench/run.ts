@@ -33,6 +33,9 @@ import { SkillRouterService } from '../lib/skill-router.js'
 import type { QuestionDefinition } from '../lib/types.js'
 
 const OFFLINE = process.argv.includes('--offline')
+// A harness that mutates sources and rebuilds (scripts/drill.mjs) must not leave
+// rewritten calibration artifacts behind.
+const NO_ARTIFACTS = process.argv.includes('--no-artifacts')
 
 // A bench run prices real decisions; they belong in a scratch file, not in the
 // metrics an operator reads to judge the running host.
@@ -375,10 +378,14 @@ async function main(): Promise<void> {
   }
 
   const outDir = join(process.cwd(), 'docs', 'calibration')
-  mkdirSync(outDir, { recursive: true })
-  const outFile = join(outDir, 'bench-' + new Date().toISOString().slice(0, 10) + (OFFLINE ? '-offline' : '') + '.json')
-  writeFileSync(outFile, JSON.stringify({ summary, rows }, null, 2), 'utf8')
-  console.log('Wrote ' + outFile)
+  if (NO_ARTIFACTS) {
+    console.log('Skipped the calibration artifact (--no-artifacts)')
+  } else {
+    mkdirSync(outDir, { recursive: true })
+    const outFile = join(outDir, 'bench-' + new Date().toISOString().slice(0, 10) + (OFFLINE ? '-offline' : '') + '.json')
+    writeFileSync(outFile, JSON.stringify({ summary, rows }, null, 2), 'utf8')
+    console.log('Wrote ' + outFile)
+  }
 
   // Strict: every case must behave as labelled unless it is recorded as a known
   // miss. An accuracy floor alone let a single rule regression through, because a
