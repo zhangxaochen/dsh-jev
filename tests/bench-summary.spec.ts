@@ -63,3 +63,26 @@ test('renderBenchLine explains the absence instead of inventing numbers', () => 
   assert.match(line, /暂无记录/)
   assert.match(line, /pnpm run bench/)
 })
+
+test('the rendered bench line reports the summary it was given', () => {
+  // The line is user-visible in the dashboard and the stats tool markdown, so a hardcoded
+  // accuracy (or a wrong ratio) would be a claim about a run that never happened.
+  const line = renderBenchLine({
+    ranAt: '2026-09-20T00:00:00.000Z',
+    offline: false,
+    total: 40,
+    correct: 20,
+    accuracy: 0.5,
+    knownMisses: 2,
+    falsePositives: 0,
+    falseNegatives: 0,
+    latencyTotalMs: 1000,
+    latencyMeanMs: 25,
+    inputBytesTotal: 0,
+    estimatedCostUsd: 0,
+  })
+
+  assert.match(line, /20\/40/, 'the ratio must come from the summary')
+  assert.match(line, /50\.0%/, 'the accuracy must come from the summary')
+  assert.match(line, /真实 API/, 'an online run is labelled as such')
+})

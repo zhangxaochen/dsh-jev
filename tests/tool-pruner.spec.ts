@@ -332,3 +332,55 @@ test('the pruner starts ranking before the rest of the assembly runs', async () 
   )
   assert.equal(assembly.tools.length, 2, 'and its result must still be applied')
 })
+
+test('the host token meter is used when the context provides one', async () => {
+  // The savings the dashboard reports are priced by the host's estimator when available
+  // and by a local constant otherwise. Only the fallback was covered, so dropping the
+  // host estimator would have silently changed every reported token saving.
+  const recorded: any[] = []
+  const { defaultMetrics } = await import('../lib/metrics.js')
+  const originalRecordPrune = defaultMetrics.recordPrune.bind(defaultMetrics)
+  ;(defaultMetrics as any).recordPrune = (...args: any[]) => {
+    recorded.push(args)
+    return originalRecordPrune(...args)
+  }
+
+  try {
+    let handler: any
+    const ctx: any = {
+      on: (event: string, callback: any) => {
+        if (event === 'system-prompt/assemble') handler = callback
+        return () => {}
+      },
+      get: (name: string) => (name === 'tokenMeter' ? { estimateMessage: () => 999 } : undefined),
+      tokenMeter: { estimateMessage: () => 999 },
+      typesafe: new TypeSafeClient({
+        mockHandler: async (req: any) => {
+          const answers: Record<string, unknown> = {}
+          for (const [id, question] of Object.entries(req.questions ?? {})) {
+            const embedded = String((question as any).instructions ?? '')
+            answers[id] = { type: 'score', score: /alpha/.test(embedded) ? 2 : 0, confidence: 0.9, probabilities: {} }
+          }
+          return answers
+        },
+      }),
+    }
+    apply(ctx, { maxTools: 2 })
+
+    const assembly: any = {
+      tools: [
+        { name: 'alpha', description: 'a' },
+        { name: 'beta', description: 'b' },
+        { name: 'gamma', description: 'c' },
+      ],
+      sections: [{ text: 'run the tests and fix the failing assertion' }],
+    }
+    await handler(assembly, {}, async () => assembly)
+
+    assert.ok(recorded.length > 0, 'the prune is recorded')
+    const measurement = recorded[0][2]
+    assert.equal(measurement.tokenSource, 'tokenMeter', 'the host estimator must be preferred')
+  } finally {
+    ;(defaultMetrics as any).recordPrune = originalRecordPrune
+  }
+})

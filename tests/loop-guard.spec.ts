@@ -297,3 +297,33 @@ test('LoopGuard passes its configured thresholds into the verdict', async () => 
   const unconfident = await highConfidence.step(second, 'b')
   assert.equal(unconfident.additionalContexts, undefined, 'minConfidence must gate the verdict')
 })
+
+test('the advisory evaluation uses the short path timeout', async () => {
+  // The advisory path has its own budget (800ms by default) so a slow suggestion can
+  // never hold up the tool result; nothing pinned which timeout the call actually used.
+  let seen: any
+  let handler: any
+  const client = new TypeSafeClient({ mockHandler: async () => STUCK_FORESEEABLE })
+  Object.assign(client as any, { timeoutMs: 2000, pathTimeoutMs: 111 })
+  Object.defineProperty(client, 'systemOne', {
+    value: async (req: any, options: any) => {
+      seen = options
+      return STUCK_FORESEEABLE
+    },
+  })
+  const ctx: CordisContext = {
+    on: (event: string, callback: any) => {
+      if (event === 'tools/post-execute') handler = callback
+      return () => {}
+    },
+    typesafe: client,
+  }
+  apply(ctx, { triggerThreshold: 1 })
+
+  await handler(
+    { name: 'bash', args: { command: 'npm test' }, agent },
+    { content: 'same output' },
+    async () => ({ kind: 'accept' })
+  )
+  assert.equal(seen?.timeoutMs, 111, 'the advisory call must use pathTimeoutMs, not the full budget')
+})

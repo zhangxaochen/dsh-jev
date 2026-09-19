@@ -235,3 +235,27 @@ test('route caps the candidate list it sends', async () => {
   await capped.route('summarise the quarterly metrics into a short report', catalog)
   assert.equal(asked, 4, 'exactly maxCandidates questions are asked')
 })
+
+test('advise bounds its own request time', async () => {
+  // The router asks one question per skill, which is a large request; it carries its own
+  // timeout so a slow answer cannot run past the turn. The client's shorter advisory
+  // budget is what made routing fail silently before, so the value is pinned here. The
+  // call options are not visible to a mock handler, hence the stub on systemOne.
+  let seen: any
+  const client = new TypeSafeClient({ mockHandler: async () => ({}) })
+  Object.defineProperty(client, 'systemOne', {
+    value: async (req: any, options: any) => {
+      seen = options
+      const answers: Record<string, unknown> = {}
+      for (const id of Object.keys(req.questions ?? {})) {
+        answers[id] = { type: 'score', score: 1.9, confidence: 0.9, probabilities: {} }
+      }
+      return answers
+    },
+  })
+
+  const router = new SkillRouterService(() => client, { requestTimeoutMs: 4321 })
+  const advice = await router.advise('summarise the quarterly metrics into a short report', skills(6))
+  assert.ok(advice, 'a confident top score yields advice')
+  assert.equal(seen?.timeoutMs, 4321, 'the routing call must use requestTimeoutMs')
+})

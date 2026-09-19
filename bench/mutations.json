@@ -316,5 +316,47 @@
     "file": "src/safety-guard.ts",
     "from": "const DATA_KEYS: string[] = []",
     "to": "const DATA_KEYS: string[] = ['content', 'text']"
+  },
+  {
+    "name": "scoreConfidence always reports unknown",
+    "file": "src/typesafe-client.ts",
+    "from": "return typeof r.confidence === 'number' ? r.confidence : undefined",
+    "to": "return undefined"
+  },
+  {
+    "name": "the advisory path uses the full timeout",
+    "file": "src/loop-guard.ts",
+    "from": "{ timeoutMs: client.pathTimeoutMs }",
+    "to": "{ timeoutMs: client.timeoutMs }"
+  },
+  {
+    "name": "the router stops bounding its request time",
+    "file": "src/skill-router.ts",
+    "from": "{ timeoutMs: this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS }",
+    "to": "{ timeoutMs: 60000 }"
+  },
+  {
+    "name": "the loop guard fires one step early",
+    "file": "src/loop-guard.ts",
+    "from": "if (chain.noProgressStreak + 1 < triggerThreshold) {",
+    "to": "if (chain.noProgressStreak < triggerThreshold) {"
+  },
+  {
+    "name": "the safety guard drops the hazard a rule reports",
+    "file": "src/safety-guard.ts",
+    "from": "const maxHazard = Math.max(",
+    "to": "const maxHazard = Math.min("
+  },
+  {
+    "name": "the bench summary prints a fixed accuracy",
+    "file": "src/bench-summary.ts",
+    "from": "`${summary.correct}/${summary.total} 正确（准确率 ${(summary.accuracy * 100).toFixed(1)}%）、`",
+    "to": "`${summary.correct}/${summary.total} 正确（准确率 100.0%）、`"
+  },
+  {
+    "name": "the pruner ignores the host token meter",
+    "file": "src/tool-pruner.ts",
+    "from": "this.config.meter",
+    "to": "undefined"
   }
 ]
