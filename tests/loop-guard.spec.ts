@@ -349,4 +349,15 @@ test('a fired decision is recorded under the module threshold reviews group by',
   assert.equal(recorded.module, 'loop-guard', 'the record must name the module')
   assert.ok(typeof recorded.probability === 'number', 'and carry the probability the review reads')
   assert.ok(recorded.latencyMs >= 0, 'and the latency')
+
+  // The unusable-answer branch logs its own record, with its own module field.
+  const unusable = harness(async () => ({}), { triggerThreshold: 1 })
+  await unusable.step({ name: 'bash', args: { command: 'npm test -- -u' }, agent }, 'b')
+  const all = readFileSync(path, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+  const uncertain = all.find((entry) => entry.action === 'unknown')
+  assert.ok(uncertain, 'an unusable answer is recorded as unknown')
+  assert.equal(uncertain.module, 'loop-guard', 'the uncertain branch must name the module too')
 })
