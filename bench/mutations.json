@@ -388,5 +388,41 @@
     "file": "src/safety-guard.ts",
     "from": "return guardedTools.includes(toolName)",
     "to": "return false"
+  },
+  {
+    "name": "the stats tool stops clearing metrics",
+    "file": "src/index.ts",
+    "from": "            if (args && args.reset) {\n              defaultMetrics.reset()",
+    "to": "            if (args && args.reset) {\n              void 0"
+  },
+  {
+    "name": "the web route stops clearing metrics",
+    "file": "src/index.ts",
+    "from": "            if (req.method === 'POST' || url.searchParams.get('reset') === '1' || url.searchParams.get('reset') === 'true') {\n              defaultMetrics.reset()",
+    "to": "            if (req.method === 'POST' || url.searchParams.get('reset') === '1' || url.searchParams.get('reset') === 'true') {\n              void 0"
+  },
+  {
+    "name": "the panel posts a reset that does nothing",
+    "file": "src/client.ts",
+    "from": "body: JSON.stringify({ reset: true }),",
+    "to": "body: JSON.stringify({ reset: false }),"
+  },
+  {
+    "name": "decision records lose their module",
+    "file": "src/loop-guard.ts",
+    "from": "module: 'loop-guard',",
+    "to": "module: '',"
+  },
+  {
+    "name": "the loop notice stops naming the tool",
+    "file": "src/loop-guard.ts",
+    "from": "Potential loop or stagnation detected on tool",
+    "to": "Potential loop detected"
+  },
+  {
+    "name": "cache hits stop being counted",
+    "file": "src/metrics.ts",
+    "from": "if (accounting.cacheHit) this.state().systemOne.cacheHits += 1",
+    "to": "if (false) this.state().systemOne.cacheHits += 1"
   }
 ]
