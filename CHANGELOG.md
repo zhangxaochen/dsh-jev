@@ -31,6 +31,8 @@
 - **开关的滑块颜色用错 token（0.2.0 内修复）**：滑块原本取 `--dsw-alias-label-*`（**文字**色），在浅色语境下渲染成近黑 ✗，与「滑块应为 on-color/固定亮色」（iOS、Material 的做法）相反；开启态轨道也用了手挑的 `#16a34a`（green-600）而偏暗 ✗。现改为：开启态轨道用宿主的 `--dsw-alias-state-success-primary`（= `--dsw-static-green-500`，随主题走）、滑块固定 `#ffffff` 加 `0 1px 2px` 阴影、关闭态轨道用中性表面 token ✓
 
 ### Changed
+- **headless 下 `ask` 默认放行并告警（`headlessAsk: warn`）**：`ask` 的本意是「该由人决定」，而无法弹窗的会话把它变成拒绝 ✗ —— 实测两次 hazard 0.50 / 0.72 的询问被硬拒后，agent 步数 +12% ✓。要恢复旧的 fail-closed 设 `headlessAsk: 'deny'` ✓。**硬拒区间（≥ `blockThreshold`）与确定性外壳不变** ✓；新增 `safetyGuard.warned` 计数 ✓。
+- **拒绝与告警的决策日志现在带脱敏命令摘要** ✓（截断 160 字符，抹掉 `sk-…` / `Bearer …` / `token=` / `password=` 一类 ✓）：此前日志只记概率 ✗，两次拒绝事后**无法审计** ✓；`commandPreview()` 优先展示命令字段本身而不是 JSON ✓。
 
 - **死循环判定改用「死循环桶概率 + 置信度」**，不再比较 `score` 刻度。修复前的反向三元阈值让配置值
   `2` 实际生效为 `1.4`，把「边缘重复」误判为死循环（已实测复现两次误报）。

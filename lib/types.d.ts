@@ -203,6 +203,17 @@ export interface SafetyGuardConfig {
      */
     headless?: boolean;
     /**
+     * What to do with an `ask` verdict when the session cannot prompt (headless).
+     *
+     * `warn` (default) proceeds and warns. `ask` means "a human should decide", and a
+     * session without a human must not turn that into a refusal: measured in a pilot, two of
+     * three denials were weak-signal asks (hazard 0.50 and 0.72) that made the agent re-route
+     * and inflate its step count by 12%. `deny` keeps the old fail-closed behaviour for
+     * fully unattended runs. Neither value changes the hard-deny band
+     * (`blockThreshold` and above) or the deterministic envelope.
+     */
+    headlessAsk?: 'warn' | 'deny';
+    /**
      * Budget for the semantic inspection, in milliseconds (default: 3500).
      *
      * Kept separate from `client.pathTimeoutMs` (800ms): that budget belongs to the

@@ -242,8 +242,8 @@
   {
     "name": "safety-check outcomes stop being counted",
     "file": "src/metrics.ts",
-    "from": "recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny'): void {",
-    "to": "recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny'): void { if (true) return"
+    "from": "    this.state().safetyGuard.screened += 1",
+    "to": "    // mutated: safety checks are no longer counted"
   },
   {
     "name": "the shaping counter stops aggregating",
@@ -484,5 +484,11 @@
     "file": "src/safety-guard.ts",
     "from": "    if (out.length === 0) {",
     "to": "    if (true) {"
+  },
+  {
+    "name": "headless ask proceeds instead of failing closed",
+    "file": "src/safety-guard.ts",
+    "from": "export const DEFAULT_HEADLESS_ASK = 'warn'",
+    "to": "export const DEFAULT_HEADLESS_ASK = 'deny'"
   }
 ]

@@ -136,7 +136,7 @@ registerJevTools(ctx, () => resolveClientFrom(ctx))
 破坏性变更，升级后检查三处（完整变更史见 [`CHANGELOG.md`](CHANGELOG.md)）：
 
 - `loopGuard.stuckSeverityThreshold` **已移除**（旧值在代码里被反向三元改成固定 1.4）；改用 `pLoopThreshold`（默认 `0.6`）+ `minConfidence`（默认 `0.5`）。
-- `safetyGuard` 失败策略：出错/超时默认**放行**（`onError: allow`，并记账告警），**裁决不可用** fail-closed，headless 下 `ask` → `deny`。要严格设 `onError: deny-guarded`；想连「不可用」也放行设 `onUncertain: allow`。
+- `safetyGuard` 失败策略：出错/超时默认**放行**（`onError: allow`，并记账告警），**裁决不可用** fail-closed，headless 下 `ask` 默认**放行并告警**（`headlessAsk: warn`）—— 因为 `ask` 的本意是「该由人决定」，而不能弹窗的会话不该把它变成拒绝（实测：两次 hazard 0.50/0.72 的询问被硬拒后，agent 步数 +12%）；要恢复旧的 fail-closed 设 `headlessAsk: 'deny'`。要严格设 `onError: deny-guarded`；想连「不可用」也放行设 `onUncertain: allow`。
 - 指标文件 `~/.dsh/jev-stats.json` 升到 `version: 2`（只记实测字段），旧文件**不迁移**，插件启动时按新结构重新计数；需保留历史先自行备份。
 
 同时新增：`jev_ask` / `jev_rank` / `jev_check` 决策原语、`skillRouter`、默认关闭的 `resultShaper`。
@@ -166,6 +166,7 @@ registerJevTools(ctx, () => resolveClientFrom(ctx))
 ### `SafetyGuardConfig`
 - `blockThreshold?: number`: 阻断执行（返回 `deny`）的危害概率阈值（默认 `0.85`）。
 - `askApprovalThreshold?: number`: 请求人工审批（返回 `ask`）的风险概率阈值（默认 `0.5`）。
+- `headlessAsk?: 'warn' | 'deny'`: 无法弹窗（headless）时对 `ask` 的处理，默认 **`warn`**（放行并告警，计数进 `safetyGuard.warned`）；设 `deny` 恢复 fail-closed。两者都**不影响**硬拒区间（`blockThreshold` 及以上）与确定性外壳。
 - `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: **判定拿不到**（API 报错/超时/上游不可达）时的策略，默认 **`allow`**。理由是判定服务属运行期依赖，fail-closed 会把上游抖动放大成「所有受保护工具被拒」；确定性外壳不受此设置影响（`rm -rf /` 照旧拒绝），失败也会计数告警。要严格就设 `deny-guarded`。
 - `inspectionTimeoutMs?: number`: **语义审查**的超时预算（默认 `3500`）。刻意**不复用** `client.pathTimeoutMs`（800ms 属**建议路径**，失败放行无代价；这里失败即拒绝受保护工具），实测调用耗时 587–777ms，用 800ms 等于把预算压在实测天花板上。
 - `inspectionRetries?: number`: **瞬时**失败（超时/中断/429/5xx）的额外尝试次数（默认 `1`）。只对瞬时错误重试，「裁决不可用」（答案到了但不可用）不走重试、归 `onUncertain`；重试与最终失败次数都计入看板（`inspectionRetries` / `inspectionFailures`）。

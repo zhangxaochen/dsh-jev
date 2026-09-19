@@ -22,6 +22,15 @@ export declare const CREDENTIAL_CRITERIA: Record<string, string>;
 export declare const DEFAULT_BLOCK_THRESHOLD = 0.85;
 export declare const DEFAULT_ASK_APPROVAL_THRESHOLD = 0.5;
 /**
+ * An `ask` verdict in a session that cannot prompt proceeds by default.
+ *
+ * The alternative - refusing because nobody can answer - punishes the agent for the
+ * harness's inability to ask. A pilot measured two of three denials as weak-signal asks
+ * (hazard 0.50 and 0.72) against legitimate bash calls, and the arm that hit them ran 12%
+ * more steps. Strict unattended runs can set `headlessAsk: 'deny'`.
+ */
+export declare const DEFAULT_HEADLESS_ASK = "warn";
+/**
  * Budget for the semantic inspection, in milliseconds.
  *
  * This is deliberately not `client.pathTimeoutMs` (800ms). That budget was sized for
@@ -94,5 +103,16 @@ export declare function evaluateHazard(answers: Record<string, any>, thresholds:
  */
 export declare const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'];
 export declare function apply(ctx: CordisContext, config?: SafetyGuardConfig): () => void;
+/** Strip credential-shaped material so a command can be logged safely. */
+export declare function redactSecrets(text: string): string;
+/**
+ * A short, redacted preview of what a tool call was about to do.
+ *
+ * The decision log used to carry only probabilities, so a denial could not be judged after
+ * the fact - a pilot produced two denials at hazard 0.50 and 0.72 that nobody could audit.
+ * A command-shaped argument is shown as itself rather than as JSON, because that is what a
+ * reader needs; anything else falls back to the serialized arguments.
+ */
+export declare function commandPreview(args: unknown, maxLength?: number): string | undefined;
 export {};
 //# sourceMappingURL=safety-guard.d.ts.map

@@ -294,7 +294,7 @@ test('the delivery summary counts each module as it stands', () => {
   const MODULES: Array<[string, string[], number]> = [
     ['typesafe-client', ['client.spec.ts', 'resilience.spec.ts'], 15],
     ['loop-guard', ['loop-guard.spec.ts'], 16],
-    ['safety-guard', ['safety-guard.spec.ts'], 17],
+    ['safety-guard', ['safety-guard.spec.ts'], 18],
     ['tool-pruner', ['tool-pruner.spec.ts'], 10],
     ['ask-tools', ['ask-tools.spec.ts'], 8],
     ['skill-router', ['skill-router.spec.ts'], 11],

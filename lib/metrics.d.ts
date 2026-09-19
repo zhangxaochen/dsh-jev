@@ -31,6 +31,8 @@ export interface JevMetricsData {
         screened: number;
         blocked: number;
         approvals: number;
+        /** `ask` verdicts that proceeded because the session could not prompt (headlessAsk=warn). */
+        warned: number;
         /** Denials produced by the deterministic envelope. */
         hardDenied: number;
         /** Denials produced because the verdict was unknown and the policy fails closed. */
@@ -129,7 +131,7 @@ export declare class MetricsCollector {
     /**
      * Record a safety guard pre-execution screen.
      */
-    recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny'): void;
+    recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny' | 'warn'): void;
     /**
      * Record a retry after a transient inspection failure.
      *

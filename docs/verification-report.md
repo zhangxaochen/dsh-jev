@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **207/207**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 离线单测 | **208/208**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -55,7 +55,7 @@
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 81 处变异） | **81/81** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（25 个 spec 逐个单独运行） | **25/25 单独通过**，且各文件计数之和 **207 = 套件总数**（无用例在聚合运行中消失） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（25 个 spec 逐个单独运行） | **25/25 单独通过**，且各文件计数之和 **208 = 套件总数**（无用例在聚合运行中消失） |
 
 ## 抓到的真实缺陷（按严重度）
 

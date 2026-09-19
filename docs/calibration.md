@@ -1137,6 +1137,37 @@ exports.inject = ['slots']
 - 按钮状态靠 10s 轮询与点击后回读 ✗ 若在别处（curl/文件）改动，按钮最多滞后 10s ✓
 - 停用期间**不记账**（模块根本没进决策路径 ✗）⇒ 看板无法回答「关闭期间省了多少/漏了多少」✗ 这是刻意的：不在路径上就不该产生数字 ✓
 
+## 25. headless 下 `ask` 的默认行为：放行并告警（2026-09-19，按实测改）
 
+**触发**：插件 A/B 小样（任务 `vitest-duration-sharding`，Command Code 路由，同 DSH 版本，两臂顺序执行）里，
+处理臂的决策日志显示 3 次拒绝，其中 **2 次是弱信号** ✗：
 
+```
+{"action":"deny","probability":0.89,"detail":{"credentialHazard":0.89}}      ← 合理
+{"action":"deny","detail":{"reason":"…Approval required (hazard 72%) and this session cannot prompt; failing closed."}}
+{"action":"deny","detail":{"reason":"…Approval required (hazard 50%) and this session cannot prompt; failing closed."}}
+```
 
+即 `ask`（0.5 ≤ hazard < 0.85）在 headless 下被**直接转成拒绝** ✗ —— 而 `ask` 的语义是「该由人判断」✓，
+不能弹窗是**宿主的限制** ✗，把它变成对 agent 的惩罚并不合理 ✓。
+
+**同组数据**（n=1 ✓ 饱和任务 ✓ 两臂同 provider/版本 ✓）：
+
+| | 对照（无插件） | 处理（有插件） |
+| --- | --- | --- |
+| reward | 1.0 | 1.0 |
+| 步数 | 169 | **190（+12.4%）** ✗ |
+| 壁钟 | 24m59s | **29m9s（+16.7%）** ✗ |
+| prompt token 合计 | 18,129,403 | 19,166,538（+5.7%）✗ |
+| 未命中缓存输入 | 292,219 | **98,506（−66%）** ✓ |
+
+**决策**：`headlessAsk` 默认 **`warn`** ✓ —— 放行、告警、并把 hazard 记进 `safetyGuard.warned` ✓；
+需要严格无人值守时设 `'deny'` ✓。**边界不动** ✓：`blockThreshold`（0.85）以上的硬拒不变 ✓，
+确定性外壳（`rm -rf /` 那类形状）不变 ✓ —— 放宽的只是「不确定」那一档 ✓。
+
+**如实保留的局限**：n=1 ✓，那两次拒绝**是否就是**步数膨胀的原因**尚未证明** ✗（机制吻合 ✓ 因果未证 ✓）。
+这条改动本身可验证 ✓：改完用同一 provider / 同一 DSH 版本重跑这对，若步数差回落到噪声内即是它 ✓。
+
+**顺带修的可观测性缺口** ✓：决策日志原先只记概率 ✗，导致上面两次拒绝**无法判断是否合理** ✓。
+现增加脱敏命令摘要 ✓（`commandPreview()`：优先取 `command`/`cmd`/`script`/`query`/`content`/`path` 字段 ✓，
+抹掉 `sk-…`、`Bearer …`、`token=`、`password=` 一类 ✓，截断 160 字符 ✓）。
