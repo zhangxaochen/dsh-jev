@@ -19,7 +19,7 @@
 | `skill-router` | 为当前请求指出一个最该载入的 skill（advisory） | 开 | 单测 11 项 + `verify:router` + 服务级集成 | 112 项目录 1.4s；6/7 标注意图命中 |
 | `result-shaper` | 行形状聚类后做有界分类，只留 warning/failure | **关** | 单测 17 项 + 16 例前置检查语料 + `verify:shaper` + 服务级集成 | 压缩 130×–190×；纯噪声拒绝 |
 
-合计 **193** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、36 条 A/B 基准。
+合计 **194** 个离线单测、**22** 项真实 DSH 集成检查、5 个线上验证脚本、36 条 A/B 基准。
 
 ## 基线（本会话实测，`~/.dsh/jev-stats.json`）
 
@@ -985,5 +985,9 @@
 - [x] **可观测**：看板新增 `inspectionRetries` / `inspectionFailures`，供后续**用数据校准**预算（而不是按热调用 ×2.5 估算）
 - [x] **防回归**：单测 +6（safety-guard 11 → 17）覆盖「独立预算 / 重试后成功 / 有界重试 / 不重试非瞬时 / 裁决不可用不重试 / 分类表」；变异语料 +3（改回 `pathTimeoutMs`、重试次数置 0、对所有失败都重试——都必须被拦下）
 - [x] `docs/calibration.md` §23 记录现场、诊断数据、改动与**局限**（上游为何开始连续失败未取到直接证据：当时 shell 已被该护栏拒绝）
-- [ ] **待验证**：改动落在 `src/` 与测试里，但**现场 shell 被该护栏拒绝，我无法运行 `pnpm run build` / `pnpm test` / `verify:mutants`** ✗ → 需在 shell 恢复后跑一次：`pnpm run build && pnpm test && pnpm run verify:mutants`（`lib/` 是入库构建产物，未重建前 `verify:build` 会报不一致，属预期）
+- [x] **构建与单测已验证**（操作者重启后 shell 恢复）：`pnpm run build` ✓、`pnpm test` **194/194** ✓、`pnpm run verify:mutants` **74/74** ✓、`pnpm run drill` **31/31** ✓（三条新防回归条目全部被拦下 ⇒ 新测试有牙齿）
+- [x] **实机复测**：重启后最近三次成功检查耗时 **1195 / 1287 / 1439 ms**——旧 800ms 预算下这三次**全部**会失败 ✗，新 3500ms 全部通过 ✓；`pwsh` 可用性恢复 ✓
+- [x] **新计数立刻暴露第二个缺陷**：为校准预算而加的两个计数**没出现在实机文件里** → 根因是已存在的 v2 文件**不补齐新增字段**（`loadInitial` 直接 `return parsed`），首次自增会写入 **NaN** 并持久化 ✗。这不是个别字段问题，而是任何后续新增指标都会踩的结构性缺口
+- [x] 修复：新增并导出 `normalizeMetrics()`（逐键逐段合并到新默认值：存值保留、缺字段回填、整段缺失回填）；`metrics.spec.ts` +1 条迁移测试（含"整段缺失"与"自增后为 1 而非 NaN"）；语料 +1 条（去掉 `normalizeMetrics` 必须被拦下）；CHANGELOG 记录
+
 

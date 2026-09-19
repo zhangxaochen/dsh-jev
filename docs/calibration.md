@@ -1001,7 +1001,36 @@ Error: [TypeSafe SafetyGuard] Inspection failed for "pwsh"; failing closed per o
 
 `bench/mutations.json` 新增 3 条防回归：把预算改回 `client.pathTimeoutMs`、把重试次数改成 0、对**所有**失败都重试——三条都必须被拦下。
 
-### 23.5 局限（如实记录）
+### 23.5 修好之后的实机复测（同日）
+
+重启后（新构建生效）宿主自己写的数字：
+
+| 项 | 值 |
+|---|---|
+| 最近三次**成功**的安全检查耗时 | **1195 / 1287 / 1439 ms** |
+| 旧预算 800ms | 这三次**全部**会失败 ✗ |
+| 新预算 3500ms | 全部通过 ✓（余量约 2.4 倍） |
+| shell 可用性 | 恢复 ✓（此前每次 `pwsh` 都被拒） |
+
+即：**实测比事故前的 587–777ms 又慢了一档**（1.2–1.4s），说明当时把预算定在 800ms 不只是「贴边」，而是**已经越界**——诊断被独立复测坐实。
+
+### 23.6 新计数立刻暴露的第二个缺陷：v2 文件缺字段不补齐
+
+为了让预算「用数据校准」而加的两个计数（`inspectionRetries` / `inspectionFailures`）上线后**没有出现**在实机文件里。查原始 JSON：
+
+```
+文件里的 safetyGuard 字段: approvals, blocked, hardDenied, screened, uncertainDenied   ← 5 个
+代码期望的字段:            screened, blocked, approvals, hardDenied, uncertainDenied, inspectionRetries, inspectionFailures  ← 7 个
+```
+
+根因：`MetricsCollector.loadInitial()` 对已存在的 v2 文件**直接 `return parsed`**，不补齐该构建期望的字段 ✗。后果不只是看板显示 `undefined`：**首次自增会写成 `NaN` 并持久化** ✗ 之后每次重启都带着这个 NaN ✗。这不是我这两个字段的问题，而是**任何后续新增指标字段都会踩**的结构性缺口。
+
+修法：新增并导出 `normalizeMetrics(stored)`——把已存快照**逐键、逐段**合并到 `createEmptyMetrics()` 之上（存的值保留，缺的字段回填，整段缺失的段也回填）✓；`loadInitial` 改为返回 `normalizeMetrics(parsed)` ✓。
+
+防回归：`metrics.spec.ts` 新增 1 条（喂一个只有旧 5 字段、且**整段缺失** systemOne 的 v2 文件 → 断言存值保留、新字段回填为 0、缺失段回填、自增后为 1 而非 NaN）；语料新增 1 条（把 `normalizeMetrics` 去掉 → 必须被拦下）。
+
+
+### 23.7 局限（如实记录）
 
 诊断为**读数**（宿主决策日志的 16 条延迟 + 代码路径 + 标定记录），但根因中的「为什么从某一刻起检查开始连续失败」（限流？网络？端点抖动？）**未取到直接证据**：当时 shell 已被该护栏拒绝，无法复现或抓包。改动本身不依赖这一层归因——无论上游原因为何，「预算压在天花板上 + 失败即全禁」都是应当修掉的放大机制。
 

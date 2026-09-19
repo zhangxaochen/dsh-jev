@@ -2,7 +2,7 @@ import test from 'node:test'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -405,6 +405,42 @@ test('a false sub-config turns that module off', () => {
   const prunerOff = mount({ toolPruner: false })
   assert.ok(!prunerOff.provided.includes('toolPruner'), 'toolPruner: false must not provide the service')
   assert.ok(prunerOff.events.includes('system-prompt/assemble'), 'the router still mounts its listener')
+})
+
+test('a field added in a later build is backfilled from a file written before it', () => {
+  // The live deployment proved this: the file carried the five 0.2.0 safety fields and
+  // not the two added with the inspection budget, so those stayed undefined - the
+  // dashboard would have printed "undefined" and the first retry would have persisted
+  // NaN. Sections the file omits entirely must come from the defaults as well.
+  const file = join(tmpdir(), 'jev-migrate-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.json')
+  writeFileSync(
+    file,
+    JSON.stringify({
+      version: 2,
+      firstRecordedAt: '2026-01-01T00:00:00.000Z',
+      lastUpdatedAt: '2026-01-02T00:00:00.000Z',
+      safetyGuard: { screened: 5, blocked: 1, approvals: 0, hardDenied: 1, uncertainDenied: 0 },
+    }),
+    'utf8'
+  )
+
+  try {
+    const collector = new MetricsCollector(file)
+    const loaded = collector.getSnapshot()
+    assert.equal(loaded.safetyGuard.screened, 5, 'stored values survive the merge')
+    assert.equal(loaded.safetyGuard.blocked, 1)
+    assert.equal(loaded.safetyGuard.inspectionRetries, 0, 'the new field is backfilled rather than undefined')
+    assert.equal(loaded.safetyGuard.inspectionFailures, 0)
+    assert.equal(loaded.systemOne.totalCalls, 0, 'a section the file omits comes from the defaults')
+    assert.equal(loaded.version, 2, 'and the schema version is kept')
+
+    collector.recordSafetyRetry()
+    assert.equal(collector.getSnapshot().safetyGuard.inspectionRetries, 1, 'and increments instead of becoming NaN')
+    collector.recordSafetyInspectionFailure()
+    assert.equal(collector.getSnapshot().safetyGuard.inspectionFailures, 1)
+  } finally {
+    rmSync(file, { force: true })
+  }
 })
 
 test('the stats tool declares exactly the fields it returns', () => {

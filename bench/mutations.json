@@ -442,5 +442,11 @@
     "file": "src/safety-guard.ts",
     "from": "      if (attempt >= retries || !isTransientInspectionError(error)) throw error",
     "to": "      if (attempt >= retries) throw error"
+  },
+  {
+    "name": "a persisted snapshot stops being backfilled",
+    "file": "src/metrics.ts",
+    "from": "          return normalizeMetrics(parsed)",
+    "to": "          return parsed as JevMetricsData"
   }
 ]

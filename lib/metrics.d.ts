@@ -86,6 +86,17 @@ export declare const METRICS_PATH_ENV = "DSH_JEV_METRICS_PATH";
  * a scratch file after imports and before its first decision.
  */
 export declare function resolveMetricsPath(explicit?: string): string;
+/**
+ * Merge a persisted snapshot over a fresh default, key by key and section by section.
+ *
+ * A field added in a later build is absent from files written before it, and returning
+ * the stored object verbatim leaves it `undefined`: the dashboard renders "undefined" and
+ * the first increment writes `NaN` into the persisted file, which then survives every
+ * restart. Observed live - the live file carried the five 0.2.0 safety fields but not the
+ * two added with the inspection budget. Merging keeps every stored value and backfills
+ * whatever this build expects.
+ */
+export declare function normalizeMetrics(stored: unknown): JevMetricsData;
 export declare class MetricsCollector {
     private data?;
     private readonly explicitPath?;

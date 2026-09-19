@@ -149,6 +149,39 @@ export function resolveMetricsPath(explicit?: string): string {
   return join(homedir(), '.dsh', 'jev-stats.json')
 }
 
+/**
+ * Merge a persisted snapshot over a fresh default, key by key and section by section.
+ *
+ * A field added in a later build is absent from files written before it, and returning
+ * the stored object verbatim leaves it `undefined`: the dashboard renders "undefined" and
+ * the first increment writes `NaN` into the persisted file, which then survives every
+ * restart. Observed live - the live file carried the five 0.2.0 safety fields but not the
+ * two added with the inspection budget. Merging keeps every stored value and backfills
+ * whatever this build expects.
+ */
+export function normalizeMetrics(stored: unknown): JevMetricsData {
+  const defaults = createEmptyMetrics()
+  if (!stored || typeof stored !== 'object') return defaults
+  const record = stored as Record<string, unknown>
+  const merged = { ...defaults } as unknown as Record<string, unknown>
+  for (const [key, value] of Object.entries(record)) {
+    const fallback = (defaults as unknown as Record<string, unknown>)[key]
+    if (
+      fallback !== null &&
+      typeof fallback === 'object' &&
+      !Array.isArray(fallback) &&
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      merged[key] = { ...(fallback as Record<string, unknown>), ...(value as Record<string, unknown>) }
+    } else {
+      merged[key] = value
+    }
+  }
+  return merged as unknown as JevMetricsData
+}
+
 export class MetricsCollector {
   private data?: JevMetricsData
   private readonly explicitPath?: string
@@ -177,7 +210,8 @@ export class MetricsCollector {
         // v1 counted flat per-tool token estimates and has no measured fields;
         // it is not migrated, the collector restarts on the measured schema.
         if (parsed && parsed.version === 2) {
-          return parsed as JevMetricsData
+          // Backfill fields this build expects but the file predates.
+          return normalizeMetrics(parsed)
         }
       }
     } catch {
