@@ -295,7 +295,11 @@ function cloneAnswers(answers: Record<string, QuestionResult>): Record<string, Q
 export function resolveClientFrom(ctx: CordisContext): TypeSafeClient {
   const viaGet = typeof ctx.get === 'function' ? ctx.get('typesafe') : undefined
   if (viaGet instanceof TypeSafeClient) return viaGet
-  if (ctx.typesafe instanceof TypeSafeClient) return ctx.typesafe
+  try {
+    if ((ctx as any)?.typesafe instanceof TypeSafeClient) return (ctx as any).typesafe
+  } catch {
+    // Cordis proxy throws when accessing undeclared property on Context without inject
+  }
   return new TypeSafeClient()
 }
 

@@ -225,9 +225,15 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
 
   // Prefer the harness estimator for pricing removed schemas; the pruner works
   // without it and falls back to the documented local constant.
-  const meter: TokenEstimator | undefined =
-    (typeof ctx.get === 'function' ? (ctx.get('tokenMeter') as TokenEstimator | undefined) : undefined) ??
-    ((ctx as any).tokenMeter as TokenEstimator | undefined)
+  let meter: TokenEstimator | undefined =
+    typeof ctx.get === 'function' ? (ctx.get('tokenMeter') as TokenEstimator | undefined) : undefined
+  if (!meter) {
+    try {
+      meter = (ctx as any)?.tokenMeter as TokenEstimator | undefined
+    } catch {
+      // Cordis proxy throws on undeclared service property access
+    }
+  }
 
   const pruner = new ToolPrunerService(getClient, { ...config, meter })
 
@@ -273,8 +279,9 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
       })
     : undefined
 
+  let provideDisposer: (() => void) | undefined
   if (typeof ctx.provide === 'function') {
-    ctx.provide('toolPruner', pruner)
+    provideDisposer = ctx.provide('toolPruner', pruner)
   } else {
     ctx.toolPruner = pruner
   }
@@ -283,8 +290,14 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
     if (typeof unsubscribe === 'function') {
       unsubscribe()
     }
-    if (ctx.toolPruner === pruner) {
-      delete ctx.toolPruner
+    if (typeof provideDisposer === 'function') {
+      provideDisposer()
+    } else {
+      try {
+        if (ctx.toolPruner === pruner) {
+          delete ctx.toolPruner
+        }
+      } catch {}
     }
   }
 }

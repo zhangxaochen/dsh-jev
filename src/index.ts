@@ -39,7 +39,12 @@ export const inject: string[] = []
  */
 function resolveService<T>(ctx: CordisContext, name: string): T | undefined {
   const viaGet = typeof (ctx as any).get === 'function' ? (ctx as any).get(name) : undefined
-  return (viaGet ?? (ctx as any)[name]) as T | undefined
+  if (viaGet !== undefined) return viaGet as T
+  try {
+    return (ctx as any)?.[name] as T | undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**
