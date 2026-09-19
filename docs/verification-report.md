@@ -54,6 +54,7 @@
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 44 处变异） | **44/44** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（23 个 spec 逐个单独运行） | **23/23 单独通过**，且各文件计数之和 **177 = 套件总数**（无用例在聚合运行中消失） |
 
 ## 抓到的真实缺陷（按严重度）
 
@@ -94,6 +95,7 @@ pnpm install --frozen-lockfile
 pnpm run build && pnpm run verify:build   # 构建产物必须与已提交的一致（lib/ 入库）
 pnpm run verify:pack                      # 发布物冒烟：打包 → 安装 → 按名导入
 pnpm run verify:mutants                   # 变异扫描：44 处行为改坏后必须被单测发现
+pnpm run verify:solo                      # 顺序无关：每个 spec 单独跑，计数之和须等于总数
 pnpm run typecheck:scripts                # bench/tests/scripts 的类型检查
 pnpm test                 # 离线用例，不联网、不需要 Key（含三个语料库）
 pnpm run verify:dsh       # 真实 DSH 服务集成（无 DSH 时跳过）

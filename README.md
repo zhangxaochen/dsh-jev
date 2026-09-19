@@ -378,6 +378,9 @@ pnpm run verify:pack
 # 变异扫描：逐个改坏行为后重建跑单测，确认「改坏了有人会发现」
 pnpm run verify:mutants
 
+# 顺序无关：每个 spec 文件单独跑一遍，并核对各文件计数之和等于套件总数
+pnpm run verify:solo
+
 # 覆盖率审计：查看哪些发布代码没有被任何离线用例执行（Node 内置，无额外依赖）
 node --experimental-test-coverage --test-coverage-include='lib/*.js' --test --import ./tests/isolate.mjs tests/*.spec.ts
 

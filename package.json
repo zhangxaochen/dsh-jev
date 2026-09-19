@@ -93,6 +93,7 @@
     "verify:build": "node scripts/verify-build.mjs",
     "verify:pack": "node scripts/verify-pack.mjs",
     "verify:mutants": "node scripts/verify-mutants.mjs",
+    "verify:solo": "node scripts/verify-solo.mjs",
     "drill": "node scripts/drill.mjs",
     "test": "node --import ./tests/isolate.mjs --test tests/*.spec.ts",
     "probe": "node --experimental-strip-types tests/probe.ts",
