@@ -44,7 +44,7 @@
 | 验证脚本不写实机状态 | 单测（`tests/isolation.spec.ts`）+ 实测前后对比 | 连跑单测/集成/基准后，实机指标与决策日志均不变 |
 | **每条承诺都有闸门拦得住回退** | 回归演练（`pnpm run drill`，31 条注入） | **31/31**：每条承诺的对应回退都能被某个闸门拦下，其中 2 条（崩溃级、模块失效）只有真实运行时能抓到，无 DSH 时标记为 SKIPPED |
 | bench 跑的是发布规则而非其副本 | 回归演练（改 `DEFAULT_P_LOOP_THRESHOLD` / `DEFAULT_BLOCK_THRESHOLD` 必须失败）+ 抽取前后离线数字一致 | loop 阈值改为由 bench 拦下；安全阈值由单测拦下（bench 语义用例全走 `risk_score`） |
-| 拒止规则覆盖真实命令形态 | 语料库（`tests/deterministic-corpus.spec.ts`，**100 例**：61 硬拒 / 39 放行） | 系统目录、`erase`/`ri` 别名、花括号展开、`find … -delete`、凭据文件、设备格式化均硬拒；工作区内的 `rm -rf ./build`、`chmod -R 777 .`、`.env.example` 上传均放行 |
+| 拒止规则覆盖真实命令形态 | 语料库（`tests/deterministic-corpus.spec.ts`，**103 例**：63 硬拒 / 40 放行） | 系统目录、`erase`/`ri` 别名、花括号展开、`find … -delete`、凭据文件、设备格式化均硬拒；工作区内的 `rm -rf ./build`、`chmod -R 777 .`、`.env.example` 上传均放行 |
 | 整形前置检查不误判真实输出 | 语料库（`tests/repetition-corpus.spec.ts`，16 例） | 构建日志/依赖树/目录列表/时间戳日志触发；短结果与内容各异的输出放行；并断言该检查保持纯字符串操作 |
 | 重复让位范围不越界 | 单测（`tests/loop-guard.spec.ts`，7 条边界） | 输出不同/参数不同/工具不同/仅空白不同 → 交语义层；参数**键序不同仍视为同一次重复** |
 | 随包补丁与代码默认一致 | 单测（`tests/packaging.spec.ts`） | 补丁钉住的每个标量等于代码默认；未登记的钉住项即失败；实验性 shaper 不得出现在补丁里 |

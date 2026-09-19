@@ -478,5 +478,11 @@
     "file": "src/tool-pruner.ts",
     "from": "        if (!isJevEnabled()) return typeof next === 'function' ? next() : assembly",
     "to": "        if (false) return typeof next === 'function' ? next() : assembly"
+  },
+  {
+    "name": "the serialized arguments are inspected alongside the command",
+    "file": "src/safety-guard.ts",
+    "from": "    if (out.length === 0) {",
+    "to": "    if (true) {"
   }
 ]

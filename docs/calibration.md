@@ -1074,6 +1074,29 @@ Error: [TypeSafe SafetyGuard] Inspection failed for "pwsh"; failing closed per o
 
 **如实保留的局限**：另一批 `HARD_DENY_RULES` 的**词法正则**（Windows 形态）对「提及」仍然失明 ✗ ——例如把 `del /s /q C:\` 当作 grep 模式会被硬拒。要修得给那批规则也加命令位判定，而它们本就是「按形状硬拒」的设计 ✗ 收益小于风险，故**未改**并在此记录 ✓
 
+### 23.9.1 局限当天即复现：误报挡住了「删除两个具体路径」（同日修复）
+
+保留那条局限之后几小时，它就咬在了**我自己**要执行的一个合法操作上 ✗ —— 操作者让我删除两个误建目录，命令是：
+
+```powershell
+$homeDir = [Environment]::GetFolderPath('UserProfile')
+$targets = @((Join-Path $homeDir 'profiles'), (Join-Path $homeDir 'settings.yaml'))
+foreach ($t in $targets) { Remove-Item $t -Recurse -Force -ErrorAction Stop; "  removed: $t" }
+```
+
+被 `windows-recursive-delete-root` 硬拒 ✗。**根因不是「提及」而是「序列化文本被当成命令」**：
+
+1. `inspectableText()` 除了命令行文本，还会把 `JSON.stringify(args)` **一并**送进规则 ✗；
+2. 那条正则的 `[^\n]*` 是**无界间隔** ✗ ⇒ 动词、`-Recurse`、`-Force`、盘符可以在同一行内任意相隔 ✓；
+3. 序列化后整个多行脚本压成**一行** ✗ ⇒ 正则的「盘符」`[a-z]:` 匹配到了 JSON 的**键名** `"command":` 里的 `d":` ✗✗ —— 于是「递归强制删除盘根」成立了 ✓
+
+**修法（最小且可验证）**：**已找到命令行文本时不再检查序列化形式** ✓（该兜底本就是给「命令藏在未知键下」的形状用的 ✓ 那时 `out` 为空 ✓ 兜底照跑 ✓）。代价面：已知键存在时不再重复判一遍序列化文本 ✓ —— 嵌套命令键仍由 `collectValuesByKey` 覆盖 ✓（语料里 `{command:'echo safe', script:'rm -rf /'}` 这类用例仍全过 ✓）。
+
+**验证**：新增语料 3 例（该脚本必须**放行** ✓、`Remove-Item -Recurse -Force C:\` 与 `ri -Recurse -Force C:\` 必须**仍拒绝** ✓）⇒ 语料 100 → **103 例（63 拒 / 40 放行）**；定向探针 8 条拒绝对照全对 ✓；语料 +1 条变异（把 `if (out.length === 0)` 改回无条件 ✓ 必须被拦下 ✓）。
+
+**教训（写给下一次）**：把「序列化形态」喂给按**形状**硬拒的词法规则，等价于把规则暴露给任意文本 ✗ —— 凡是 `JSON.stringify` 兜底，都应当问一句「这里的引号/键名会不会自己凑出目标形状」✓
+
+
 ## 24. 状态栏总开关（2026-09-19，按操作者要求新增）
 
 **要求**：在**输入框下方的状态栏**加一个按钮，点一下切换插件是否生效——**不卸载**，但可以「生效 / 不生效」。

@@ -175,10 +175,18 @@ export function inspectableText(exec: ToolExecution): string[] {
       if (typeof value === 'string' && value.length > 0) out.push(value)
     }
     collectValuesByKey(args, COMMAND_KEYS, out)
-    try {
-      out.push(JSON.stringify(args))
-    } catch {
-      /* circular arguments are not inspectable as text */
+    // The serialized form is a fallback for shapes where the command hides under an
+    // unknown key. It must not be inspected when a command string was already found:
+    // the lexical rules match the destructive *shape* across unbounded text, and in JSON
+    // the key `"command":` itself supplies the `[a-z]:` of a drive root - which is how a
+    // legitimate multi-line script that removes two specific paths was denied as
+    // "recursive forced deletion of a drive root".
+    if (out.length === 0) {
+      try {
+        out.push(JSON.stringify(args))
+      } catch {
+        /* circular arguments are not inspectable as text */
+      }
     }
   }
   return out

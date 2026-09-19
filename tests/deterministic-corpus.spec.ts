@@ -165,6 +165,24 @@ const CASES: Case[] = [
   { command: 'grep -rn "rm -rf /" docs/', expect: 'pass', note: 'a search pattern' },
   { command: 'echo "rm -rf /"', expect: 'pass', note: 'an echoed string' },
   { command: 'node -e "console.log(\'rm -rf /\')"', expect: 'pass', note: 'a string inside a script argument' },
+  // A real script that removes two specific paths. The lexical drive-root rule matched the
+  // shape across the whole serialized arguments, where the JSON key `"command":` supplied
+  // the `[a-z]:` of a drive root - so the guard denied deleting `~/profiles` and
+  // `~/settings.yaml`. The serialized form is no longer inspected once a command string
+  // has been found.
+  {
+    command:
+      "$homeDir = [Environment]::GetFolderPath('UserProfile')\n" +
+      "$targets = @((Join-Path $homeDir 'profiles'), (Join-Path $homeDir 'settings.yaml'))\n" +
+      'foreach ($t in $targets) {\n' +
+      '  Remove-Item $t -Recurse -Force -ErrorAction Stop\n' +
+      '  "  removed: $t"\n' +
+      '}',
+    expect: 'pass',
+    note: 'a scoped removal of named paths inside a script',
+  },
+  { command: 'Remove-Item -Recurse -Force C:\\', expect: 'deny', note: 'the drive root itself, still denied' },
+  { command: 'ri -Recurse -Force C:\\', expect: 'deny', note: 'the powershell alias, still denied' },
 ]
 
 test('the deterministic envelope classifies the destructive-command corpus', () => {
