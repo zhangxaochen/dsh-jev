@@ -5,6 +5,11 @@
  * The corpus is deliberately small and hand-picked - each entry targets a knob or a
  * guard whose silent removal would change user-visible behaviour.
  *
+ * Safety: a sweep edits tracked sources, so it refuses to start on a dirty tree and
+ * restores every file it touched on exit, on an unhandled error and on an interrupt.
+ * A transient filesystem error once aborted a run mid-mutation and left the broken
+ * source behind, one `git add -A` away from being committed.
+ *
  * Usage: pnpm run verify:mutants
  *
  * The name follows the verify-*.mjs convention: the evidence index maps each such
@@ -19,6 +24,70 @@ const ROOT = process.cwd()
 const CORPUS = process.env.JEV_MUTATIONS
   ? join(ROOT, process.env.JEV_MUTATIONS)
   : join(ROOT, 'bench', 'mutations.json')
+
+/** Every file this run has edited, with the content to put back. */
+const pending = new Map()
+
+function gitStatus(args) {
+  try {
+    return execFileSync('git', args, { encoding: 'utf8', cwd: ROOT }).trim()
+  } catch {
+    return undefined
+  }
+}
+
+function restoreAll() {
+  let restored = 0
+  for (const [path, content] of pending) {
+    try {
+      if (readFileSync(path, 'utf8') !== content) {
+        writeFileSync(path, content, 'utf8')
+        restored += 1
+      }
+    } catch {
+      console.error('could not restore ' + path + ' - restore it before committing')
+    }
+  }
+  pending.clear()
+  return restored
+}
+
+let restoredAndRebuilt = false
+function restoreAndRebuild() {
+  if (restoredAndRebuilt) return
+  restoredAndRebuilt = true
+  const restored = restoreAll()
+  if (restored > 0) {
+    try {
+      execFileSync('pnpm', ['run', 'build'], { stdio: 'ignore', shell: true, cwd: ROOT })
+    } catch {
+      console.error('the rebuild after restoring failed; run `pnpm run build` before anything else')
+    }
+  }
+}
+
+// The tree is the tool's working surface: refuse to start unless it is clean, so a
+// leftover mutation from an interrupted run is caught instead of swept up by a commit.
+const dirty = gitStatus(['status', '--porcelain'])
+if (dirty === undefined) {
+  console.error('refusing to run: this is not a git working tree, so edits cannot be undone safely')
+  process.exit(2)
+}
+if (dirty !== '') {
+  console.error('refusing to run: commit or stash the working tree first\n' + dirty)
+  process.exit(2)
+}
+
+process.on('exit', () => restoreAndRebuild())
+process.on('SIGINT', () => {
+  restoreAndRebuild()
+  process.exit(130)
+})
+process.on('uncaughtException', (error) => {
+  console.error('the sweep failed:', error instanceof Error ? error.message : String(error))
+  restoreAndRebuild()
+  process.exit(2)
+})
 
 function build() {
   try {
@@ -38,30 +107,47 @@ function testsPass() {
   }
 }
 
+function applyMutation(path, content) {
+  pending.set(path, content)
+  writeFileSync(path, content, 'utf8')
+}
+
 const mutations = JSON.parse(readFileSync(CORPUS, 'utf8'))
 const results = []
 
 for (const mutation of mutations) {
   const path = join(ROOT, mutation.file)
-  const original = readFileSync(path, 'utf8')
+  let original
+  try {
+    original = readFileSync(path, 'utf8')
+  } catch (error) {
+    results.push({ name: mutation.name, caught: false, why: 'could not read ' + mutation.file })
+    continue
+  }
   if (!original.includes(mutation.from)) {
     results.push({ name: mutation.name, caught: false, why: 'anchor not found (the code moved)' })
     continue
   }
   try {
-    writeFileSync(path, original.replace(mutation.from, mutation.to), 'utf8')
+    applyMutation(path, original.replace(mutation.from, mutation.to))
     // A build failure counts as caught: the mutation cannot reach the user at all.
     const built = build()
     const caught = !built || !testsPass()
     results.push({ name: mutation.name, caught, why: !built ? 'build failed' : caught ? 'a test failed' : 'NO TEST FAILED' })
+  } catch (error) {
+    // One entry failing (a locked file, a killed build) must not abandon the rest.
+    results.push({ name: mutation.name, caught: false, why: 'the entry failed: ' + (error instanceof Error ? error.message : String(error)) })
   } finally {
-    writeFileSync(path, original, 'utf8')
+    applyMutation(path, original)
+    restoreAll()
   }
 }
 
-// Always leave the tree built for whatever runs next.
-if (!build()) {
-  console.error('the final rebuild failed; the tree needs attention before anything else runs')
+restoreAndRebuild()
+
+const leftOver = gitStatus(['status', '--porcelain', '--', 'src', 'lib'])
+if (leftOver === undefined || leftOver !== '') {
+  console.error('the sweep left changes behind:\n' + (leftOver ?? '(git status failed)'))
   process.exit(2)
 }
 
