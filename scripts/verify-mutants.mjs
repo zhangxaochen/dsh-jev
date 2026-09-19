@@ -56,13 +56,14 @@ let restoredAndRebuilt = false
 function restoreAndRebuild() {
   if (restoredAndRebuilt) return
   restoredAndRebuilt = true
-  const restored = restoreAll()
-  if (restored > 0) {
-    try {
-      execFileSync('pnpm', ['run', 'build'], { stdio: 'ignore', shell: true, cwd: ROOT })
-    } catch {
-      console.error('the rebuild after restoring failed; run `pnpm run build` before anything else')
-    }
+  restoreAll()
+  // Always rebuild, even when nothing needed restoring: the last entry's build output
+  // still carries that mutation, and tsc skips re-emitting an unchanged source, so the
+  // tree would otherwise be left with a mutated lib/.
+  try {
+    execFileSync('pnpm', ['run', 'build'], { stdio: 'ignore', shell: true, cwd: ROOT })
+  } catch {
+    console.error('the rebuild after restoring failed; run `pnpm run build` before anything else')
   }
 }
 
