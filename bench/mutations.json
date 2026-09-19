@@ -296,8 +296,8 @@
   {
     "name": "the resolver stops falling back to the context property",
     "file": "src/index.ts",
-    "from": "return (viaGet ?? (ctx as any)[name]) as T | undefined",
-    "to": "return viaGet as T | undefined"
+    "from": "    return (ctx as any)?.[name] as T | undefined",
+    "to": "    return undefined"
   },
   {
     "name": "the stats tool returns a field its schema forbids",
@@ -380,8 +380,8 @@
   {
     "name": "resolveClientFrom ignores the context property",
     "file": "src/typesafe-client.ts",
-    "from": "  if (ctx.typesafe instanceof TypeSafeClient) return ctx.typesafe",
-    "to": "  if (false && ctx.typesafe instanceof TypeSafeClient) return ctx.typesafe"
+    "from": "    if ((ctx as any)?.typesafe instanceof TypeSafeClient) return (ctx as any).typesafe",
+    "to": "    if (false) return (ctx as any).typesafe"
   },
   {
     "name": "the safety guard protects no tool by default",
