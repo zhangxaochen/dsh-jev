@@ -10,8 +10,8 @@
 
 | 维度 | 结果 |
 |---|---|
-| 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **208/208**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 版本 | `0.2.0`（含破坏性配置变更，升级须知见 CHANGELOG） |
+| 离线单测 | **209/209**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -40,7 +40,7 @@
 | 面板端点与宿主路由一致 | 单测（跨文件解析 + 构建产物） | 三处路径一致 |
 | 逐项提问把项内容嵌在问题里 | 行为断言（`tests/question-binding.spec.ts`） | 四处提问两两不同且各含自身项文本 |
 | 发布配置不弱化保护 | 单测（解析 `cordis.patch.yml`） | `guardedTools` ⊇ 库默认且含文件写入；`alwaysRetain` ⊇ 库默认 |
-| 文档默认值不说谎 | 单测（从 README/calibration 反解数字比对代码常量） | 全部一致（曾抓到 1 处不符） |
+| 文档默认值不说谎 | 单测（从 `docs/configuration.md` / calibration 反解数字比对代码常量） | 全部一致（曾抓到 1 处不符） |
 | 验证脚本不写实机状态 | 单测（`tests/isolation.spec.ts`）+ 实测前后对比 | 连跑单测/集成/基准后，实机指标与决策日志均不变 |
 | **每条承诺都有闸门拦得住回退** | 回归演练（`pnpm run drill`，31 条注入） | **31/31**：每条承诺的对应回退都能被某个闸门拦下，其中 2 条（崩溃级、模块失效）只有真实运行时能抓到，无 DSH 时标记为 SKIPPED |
 | bench 跑的是发布规则而非其副本 | 回归演练（改 `DEFAULT_P_LOOP_THRESHOLD` / `DEFAULT_BLOCK_THRESHOLD` 必须失败）+ 抽取前后离线数字一致 | loop 阈值改为由 bench 拦下；安全阈值由单测拦下（bench 语义用例全走 `risk_score`） |
@@ -48,14 +48,14 @@
 | 整形前置检查不误判真实输出 | 语料库（`tests/repetition-corpus.spec.ts`，16 例） | 构建日志/依赖树/目录列表/时间戳日志触发；短结果与内容各异的输出放行；并断言该检查保持纯字符串操作 |
 | 重复让位范围不越界 | 单测（`tests/loop-guard.spec.ts`，7 条边界） | 输出不同/参数不同/工具不同/仅空白不同 → 交语义层；参数**键序不同仍视为同一次重复** |
 | 随包补丁与代码默认一致 | 单测（`tests/packaging.spec.ts`） | 补丁钉住的每个标量等于代码默认；未登记的钉住项即失败；实验性 shaper 不得出现在补丁里 |
-| 代码接受的配置项都有文档 | 单测（`tests/docs-consistency.spec.ts`） | 7 个 `*Config` 接口 50 个字段全部在 README 有说明（曾漏 `headless` 等 5 项） |
-| 破坏性变更在变更日志里有公告 | 单测（`tests/docs-consistency.spec.ts`） | 迁移表的三处破坏性变更均在 CHANGELOG；同一小节不得重复条目 |
-| 安装文档不自造第二份配置 | 单测（`tests/readme.spec.ts`） | 代码围栏必须闭合（曾有一个未闭合的 ts 围栏吞掉其后约 200 行）；README 里的 `dsh-jev/*` 导入必须都是清单导出；不得把浏览器面板当插件挂载；覆盖说明必须指向安装副本而非文档副本 |
+| 代码接受的配置项都有文档 | 单测（`tests/docs-consistency.spec.ts`） | 7 个 `*Config` 接口 53 个字段全部在 `docs/configuration.md` 有说明（曾漏 `headless` 等 5 项） |
+| 破坏性变更在变更日志里有公告 | 单测（`tests/docs-consistency.spec.ts`） | 三处破坏性变更均在 CHANGELOG（README 只链接，不再重复） |
+| 前端入口只讲装与用，参考手册不许漂移 | 单测（`tests/readme.spec.ts`） | 两份文档的代码围栏必须闭合（曾有一个未闭合的 ts 围栏吞掉其后约 200 行）；`dsh-jev/*` 导入必须都是清单导出；不得把浏览器面板当插件挂载；覆盖说明必须指向安装副本而非文档副本 |
 | 宿主契约仍成立 | 单测（`tests/dsh-contract.spec.ts`，无 DSH 时跳过） | 内置包已安装、阈值仍为 `[3,5,8]`、`engines.dsh` 满足、钩子实参形态未变、补丁整行替换语义未变 |
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
-| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 81 处变异） | **81/81** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（25 个 spec 逐个单独运行） | **25/25 单独通过**，且各文件计数之和 **208 = 套件总数**（无用例在聚合运行中消失） |
+| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（25 个 spec 逐个单独运行） | **25/25 单独通过**，且各文件计数之和 **209 = 套件总数**（无用例在聚合运行中消失） |
 
 ## 抓到的真实缺陷（按严重度）
 

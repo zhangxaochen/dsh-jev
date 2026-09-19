@@ -94,7 +94,7 @@
 
 ### Notes
 
-- 升级到 0.2.0 需检查的三处破坏性变更见 README「从 0.1.0 升级到 0.2.0」。
+- 升级到 0.2.0 需检查的三处破坏性变更见本文件 0.2.0 的 `Changed` 小节（`stuckSeverityThreshold` 移除、受保护工具的失败策略、指标 schema 升至 v2）；README 不再重复维护一份，它只链接到这里。
 - 同步文件后**必须重启 DSH**：本部署的 profile 组合未挂载 HMR，运行中的进程不会重新加载模块。
   用 `pnpm run doctor` 判定是否已生效。
 

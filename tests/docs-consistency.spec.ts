@@ -1,10 +1,12 @@
 /**
  * The documentation must not claim a default the code does not use.
  *
- * Every numeric default named in README.md is read back out of the prose and
- * compared with the constant the module actually applies. A drift like the
- * `timeoutMs` value that said 10000 while the client used 2000 fails here
- * instead of silently misleading a reader who tunes their config.
+ * Every numeric default named in docs/configuration.md - the reference the README
+ * links to - is read back out of the prose and compared with the constant the module
+ * actually applies. A drift like the `timeoutMs` value that said 10000 while the
+ * client used 2000 fails here instead of silently misleading a reader who tunes their
+ * config. The reference sits in docs/ because a README is a front door, not a manual;
+ * these checks follow the document rather than pinning it in place.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -42,50 +44,50 @@ import {
   DEFAULT_THRESHOLD_CHARS,
 } from '../lib/result-shaper.js'
 
-const README = readFileSync(join(process.cwd(), 'README.md'), 'utf8')
+const REFERENCE = readFileSync(join(process.cwd(), 'docs', 'configuration.md'), 'utf8')
 
 /**
  * Read the documented default for one config field.
- * @param field the option name as written in the README, e.g. `pLoopThreshold?: number`
+ * @param field the option name as written in the reference, e.g. `pLoopThreshold?: number`
  * @returns the number in the trailing 「默认 `x`」 clause
  */
 function documentedDefault(field) {
-  const line = README.split('\n').find((candidate) => candidate.startsWith('- `' + field))
-  assert.ok(line, 'README does not document ' + field)
+  const line = REFERENCE.split('\n').find((candidate) => candidate.startsWith('- `' + field))
+  assert.ok(line, 'docs/configuration.md does not document ' + field)
   const match = line.match(/默认\s*`([0-9.]+)`/)
   assert.ok(match, 'no default value stated for ' + field + ' in: ' + line)
   return Number(match[1])
 }
 
-test('README documents the client timeouts the code applies', () => {
+test('the reference documents the client timeouts the code applies', () => {
   assert.equal(documentedDefault('timeoutMs?: number'), DEFAULT_TIMEOUT_MS)
-  assert.ok(README.includes('`pathTimeoutMs?: number`'), 'README documents pathTimeoutMs')
+  assert.ok(REFERENCE.includes('`pathTimeoutMs?: number`'), 'the reference documents pathTimeoutMs')
   assert.equal(documentedDefault('pathTimeoutMs?: number'), DEFAULT_PATH_TIMEOUT_MS)
 })
 
-test('README documents the loop guard thresholds the code applies', () => {
+test('the reference documents the loop guard thresholds the code applies', () => {
   assert.equal(documentedDefault('triggerThreshold?: number'), DEFAULT_TRIGGER_THRESHOLD)
   assert.equal(documentedDefault('noProgressThreshold?: number'), DEFAULT_NO_PROGRESS_THRESHOLD)
   assert.equal(documentedDefault('pLoopThreshold?: number'), DEFAULT_P_LOOP_THRESHOLD)
   // Two `minConfidence` entries exist; the loop guard one is asserted by value.
-  assert.ok(README.includes('（默认 `' + LOOP_MIN_CONFIDENCE + '`）'))
+  assert.ok(REFERENCE.includes('（默认 `' + LOOP_MIN_CONFIDENCE + '`）'))
   assert.equal(documentedDefault('cooldownSteps?: number'), DEFAULT_COOLDOWN_STEPS)
   assert.equal(documentedDefault('maxHistory?: number'), DEFAULT_MAX_HISTORY)
 })
 
-test('README documents the safety guard thresholds the code applies', () => {
+test('the reference documents the safety guard thresholds the code applies', () => {
   assert.equal(documentedDefault('blockThreshold?: number'), DEFAULT_BLOCK_THRESHOLD)
   assert.equal(documentedDefault('askApprovalThreshold?: number'), DEFAULT_ASK_APPROVAL_THRESHOLD)
 })
 
-test('README documents the pruner, router and shaper defaults the code applies', () => {
+test('the reference documents the pruner, router and shaper defaults the code applies', () => {
   assert.equal(documentedDefault('maxTools?: number'), DEFAULT_MAX_TOOLS)
   assert.equal(documentedDefault('minCandidates?: number'), DEFAULT_MIN_CANDIDATES)
   assert.equal(documentedDefault('minIntentChars?: number'), DEFAULT_MIN_INTENT_CHARS)
   assert.equal(documentedDefault('minScore?: number'), DEFAULT_MIN_SCORE)
   assert.equal(documentedDefault('requestTimeoutMs?: number'), DEFAULT_REQUEST_TIMEOUT_MS)
   assert.equal(documentedDefault('nameMatchBoost?: number'), DEFAULT_NAME_MATCH_BOOST)
-  assert.ok(README.includes('（默认 `' + ROUTER_MIN_CONFIDENCE + '`）'))
+  assert.ok(REFERENCE.includes('（默认 `' + ROUTER_MIN_CONFIDENCE + '`）'))
   assert.equal(documentedDefault('thresholdChars?: number'), DEFAULT_THRESHOLD_CHARS)
   assert.equal(documentedDefault('maxCandidates?: number'), DEFAULT_MAX_CANDIDATES)
   assert.equal(documentedDefault('minKeep?: number'), DEFAULT_MIN_KEEP)
@@ -98,10 +100,10 @@ test('README documents the pruner, router and shaper defaults the code applies',
 test('the operationally important defaults are stated, not implied', () => {
   // These have no numeric default and must be spelled out instead. Emphasis around the
   // value is allowed: the point is that the default is stated, not how it is styled.
-  assert.match(README, /onError[^\n]*默认\s*\*{0,2}`allow`/)
-  assert.match(README, /onUncertain[^\n]*默认\s*\*{0,2}`deny-guarded`/)
-  assert.match(README, /deferExactRepeats[^\n]*默认 `true`/)
-  assert.match(README, /resultShaper[^\n]*默认 \*\*关闭\*\*/)
+  assert.match(REFERENCE, /onError[^\n]*默认\s*\*{0,2}`allow`/)
+  assert.match(REFERENCE, /onUncertain[^\n]*默认\s*\*{0,2}`deny-guarded`/)
+  assert.match(REFERENCE, /deferExactRepeats[^\n]*默认 `true`/)
+  assert.match(REFERENCE, /resultShaper[^\n]*默认 \*\*关闭\*\*/)
 })
 
 test('docs/calibration.md threshold table matches the code it documents', () => {
@@ -179,11 +181,11 @@ test('the research record cites sections and files that exist', () => {
 test('every config field the code accepts is documented', () => {
   // Keys added during this work (minKeep, minIntentChars, nameMatchBoost,
   // requestTimeoutMs, minKindConfidence ...) each had to be written into the
-  // README by hand; five fields had already been missed, including
+  // reference by hand; five fields had already been missed, including
   // SafetyGuardConfig.headless, which changes whether a prompt is possible. The
   // check reads the interfaces rather than a list, so a new field cannot skip it.
   const types = readFileSync(join(cwd(), 'src', 'types.ts'), 'utf8')
-  const readme = readFileSync(join(cwd(), 'README.md'), 'utf8')
+  const reference = readFileSync(join(cwd(), 'docs', 'configuration.md'), 'utf8')
 
   const interfaces = [...types.matchAll(/export interface (\w*Config\w*) \{([\s\S]*?)\n\}/g)]
   assert.ok(interfaces.length >= 5, 'expected the config interfaces to be found in src/types.ts')
@@ -192,11 +194,11 @@ test('every config field the code accepts is documented', () => {
   for (const [, interfaceName, body] of interfaces) {
     for (const match of body.matchAll(/^\s{2}(\w+)\??:/gm)) {
       const field = match[1]
-      if (!new RegExp('`' + field + '\\??:').test(readme)) missing.push(interfaceName + '.' + field)
+      if (!new RegExp('`' + field + '\\??:').test(reference)) missing.push(interfaceName + '.' + field)
     }
   }
 
-  assert.deepEqual(missing, [], 'these config fields are accepted by the code but absent from README')
+  assert.deepEqual(missing, [], 'these config fields are accepted by the code but absent from docs/configuration.md')
 })
 
 test('the changelog does not repeat a bullet inside one release section', () => {
@@ -227,10 +229,10 @@ test('the changelog does not repeat a bullet inside one release section', () => 
   assert.deepEqual(duplicates, [], 'the changelog repeats these bullets')
 })
 
-test('every breaking change the README lists is announced in the changelog', () => {
-  // The changelog is what people read while upgrading, so a breaking change that
-  // only exists in the README's migration table is easy to miss. The markers are
-  // deliberately the concepts, not the wording.
+test('the changelog announces the breaking changes users have to act on', () => {
+  // The changelog is the only place upgrade steps live now that the README carries
+  // none, so these markers must stay there: a breaking change nobody announces is a
+  // silent break. The markers are deliberately the concepts, not the wording.
   const changelog = readFileSync(join(cwd(), 'CHANGELOG.md'), 'utf8')
   const markers = [
     ['removed stuckSeverityThreshold', /stuckSeverityThreshold/],
@@ -238,7 +240,7 @@ test('every breaking change the README lists is announced in the changelog', () 
     ['the metrics schema change', /schema 升至 v2|version: 2|schema v2/],
   ]
   const missing = markers.filter(([, pattern]) => !pattern.test(changelog)).map(([label]) => label)
-  assert.deepEqual(missing, [], 'these breaking changes are documented only in the README')
+  assert.deepEqual(missing, [], 'the changelog is missing a breaking change users must act on')
 })
 
 test('the evidence index names every gate the package exposes', () => {

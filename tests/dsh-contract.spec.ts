@@ -151,7 +151,7 @@ test('the host dispatches the hooks with the argument counts the guards assume',
   assert.ok(Array.isArray((args[1] as any)?.content), 'the second argument is the result')
   assert.equal(typeof args[2], 'function', 'the third argument is the continuation')
 })
-test('the patch semantics the README warns about are still the host ones', { skip: !nodeModules }, () => {
+test('the patch semantics the reference warns about are still the host ones', { skip: !nodeModules }, () => {
   // The README tells users a patch replaces the targeted row's whole config, which
   // it quotes from the host's own bundle patch. If DSH ever switches to a deep
   // merge, that warning becomes wrong advice, so the quote is checked against the
@@ -171,8 +171,8 @@ test('the patch semantics the README warns about are still the host ones', { ski
   )
   assert.match(hostText, /last write winning per row/, 'the host no longer states the per-row precedence')
 
-  const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8')
-  assert.match(readme, /补丁是「整行替换」，不是逐键合并/, 'the README must keep the warning it quotes')
+  const reference = readFileSync(join(process.cwd(), 'docs', 'configuration.md'), 'utf8')
+  assert.match(reference, /补丁是「整行替换」，不是逐键合并/, 'the reference must keep the warning it quotes')
 })
 
 test('our shipped patch uses only the operations the host itself uses', { skip: !nodeModules }, () => {
