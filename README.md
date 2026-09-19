@@ -20,34 +20,7 @@ Jev (TypeSafe System One 决策模型) 与 [DeepSeek Harness (dsh)](https://gith
 | **`typesafe-skill-router`** | `system-prompt/assemble` | Skill 目录达到阈值时，为当前请求指出**一个**最该载入的 skill 并作为建议注入（advisory，不阻断、不删减）。 |
 | **`typesafe-result-shaper`** | `tools/post-execute`（**默认关闭**） | 对超长且明显重复的命令输出做语义选段：保留有信息量的中段、丢弃噪声，只改模型可见内容。 |
 
----
-
-## 实际效果（本机实测输出摘录）
-
-以下均为**逐字摘录**，可用标注的命令复现（数值随当时的请求与输出规模变化；完整标定见 [`docs/calibration.md`](docs/calibration.md)）。
-
-**死循环判定**（`pnpm run verify:live`）：健康轨迹不触发，真循环以高置信度命中。
-
-```
-PASS [healthy-read-then-pwsh] fires=false (expected false) progress=0.67 pLoop=0.00 confidence=0.97  792ms
-PASS [true-loop]              fires=true  (expected true)  progress=0.10 pLoop=0.88 confidence=0.81  297ms
-```
-
-**工具剪枝**（`pnpm run verify:pruner`）：意图为「提交并推送」时，只保留该意图真正需要的工具。
-
-```
-PASS [ship-the-commit]   kept git_commit, git_push, run_tests   689ms
-PASS [fix-failing-test]  kept run_tests, read_file, edit_file    233ms
-```
-
-**结果整形**（`pnpm run verify:shaper`，默认关闭）：32.7KB 构建日志压到 253 字符且保留报错行；纯噪声直接拒绝整形。
-
-```
-PASS [build-log]    32725 -> 253 chars, kept 2 cluster(s), dropped 600 line(s)  773ms
-PASS [pure-noise]   declined (nothing worth keeping)                              1ms
-```
-
-**一整轮的语义开销**（`pnpm run verify:turn`：全部模块 + 真实模型 + 真实装配）：
+`pnpm run verify:turn` 一整轮（全部模块 + 真实模型 + 真实装配）的实测输出：
 
 ```
 assemble:       2139ms -> 12 tools to 5 (edit_file,git_commit,git_push,read_file,run_tests)
@@ -56,56 +29,42 @@ post-execute:   586ms -> 32680 to 237 chars
 semantic overhead this turn: 3704ms
 ```
 
+`verify:live` 中真循环 `pLoop=0.88`、置信度 `0.81` 命中，健康轨迹 `pLoop=0.00` 不触发；`verify:pruner` 在「提交并推送」意图下只保留 `git_commit` / `git_push` / `run_tests`。数值随请求与输出规模变化，完整标定见 [`docs/calibration.md`](docs/calibration.md)。
+
 ---
 
 ## 兼容性
 
 - **Node**：`^22.19.0 || >=24.0.0`
-- **DSH**：`>=0.1.5-rc.2`。插件挂载 `tools.guard()`、`tools/pre-execute`、`tools/post-execute`、`system-prompt/assemble`、`agent/pre-step`，并按需读取 `tokenMeter` / `skills` / `toolResultPruner` 服务；这些在 0.1.5-rc.2 之外的版本上未经验证，因此 `engines.dsh` 不再声称兼容 0.1.0。
+- **DSH**：`>=0.1.5-rc.2`。插件挂载 `tools.guard()`、`tools/pre-execute`、`tools/post-execute`、`system-prompt/assemble`、`agent/pre-step`，并按需读取 `tokenMeter` / `skills` / `toolResultPruner` 服务；这些在 0.1.5-rc.2 之外的版本上未经验证。
 - 缺失任一可选服务时按降级路径工作（例如没有 `tokenMeter` 时工具剪枝回退到公开的字符/token 常量并标注口径）。
 
-## 准备工作：配置 API Key
+---
 
-`dsh-jev` 依托 TypeSafe System One（Jev）决策模型执行高频毫秒级判定，需配置 `TYPESAFE_API_KEY`。
+## 安装与配置
 
-### 推荐方式：写入 DSH 全局配置文件（最简）
+### 1. 配置 API Key
 
-DeepSeek Harness 桌面端（Desktop）及所有 CLI profiles（Headless / Web / TUI）在启动时均会自动载入 `$DSH_HOME/.env`（默认位于 `~/.dsh/.env`）。
+`dsh-jev` 依托 TypeSafe System One（Jev）决策模型执行高频毫秒级判定，需配置 `TYPESAFE_API_KEY`。**最简**：写进 `$DSH_HOME/.env`（默认 `~/.dsh/.env`），桌面端与所有 CLI profile 启动时都会自动载入：
 
-在 `~/.dsh/.env` 中添加一行即可全局生效：
 ```bash
 TYPESAFE_API_KEY=your_typesafe_api_key_here
 ```
 
-### 其它方式：
-- **系统环境变量**：
-  - Linux / macOS: `export TYPESAFE_API_KEY="your_api_key"`
-  - Windows (PowerShell): `[Environment]::SetEnvironmentVariable("TYPESAFE_API_KEY", "your_api_key", "User")`
-- **代码 / YAML 显式指定**：在 `cordis.patch.yml` 的 `client.apiKey` 中指定。
+其它方式：系统环境变量（`export TYPESAFE_API_KEY=...`，Windows 用 `[Environment]::SetEnvironmentVariable(..., "User")`），或在 `cordis.patch.yml` 的 `client.apiKey` 中指定（补丁是整行替换，见下面「3. 修改默认阈值」）。未配置 Key 时 DSH 不会崩溃，插件记 Warn 并按 Mock 模式运行，只是无法发起云端语义仲裁。
 
-> ℹ️ **说明**：未配置 Key 时，DSH 不会崩溃，插件会记录 Warn 警告日志，此时可作为 Mock 模式运行；但在真实执行中将无法向云端发起 System One 语义仲裁。
+> ⚠️ **失败策略**：受保护工具上**判定拿不到**（超时/报错/上游不可达）默认**放行**（`onError: allow`）——判定服务是运行期依赖，fail-closed 会让上游一抖就锁死宿主所有受保护工具；放行时命中确定性外壳仍拒绝（`rm -rf /` 类不需要模型），失败计入 `inspectionFailures` 并告警。**裁决到达但不可用**仍 fail-closed（`onUncertain`，默认 `deny-guarded`）。取舍详见下面 `SafetyGuardConfig.onError`。
 
-> ⚠️ **失败策略**：受保护工具（`guardedTools`）上的语义**判定拿不到**时（超时/报错/上游不可达）默认 **放行**（`onError: allow`）——判定服务是**运行期依赖**，默认 fail-closed 会让上游一抖就把宿主所有受保护工具（含 shell）锁死；实测约 2% 调用被拒、并出现「失败一次 + 退避 + 重试成功」共 4822ms 的一次。放行时**仍会**：命中确定性外壳即拒绝（`rm -rf /` 类不需要模型）、失败计入 `inspectionFailures` 并告警。判定**到达但不可用**（模型没给出可用概率）仍 fail-closed（`onUncertain`，默认 `deny-guarded`）。若你的威胁模型认为「判定服务不可达本身就是攻击面」，在你自己的补丁层钉 `onError: deny-guarded`。
+### 2. 安装：`dsh plugin add`（自动激活为 Bundle）
 
----
-
-## 安装与挂载
-
-### 方式 1：DSH 官方命令行一键安装（推荐，自动激活为 Bundle）
-
-DSH 原生支持 Bundle 机制，执行以下命令会自动安装依赖并激活该插件层：
+DSH 原生支持 Bundle 机制，这条命令会自动安装依赖并激活该插件层，也是唯一的安装路径：
 
 ```bash
 # 从 GitHub 仓库直接安装（免 npm 发包，即装即用）
 dsh plugin --profile <profile_name> add github:zhangxaochen/dsh-jev
 
-# 或发布至 npm 后
-dsh plugin --profile <profile_name> add dsh-jev
-```
-
-例如为 `headless` 或 `web` 激活：
-```bash
-dsh plugin --profile headless add github:zhangxaochen/dsh-jev
+# 或发布至 npm 后；也适用于 headless / web 等具体 profile
+dsh plugin --profile headless add dsh-jev
 ```
 
 > ⚠️ **`desktop` profile 不能这样装**。CLI 会直接拒绝：
@@ -117,79 +76,37 @@ dsh plugin --profile headless add github:zhangxaochen/dsh-jev
 > `plugin needs pnpm arguments to forward (e.g. add <package>)`），因此 `add` / `remove` / `list`
 > 都是 pnpm 的语义。
 
-### 方式 2：在 profile 或全局 `cordis.patch.yml` 中手动挂载
+### 3. 修改默认阈值
+
+装完即是可用默认值；**不改阈值就不用看这一节**。
 
 > ⚠️ **补丁是「整行替换」，不是逐键合并。** DSH 自身的补丁文件写明了这一点：
 > *"A patch replaces the targeted row's whole `config` rather than merging into it … the last write winning per row."*
-> 因此要改某个阈值时，**必须把你想要的整份 `config` 都写出来**——只写要改的那个键会让该行其余配置一起消失（例如只写 `loopGuard.pLoopThreshold` 会连带丢掉 `guardedTools`、`alwaysRetain`、`client.apiKey` 等）。
-> 最省事的做法是复制下面这份完整配置再改；或者改用「方式 1」由 Bundle 提供默认值，再用你自己的补丁覆盖整行。
+> 因此只写一行 `loopGuard.pLoopThreshold: 0.7`，会让该条目的其余配置（`guardedTools`、`alwaysRetain`、`client.apiKey`…）一起回到代码默认值。
 
-若需深度定制各项阈值，可在 `$DSH_HOME/cordis.patch.yml` 或 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中添加配置：
+起点用**安装副本**，不要用文档里的副本：`cordis.patch.yml` 随包发布，并被 `tests/packaging.spec.ts` 钉在代码默认值上。
 
-```yaml
-- insert:
-    - id: dsh-jev
-      name: dsh-jev
-      config:
-        client:
-          apiKey: !!js process.env.TYPESAFE_API_KEY
-        loopGuard:
-          triggerThreshold: 2
-          noProgressThreshold: 0.3
-          pLoopThreshold: 0.6
-          minConfidence: 0.5
-        safetyGuard:
-          blockThreshold: 0.85
-          askApprovalThreshold: 0.5
-          onError: allow
-          onUncertain: deny-guarded
-          guardedTools:
-            - bash
-            - pwsh
-            - terminal
-            - run_command
-            - run_code
-        # 可选：Agent 决策原语（默认 true）
-        askTools: true
-        # 可选：语义 skill 路由（默认 true）
-        skillRouter:
-          minCandidates: 8
-          minScore: 1.5
-        # 可选：语义结果整形，默认关闭，需显式开启
-        # resultShaper:
-        #   thresholdChars: 8000
-        #   maxPerTurn: 2
-        toolPruner:
-          maxTools: 8
-          minScoreThreshold: 2
-          alwaysRetain:
-            - read_file
-            - write_to_file
-            - write_file
-            - edit_file
-            - str_replace_editor
-            - bash
-            - terminal
-            - pwsh
-            - run_command
-            - execute_command
-            - grep
-            - glob
-            - find_by_name
-            - view_file
-            - replace_file_content
-            - list_dir
-            - directory-picker-native
-            - ui-directory-picker-native
+```bash
+# 1. 复制已安装副本作为起点（<profile> 换成实际 profile 名）
+cp "$DSH_HOME/profiles/<profile>/node_modules/dsh-jev/cordis.patch.yml" ~/.dsh/cordis.patch.yml
+
+# 2. 只改你要改的值，其余整行原样保留
+
+# 3. 确认真正生效的那份配置（输出带 patch 层来源注释）
+dsh --profile <profile> --dump-config
 ```
 
-### 方式 3：按需挂载单独插件
+- 用户 patch 有两个位置：全局 `$DSH_HOME/cordis.patch.yml` 与 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`；**先应用 profile 级、再应用 home 级**，因此全局文件优先级更高。
+- 空文件或只有注释会让启动失败；要停用该层请写 `[]`。
 
-你也可以仅引入所需特定守卫或客户端：
+### 4. 编程式挂载：嵌入非 DSH 的 Cordis 宿主（可选）
+
+`dsh plugin add` 已按 Bundle 挂载全部模块，DSH 用户不需要这一节。每个模块都导出 `name` + `apply`，可当作普通 Cordis 插件挂载：
 
 ```ts
 import { Context } from '@deepseek-ai/cordis'
-import * as TypeSafeClient from 'dsh-jev/client'
+import { registerJevTools, resolveClientFrom } from 'dsh-jev'
+import * as TypeSafeClient from 'dsh-jev/typesafe-client'   // 服务层；注意不是 dsh-jev/client
 import * as LoopGuard from 'dsh-jev/loop-guard'
 import * as SafetyGuard from 'dsh-jev/safety-guard'
 import * as ToolPruner from 'dsh-jev/tool-pruner'
@@ -198,43 +115,31 @@ import * as ResultShaper from 'dsh-jev/result-shaper'   // 默认关闭，需显
 
 const ctx = new Context()
 
-// 挂载底层 Client 服务
 ctx.plugin(TypeSafeClient, { apiKey: process.env.TYPESAFE_API_KEY })
-
-// 单独挂载死循环阻断卫士
-ctx.plugin(LoopGuard, {
-  triggerThreshold: 2,
-  noProgressThreshold: 0.3
-})
-
-// 单独挂载安全门禁
-ctx.plugin(SafetyGuard, {
-  blockThreshold: 0.85,
-  onError: 'allow'
-})
-
-// 单独挂载语义 skill 路由（advisory）
+ctx.plugin(LoopGuard, { triggerThreshold: 2, noProgressThreshold: 0.3 })
+ctx.plugin(SafetyGuard, { blockThreshold: 0.85, onError: 'allow' })
+ctx.plugin(ToolPruner, { maxTools: 8, minScoreThreshold: 2 })
 ctx.plugin(SkillRouter, { minScore: 1.5, minConfidence: 0.5 })
-
-// 单独挂载语义结果整形（改变模型所见，按需开启）
 ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
-  onError: 'allow'
 
-决策原语不经 `ctx.plugin` 挂载，而是注册为 Agent 工具（`registerJevTools(ctx, () => client)`，或直接用整包默认开启的 `askTools`）。
+// 决策原语不经 ctx.plugin 挂载，而是注册为 Agent 工具（整包挂载时由 askTools 默认开启）
+registerJevTools(ctx, () => resolveClientFrom(ctx))
+```
+
+- `dsh-jev/client` 是宿主 `client-modules` 加载的**浏览器端**面板（设置项 + 状态栏开关），由 DSH 按 `package.json` 的 `dsh.client` 自动加载。它不导出 `apply`，拿它 `ctx.plugin()` 会直接抛 `invalid plugin`。
+- 缺少 `skills` / `system-prompt` / `tokenMeter` 等宿主服务时按降级路径工作，见上面「兼容性」。
 
 ---
 
 ## 从 0.1.0 升级到 0.2.0
 
-这是一次**破坏性变更**版本，升级后请检查三处：
+破坏性变更，升级后检查三处（完整变更史见 [`CHANGELOG.md`](CHANGELOG.md)）：
 
-| 变更 | 0.1.0 | 0.2.0 | 需要做什么 |
-|---|---|---|---|
-| `loopGuard.stuckSeverityThreshold` | 有效区间 `[0, 2]`，但代码里被反向三元改成固定 1.4 | **已移除** | 从配置里删掉该项；改用 `pLoopThreshold`（默认 `0.6`）+ `minConfidence`（默认 `0.5`） |
-| `safetyGuard` 失败策略 | 出错/超时 → 放行；headless 下 `ask` → 放行 | 出错/超时 → **默认放行**（`onError: allow`，并记账告警）；**裁决不可用** → fail-closed；headless 下 `ask` → `deny` | 想要严格：`onError: deny-guarded`；想连「不可用」也放行：`onUncertain: allow` |
-| 指标文件 `~/.dsh/jev-stats.json` | `version: 1`，含两个凭空常量折算的「节省 token」 | `version: 2`，只记实测字段 | 旧文件**不迁移**，插件启动时按新结构重新计数；如需保留历史先自行备份 |
+- `loopGuard.stuckSeverityThreshold` **已移除**（旧值在代码里被反向三元改成固定 1.4）；改用 `pLoopThreshold`（默认 `0.6`）+ `minConfidence`（默认 `0.5`）。
+- `safetyGuard` 失败策略：出错/超时默认**放行**（`onError: allow`，并记账告警），**裁决不可用** fail-closed，headless 下 `ask` → `deny`。要严格设 `onError: deny-guarded`；想连「不可用」也放行设 `onUncertain: allow`。
+- 指标文件 `~/.dsh/jev-stats.json` 升到 `version: 2`（只记实测字段），旧文件**不迁移**，插件启动时按新结构重新计数；需保留历史先自行备份。
 
-同时新增（默认值见下）：`jev_ask`/`jev_rank`/`jev_check` 决策原语、`skillRouter`、以及默认关闭的 `resultShaper`。
+同时新增：`jev_ask` / `jev_rank` / `jev_check` 决策原语、`skillRouter`、默认关闭的 `resultShaper`。
 
 ## 配置参考
 
@@ -261,9 +166,9 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 ### `SafetyGuardConfig`
 - `blockThreshold?: number`: 阻断执行（返回 `deny`）的危害概率阈值（默认 `0.85`）。
 - `askApprovalThreshold?: number`: 请求人工审批（返回 `ask`）的风险概率阈值（默认 `0.5`）。
-- `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: **判定拿不到**（API 报错/超时/上游不可达）时的策略，默认 **`allow`**。理由：判定服务是运行期依赖，fail-closed 会把上游抖动放大成「所有受保护工具被拒」；而确定性外壳不受此设置影响（`rm -rf /` 照旧拒绝），失败也会计数告警。要严格就设 `deny-guarded`。
-- `inspectionTimeoutMs?: number`: **语义审查**的超时预算（默认 `3500`）。刻意**不复用** `client.pathTimeoutMs`（800ms）：那个预算属于**建议路径**（loop-guard 提示，失败放行无代价），而这里失败即拒绝受保护工具；实测调用耗时 587–777ms，用 800ms 等于把预算压在实测天花板上，一次延迟抖动就会升级为「所有受保护工具被拒」。`skillRouter` 曾因同一个 800ms 遭遇 7/7 线上用例中止，并因此获得了自己的 4000ms 预算。
-- `inspectionRetries?: number`: **瞬时**失败（超时/中断/429/5xx）的额外尝试次数（默认 `1`）。只对瞬时错误重试，且次数有上界：端点彻底不可用时仍会走到 `onError` 策略，而「裁决不可用」（答案到了但不可用）不走重试，归 `onUncertain`。重试与最终失败次数都计入看板（`inspectionRetries` / `inspectionFailures`），用于**用数据校准**这个预算。
+- `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: **判定拿不到**（API 报错/超时/上游不可达）时的策略，默认 **`allow`**。理由是判定服务属运行期依赖，fail-closed 会把上游抖动放大成「所有受保护工具被拒」；确定性外壳不受此设置影响（`rm -rf /` 照旧拒绝），失败也会计数告警。要严格就设 `deny-guarded`。
+- `inspectionTimeoutMs?: number`: **语义审查**的超时预算（默认 `3500`）。刻意**不复用** `client.pathTimeoutMs`（800ms 属**建议路径**，失败放行无代价；这里失败即拒绝受保护工具），实测调用耗时 587–777ms，用 800ms 等于把预算压在实测天花板上。
+- `inspectionRetries?: number`: **瞬时**失败（超时/中断/429/5xx）的额外尝试次数（默认 `1`）。只对瞬时错误重试，「裁决不可用」（答案到了但不可用）不走重试、归 `onUncertain`；重试与最终失败次数都计入看板（`inspectionRetries` / `inspectionFailures`）。
 - `onUncertain?: 'deny-guarded' | 'deny-all' | 'allow'`: 拿到了答案但没有可用概率时的策略，默认 `deny-guarded`。
 - `rules?: Array<{ id, question, threshold?, action? }>`: 用户自定义语义规则，与内置问题同一次请求评估；`action` 可取 `deny` / `ask` / `warn`。
 - `headless?: boolean`: 会话无法弹窗询问时设为 `true`（默认 `false`）。此时任何 `ask`（含用户规则触发的）都转为 `deny`——宁可拒绝也不假装已获批准。桌面端保持默认即可。
@@ -277,12 +182,11 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `requestTimeoutMs?: number`: 路由请求自身的超时（默认 `4000`）。**实测：112 个技能一次的请求耗时 1.36–1.45s**，沿用 800ms 的建议路径超时会让路由**每次都失败且被静默吞掉**。
 - `nameMatchBoost?: number`: 请求**字面点名**某个技能时给它的加分（默认 `0.6`）。实测「对这个新产品做一次 SWOT 分析」在无此加成时会输给 `company-intel`。
 - `maxCandidates?: number`: 可选候选上限；`0` 表示把整个目录送去排序（默认 `0`）。设成非零会启用**词法**预筛，对「请求语言与技能描述语言不同」的场景有丢正确项的风险，故默认关闭。
-- **语义**：同一意图只在首次装配时给出一次建议（指纹相同即跳过，不重复调用模型也不重复注入）；每轮装配最多一条 `typesafe-skill-router` 条目，同名替换而非堆叠；低于分/置信度阈值时保持沉默；`skills.list()` 抛错时 prompt 原样返回。
+- **语义**：同一意图只在首次装配时给出一次建议；每轮装配最多一条 `typesafe-skill-router` 条目（同名替换而非堆叠）；低于阈值或 `skills.list()` 抛错时保持沉默。
 
 ### `ResultShaperConfig`（**默认关闭**）
 
-判定单元是**行形状**：先把只差数字/哈希的行归为一类，再对每类的代表行做**有界分类**（类别见下），
-只有 `warning` / `failure` 两类留下。实测依据见 [`docs/calibration.md`](docs/calibration.md) §9。
+判定单元是**行形状**：先把只差数字/哈希的行归为一类，再对每类的代表行做**有界分类**，只有 `warning` / `failure` 两类留下（实测依据见 [`docs/calibration.md`](docs/calibration.md) §9）。
 
 - `shapeTools?: string[]`: 允许整形的输出密集型工具（默认 `bash` / `pwsh` / `terminal` / `run_command` / `execute_command`）。
 - `thresholdChars?: number`: 触发整形的最小内容长度（默认 `8000`）。
@@ -292,11 +196,12 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `maxClusters?: number`: 单次请求最多分类的行形状数，超出的类别一律保留（默认 `24`）。
 - `sampleChars?: number`: 每类代表行送入分类的字符数（默认 `400`）。
 - `requestTimeoutMs?: number`: 分类请求自身的超时（默认 `4000`）。
-- 前置检查：单行 >4000 字符、行数 ≥120、或结构重复率 ≥50% 才发起判定；类别全部被丢弃时**拒绝整形**、原样返回，且同一轮内不再重试。
-- ℹ️ 该模块仍是**opt-in / 实验性**：分类本身可靠（实测对 600 行中的单行报错给出 `failure`、置信度 1），但「保留 warning/failure、丢弃其余」意味着普通细节也会被丢弃——请按你的输出形态决定是否开启。
+- 前置检查：单行 >4000 字符、行数 ≥120、或结构重复率 ≥50% 才发起判定；类别全部被丢弃时**拒绝整形**原样返回，且同一轮内不再重试。
+- ℹ️ 该模块仍是 **opt-in / 实验性**：分类本身可靠，但「保留 warning/failure、丢弃其余」意味着普通细节也会被丢弃——请按你的输出形态决定是否开启。
+
 ### `TypeSafeSuiteConfig` 开关
 
-套件配置按模块**嵌套**；未出现的模块取代码默认值（补丁是整行替换，见「方式 2」的提醒）：
+套件配置按模块**嵌套**；未出现的模块取代码默认值（补丁是整行替换，见上面「3. 修改默认阈值」）：
 
 - `client?: TypeSafeClientConfig`: 客户端配置（`apiKey`、超时、缓存等），见上一节。
 - `loopGuard?: LoopGuardConfig | boolean`: 死循环判定（默认 `true`）。
@@ -308,11 +213,11 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 
 ### `ToolPrunerConfig`
 - `maxTools?: number`: 上下文中最多保留的动态工具数量（默认 `8`）。
-- **顺序稳定性**：剪枝只决定「哪些工具留下」，不决定它们的排列——返回结果保持上游 `orderTools` 的顺序（`alwaysRetain` 工具也不会被提到最前）。工具块位于请求前部，顺序每轮变化会让可复用的前缀失效，因此这里刻意不做相关性排序。
 - `minScoreThreshold?: number`: 工具入选的最低相关性打分；实测刻度为 `[0, 2]`（3 级 rubric，默认 `2`）。
 - `alwaysRetain?: string[]`: 永远不被剪枝保留的核心工具（默认包含 `read_file`, `write_to_file`, `bash`, `run_command`）。
-- 目标过短时**跳过剪枝**（剪枝器的 `minIntentChars`，默认 8 个字符）：实测空目标下排序失去依据——同一候选列表会保留 `deploy_service` 却丢掉 `run_tests`，且逐次不同；给定真实目标后连续三次结果完全一致。
 - `minKeep?: number`: 即便没有工具达到阈值也至少保留几个（默认 `3`）。阈值 `2` 只认「高度相关」，实测多步意图下 12 个工具只剩 1 个（调研类意图在空保留表下甚至为 0）；下限从剩余候选中按分数补齐。
+- **顺序稳定性**：剪枝只决定「哪些工具留下」，不决定它们的排列——返回结果保持上游 `orderTools` 的顺序（`alwaysRetain` 工具也不会被提到最前）。工具块位于请求前部，顺序每轮变化会让可复用的前缀失效，因此刻意不做相关性排序。
+- 目标过短时**跳过剪枝**（剪枝器的 `minIntentChars`，默认 8 个字符）：实测空目标下排序失去依据——同一候选列表会保留 `deploy_service` 却丢掉 `run_tests`，且逐次不同。
 
 ---
 
@@ -331,156 +236,43 @@ Jev 只做 DSH 自己没有的那一层，避免重复与相互抵消：
 
 ## 本地开发与测试
 
-本项目采用 Node.js 原生测试运行器，测试执行速度极快（< 300ms），且不依赖外部网络与 API Key（内置 Mock 测试套件）：
+Node 原生测试运行器，离线用例不联网、不需要 Key（内置 Mock）：
 
 ```bash
-# 编译 TypeScript
-pnpm run build
-
-# 离线单元测试（不联网、不需要 Key；用例数随版本增长，以输出为准）
-pnpm test
-
-# 探针：确认 System One 三种原语的真实返回结构（score 是 [0, n-1] 的连续期望值）
-pnpm run probe
-
-# 线上验证：回放历史误报形态，确认误报消失且真循环仍被拦截
-pnpm run verify:live
-
-# 线上验证：jev_ask / jev_rank / jev_check 三个决策原语
-pnpm run verify:tools
-
-# 集成校验：在真实 DSH runtime（真实 Cordis + 真实 waterfall）上挂载插件
-# 未安装 DSH 时自动跳过并退出 0，因此可在无 DSH 的 CI 中安全运行
-pnpm run verify:dsh
-
-# 线上验证：结果整形（重写后的行形状分类）对四类真实输出是否按预期保留/丢弃
-pnpm run verify:shaper
-
-# 线上验证：工具剪枝的排序质量（带标注用例：哪些工具必须留下、哪些必须剔除）
-pnpm run verify:pruner
-
-# 线上验证：skill 路由（真实 112 项目录；含 1 条已记录的跨语言漏报）
-pnpm run verify:router
-
-# 线上验证：整轮演练（全部模块 + 真实模型 + 真实装配，给出单轮语义开销）
-pnpm run verify:turn
-
-# 守卫网自检：对 16 条承诺注入对应回归，确认至少有一道闸门拦下（需干净工作树；无 DSH/Key 时相应条目跳过）
-pnpm run drill
-
-# 重启后验收：确认**运行中的宿主进程**确实在跑当前构建（其余闸门都无法覆盖这一点）
-pnpm run verify:host
-
-# 构建产物一致性：lib/ 入库且单测导入的是它，改了 src 忘记重建必须报错
-pnpm run build && pnpm run verify:build
-
-# 发布物冒烟：打包 → 装进干净目录 → 按包名导入，确认装得上、解析得到
-pnpm run verify:pack
-
-# 变异扫描：逐个改坏行为后重建跑单测，确认「改坏了有人会发现」
-pnpm run verify:mutants
-
-# 顺序无关：每个 spec 文件单独跑一遍，并核对各文件计数之和等于套件总数
-pnpm run verify:solo
-
-# 覆盖率审计：查看哪些发布代码没有被任何离线用例执行（Node 内置，无额外依赖）
-node --experimental-test-coverage --test-coverage-include='lib/*.js' --test --import ./tests/isolate.mjs tests/*.spec.ts
-
-# A/B 基准：30 条正负样本，输出误报/漏报/延迟/费用
-pnpm run bench            # 真实 API，并录制答案到 bench/recorded.json
-pnpm run bench:offline    # 回放录制答案，零成本复现
+pnpm install --frozen-lockfile
+pnpm run build && pnpm run verify:build   # lib/ 入库且单测导入的是它，改了 src 忘记重建必须报错
+pnpm test                                 # 离线单测（用例数随版本增长，以输出为准）
+pnpm run verify:dsh                       # 真实 DSH runtime（未安装 DSH 时跳过并退出 0，可用于 CI）
+pnpm run verify:live                      # 线上：回放历史误报形态，确认误报消失且真循环仍被拦截
+pnpm run bench:offline                    # 回放录制答案的 A/B 基准，零成本、无需 Key
+pnpm run doctor                           # 部署自检：本机跑的是不是当前构建
 ```
 
-验证证据索引见 [`docs/verification-report.md`](docs/verification-report.md)（每条承诺对应哪种验证手段、抓到过哪些缺陷）；标定结果与阈值来源见 [`docs/calibration.md`](docs/calibration.md)；借鉴项与其在本仓库的证据见 [`docs/research.md`](docs/research.md)；分阶段执行清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)；行为变更史见 [`CHANGELOG.md`](CHANGELOG.md)。
+其余闸门——`probe` / `verify:tools` / `verify:pruner` / `verify:router` / `verify:shaper` / `verify:turn` / `verify:pack` / `verify:mutants` / `verify:solo` / `drill` / `bench` / 覆盖率审计——的命令与各自证据见 [`docs/verification-report.md`](docs/verification-report.md)；阈值来源见 [`docs/calibration.md`](docs/calibration.md)；借鉴项与其证据见 [`docs/research.md`](docs/research.md)；分阶段清单见 [`docs/OPTIMIZATION_PLAN.md`](docs/OPTIMIZATION_PLAN.md)；行为变更史见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-CI（`.github/workflows/ci.yml`）在 Node 22 与 24 上跑 `build → typecheck:scripts → test → bench:offline → verify:dsh（跳过）→ 打包校验`：基准是离线回放的且带**输入指纹校验**，因此不需要 API Key；**任何未标记为已知漏报的用例行为不符都会让 CI 失败**（不再只看总体准确率）。
+CI（`.github/workflows/ci.yml`）在 Node 22 与 24 上跑 `build → typecheck:scripts → test → bench:offline → verify:dsh（跳过）→ 打包校验`：基准是离线回放的且带**输入指纹校验**，因此不需要 API Key；**任何未标记为已知漏报的用例行为不符都会让 CI 失败**。
 
 ### 让改动在本机生效
-> **`pnpm run sync` 同时会把 profile 清单里声明的 `dsh-jev` 版本对齐到本仓库版本。** profile 声明的是精确版本，而安装副本是**原地替换**的，两者会漂移：本机实测曾出现「声明 `0.1.0`、实际运行 `0.2.0`」，此时该 profile 里任何一次 `pnpm install`（任何 `dsh plugin add` 都会跑）都会按声明解析并把 0.2.0 **静默换回 0.1.0**。对齐后声明与实际一致；`pnpm run doctor` 会报出这类漂移（`declaredMatch`）。
 
-profile 里的插件是**构建产物的副本**，改完源码必须同步过去：
+profile 里的插件是**构建产物的副本**，改完源码必须同步，然后重启 DSH：
 
 ```bash
 pnpm run sync              # 同步到所有已安装该插件的 profile（自动发现）
 pnpm run sync:desktop      # 只同步 desktop
-node scripts/sync-profiles.js --dry-run   # 只列出目标，不写文件
+pnpm run doctor            # 逐 profile 比对构建哈希、安装版本与指标 schema，输出 ACTION: 或 OK:
 ```
 
-> ℹ️ **验证脚本不会污染实机指标**：`verify:dsh` / `verify:live` / `verify:tools` / `bench` 都把指标写到
-> `%TEMP%` 下的临时文件（指标通过 `DSH_JEV_METRICS_PATH`，决策日志通过 `DSH_JEV_DECISIONS_PATH`）；
-> 否则指标文件会以自身 schema 覆写
-> `~/.dsh/jev-stats.json`，而那正是 `doctor` 判断部署状态的依据。
-
-判定「本机是否真的在跑新构建」用一条命令：
-
-```bash
-pnpm run doctor
-```
-
-它会逐 profile 比对构建哈希、比对安装版本，并读取 `~/.dsh/jev-stats.json` 的 schema 版本，输出 `ACTION:` 或 `OK:`；`--json` 供 CI 使用，退出码 0 表示运行中的宿主已在用当前构建。
+`pnpm run sync` 同时把 profile 清单里声明的 `dsh-jev` 版本对齐到本仓库版本：声明是精确版本而安装副本是**原地替换**的，两者漂移后该 profile 里任何一次 `pnpm install`（`dsh plugin add` 都会跑）会把新版本**静默换回**声明版本；`doctor` 会报出这类漂移（`declaredMatch`）。验证脚本不会污染实机指标——`verify:*` / `bench` 都把指标与决策日志写到 `%TEMP%`（`DSH_JEV_METRICS_PATH` / `DSH_JEV_DECISIONS_PATH`），否则 `~/.dsh/jev-stats.json` 会被测试覆写，而那正是 `doctor` 判断部署状态的依据。
 
 > ⚠️ **必须重启 DSH**：本部署的 profile 组合里没有挂载 HMR 插件，运行中的进程不会重新加载 `node_modules` 下的模块。只同步不重启，会话里跑的还是旧构建（`doctor` 会明确报 `ACTION: restart DSH`）。
 
 ---
 
-## 📊 指标统计与用户收益感知
+## 指标与总开关
 
-`dsh-jev` 内置了完整的指标收集与收益感知系统，自动追踪工具剪枝节省的 Schema Token、死循环熔断止损、安全门禁拦截次数以及 System One 决策延迟：
-
-### 1. Agent 工具直接调取看板
-在对话中直接让模型执行 `jev_stats`，或通过命令调取，即可输出结构化看板卡片：
-```markdown
-### 🛡️ TypeSafe Jev 守护与收益看板
-
-| 守护维度 | 核心拦截/优化战果 | 预估 Token / 成本收益 |
-| :--- | :--- | :--- |
-| **🛠️ 工具动态剪枝** | 评估 **42** 次，裁剪 **210** 个次无关工具（精确移除 **31,500** 字符） | 省约 **9.0K** Tokens（口径：tokenMeter 估算器 / 本地启发 / 混合） |
-| **🔄 死循环及早止损** | 检查 **18** 次，阻断 **2** 次、警示 **3** 次，共注入 **5** 条提示 | 不做 token 折算（避免成本不可测），仅报计数 |
-| **🔒 执行安全护栏** | 审查 **65** 次，阻断 **1** 次（确定性 **1** / 判定不可用 fail-closed **0**），审批 **4** 次 | 确定性外壳 0 次模型调用即可拒止 |
-| **🧩 语义结果整形** | 整形 **6** 次，精确移除 **42,000** 字符 | 默认关闭；仅对输出密集型工具的重复内容生效，不可用时原样返回 |
-| **⚡ System One 响应** | 累计决策 **125** 次（缓存命中 **12**），平均延迟 **142ms**，错误 **3** | 输入 **180.0KB**，按 $0.042/M 输入计约 **$0.0076**（输出免费） |
-
-> 💡 **累计可测收益**：工具 Schema 精确移除字符数可核对；死循环与安全拦截只报计数，不做不可测的 token 折算。
-```
-
-### 2. HTTP / RPC 查询接口
-若环境启用了 `webServer`（如 Web 或 Desktop profile），访问对应端口的 `/dsh-jev/stats` 路由：
-- 浏览器访问直接展示格式化仪表盘（HTML）。
-- `curl` 或程序请求（`Accept: application/json`）返回结构化指标 JSON。
-
-### 3. 本地持久化与重置
-- 所有指标跨会话持久化存储于 `~/.dsh/jev-stats.json`。
-- 如需重置归零，可在调用工具时传入 `{ "reset": true }`，或删除该 JSON 文件。
-
-### 4. 状态栏总开关（运行时启用 / 停用）
-
-**输入框下方的状态栏**（composer 卡片内，`conversation.input.right` 插槽）有一个 `jev` **开关（switcher）**：
-
-| 外观 | 含义 |
-|---|---|
-| 轨道**绿色**、白色滑块在右 | **已启用**：语义剪枝、技能路由、结果整形、死循环与安全拦截均生效 |
-| 轨道灰色、白色滑块在左 | **已停用**：所有模块直通——不剪枝、不路由、不整形、不拦截 |
-| 轨道虚线且禁用 | 读不到开关状态（宿主路由尚未注册），不猜 |
-
-配色遵循宿主设计系统：**开启态用 `--dsw-alias-state-success-primary`**（宿主的 `--dsw-static-green-500`，随主题走），关闭态用中性表面 token `--dsw-alias-fill-l2`，**滑块固定白色并带阴影**（iOS 与 Material 的 on-color 做法——用文字色 token 会让它在浅色语境下渲染成近黑 ✗）。尺寸 32×18、滑块 14px（Material 的 52×32 是给设置行的，状态栏属密集区域），并含 `focus-visible` 焦点环与 `prefers-reduced-motion` ✓
-
-点一下即切换，**无需卸载、无需重启**：各模块在**每次决策前**读取开关，因此状态立即生效。开关持久化在 `~/.dsh/jev-enabled.json`：
-
-```json
-{ "enabled": false, "changedAt": "2026-09-19T09:12:00.000Z", "changedBy": "panel" }
-```
-
-三种切换方式（等价）：
-
-```bash
-# ① 点状态栏的绿色开关（推荐）
-# ② HTTP 查询参数（webServer 路由不解析 body，故用 query）
-curl 'http://<host>:<port>/api/dsh-jev/stats?enabled=0'   # 0 停用 / 1 启用
-# ③ 直接改文件（下次决策即生效）
-echo '{"enabled":false}' > ~/.dsh/jev-enabled.json
-```
-
-> ⚠️ **停用是彻底的**：连**确定性硬拒层**（无需模型调用的那一层，例如递归删除根目录）也一并停止拦截。总开关里留一个隐藏例外会造成「看到 ○ 却仍被拦」的困惑，所以这里不设例外——但请知悉这一点再点。文件缺失、损坏或不可读时**一律视为启用**：文件系统故障不该悄悄关掉护栏。
+- **看板**：让 Agent 执行 `jev_stats`，或请求 `GET /api/dsh-jev/stats`（浏览器得到 HTML 仪表盘，`Accept: application/json` 得到结构化 JSON）。指标持久化在 `~/.dsh/jev-stats.json`，调用时传 `{ "reset": true }` 或删除该文件即归零。工具 Schema 的精确移除字符数可核对；死循环与安全拦截只报计数，不做不可测的 token 折算。
+- **状态栏总开关**：输入框下方状态栏（`conversation.input.right` 插槽）有一个 `jev` switcher——轨道绿色=启用全部模块，灰色=全部直通（不剪枝、不路由、不整形、不拦截），虚线=读不到状态（宿主路由尚未注册，不猜）。点一下即切换，**无需卸载或重启**：各模块在每次决策前读取开关。状态持久化在 `~/.dsh/jev-enabled.json`，也可用 `curl 'http://<host>:<port>/api/dsh-jev/stats?enabled=0'`（`0` 停用 / `1` 启用）或直接改该文件切换。
+- ⚠️ **停用是彻底的**：连**确定性硬拒层**（无需模型调用的那一层，例如递归删除根目录）也一并停止拦截——留隐藏例外会造成「看到关闭却仍被拦」的困惑，故不设例外。文件缺失、损坏或不可读时**一律视为启用**：文件系统故障不该悄悄关掉护栏。
 
 ---
 

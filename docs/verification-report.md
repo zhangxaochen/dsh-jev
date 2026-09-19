@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **203/203**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 离线单测 | **207/207**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -50,11 +50,12 @@
 | 随包补丁与代码默认一致 | 单测（`tests/packaging.spec.ts`） | 补丁钉住的每个标量等于代码默认；未登记的钉住项即失败；实验性 shaper 不得出现在补丁里 |
 | 代码接受的配置项都有文档 | 单测（`tests/docs-consistency.spec.ts`） | 7 个 `*Config` 接口 50 个字段全部在 README 有说明（曾漏 `headless` 等 5 项） |
 | 破坏性变更在变更日志里有公告 | 单测（`tests/docs-consistency.spec.ts`） | 迁移表的三处破坏性变更均在 CHANGELOG；同一小节不得重复条目 |
+| 安装文档不自造第二份配置 | 单测（`tests/readme.spec.ts`） | 代码围栏必须闭合（曾有一个未闭合的 ts 围栏吞掉其后约 200 行）；README 里的 `dsh-jev/*` 导入必须都是清单导出；不得把浏览器面板当插件挂载；覆盖说明必须指向安装副本而非文档副本 |
 | 宿主契约仍成立 | 单测（`tests/dsh-contract.spec.ts`，无 DSH 时跳过） | 内置包已安装、阈值仍为 `[3,5,8]`、`engines.dsh` 满足、钩子实参形态未变、补丁整行替换语义未变 |
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
-| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 75 处变异） | **75/75** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（23 个 spec 逐个单独运行） | **23/23 单独通过**，且各文件计数之和 **177 = 套件总数**（无用例在聚合运行中消失） |
+| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 81 处变异） | **81/81** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（25 个 spec 逐个单独运行） | **25/25 单独通过**，且各文件计数之和 **207 = 套件总数**（无用例在聚合运行中消失） |
 
 ## 抓到的真实缺陷（按严重度）
 
@@ -77,6 +78,7 @@
 | 15 | README 安装指令对 `desktop` profile 无效 | CLI 直接拒绝，用户无指引 | 实跑文档里的命令 |
 | 16 | `skill-router` 用 800ms 建议超时跑 112 问请求 | **7/7 用例全部超时**且被装配钩子静默吞掉 → 默认开启的模块从不给建议 | 线上路由验证（mock 覆盖无法发现） |
 | 17 | `skill-router` 在请求字面点名技能时仍可能选错 | 「SWOT 分析」选中 `company-intel`，而目录含 `swot-analysis` | 线上路由验证的标注用例 |
+| 18 | README 安装章节内联了一份 `cordis.patch.yml` 副本，且 ts 代码围栏未闭合 | 副本残留 0.1.0 的 5 项 `guardedTools`（照抄即让文件写入失去语义门禁）；未闭合的围栏把其后约 200 行渲染成一个代码块 | 逐行比对 README 副本与随包补丁；新增 `tests/readme.spec.ts` |
 
 另有一类**结论被推翻**的记录，同样值得留档：第 34–35 轮曾把「Jev 无法判断输出中哪一部分重要」写入文档，第 36 轮的对照实验发现真因是**请求打包方式**（把项放进 state 再按索引指代），换用「行形状聚类 + 内容嵌入问题」后分类完全可靠。教训：**「模型做不到」的结论必须先排除「我请求写错了」**。
 
@@ -94,7 +96,7 @@
 pnpm install --frozen-lockfile
 pnpm run build && pnpm run verify:build   # 构建产物必须与已提交的一致（lib/ 入库）
 pnpm run verify:pack                      # 发布物冒烟：打包 → 安装 → 按名导入
-pnpm run verify:mutants                   # 变异扫描：71 处行为改坏后必须被单测发现
+pnpm run verify:mutants                   # 变异扫描：81 处行为改坏后必须被单测发现
 pnpm run verify:solo                      # 顺序无关：每个 spec 单独跑，计数之和须等于总数
 pnpm run typecheck:scripts                # bench/tests/scripts 的类型检查
 pnpm test                 # 离线用例，不联网、不需要 Key（含三个语料库）
