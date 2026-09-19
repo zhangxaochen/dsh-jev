@@ -164,22 +164,36 @@ export function normalizeMetrics(stored: unknown): JevMetricsData {
   if (!stored || typeof stored !== 'object') return defaults
   const record = stored as Record<string, unknown>
   const merged = { ...defaults } as unknown as Record<string, unknown>
-  for (const [key, value] of Object.entries(record)) {
-    const fallback = (defaults as unknown as Record<string, unknown>)[key]
-    if (
-      fallback !== null &&
-      typeof fallback === 'object' &&
-      !Array.isArray(fallback) &&
-      value !== null &&
-      typeof value === 'object' &&
-      !Array.isArray(value)
-    ) {
-      merged[key] = { ...(fallback as Record<string, unknown>), ...(value as Record<string, unknown>) }
-    } else {
-      merged[key] = value
+
+  /**
+   * Take the stored value only when it can be the same kind of thing as the default.
+   *
+   * A counter polluted by a persisted `NaN` arrives as `null`, and `null + 1` is 1 while
+   * `null` itself is not a count - so a stored value whose type contradicts the default is
+   * treated as missing and the default repairs it. Keys the defaults do not know are kept
+   * as they are rather than dropped.
+   */
+  const pick = (fallback: unknown, value: unknown): unknown => {
+    if (isPlainObject(fallback) && isPlainObject(value)) {
+      const section: Record<string, unknown> = { ...(fallback as Record<string, unknown>) }
+      for (const [inner, innerValue] of Object.entries(value as Record<string, unknown>)) {
+        section[inner] = pick(section[inner], innerValue)
+      }
+      return section
     }
+    if (fallback === undefined) return value
+    if (value === undefined) return fallback
+    return typeof value === typeof fallback ? value : fallback
+  }
+
+  for (const [key, value] of Object.entries(record)) {
+    merged[key] = pick((defaults as unknown as Record<string, unknown>)[key], value)
   }
   return merged as unknown as JevMetricsData
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 export class MetricsCollector {

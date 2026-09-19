@@ -443,6 +443,40 @@ test('a field added in a later build is backfilled from a file written before it
   }
 })
 
+test('a counter polluted by a persisted NaN is repaired rather than kept', () => {
+  // A build without the backfill wrote `undefined + 1`, which JSON turns into null - and
+  // that value was observed in the live file. Keeping it would leave the dashboard showing
+  // a non-number forever, so a stored value of the wrong type yields to the default.
+  const file = join(tmpdir(), 'jev-polluted-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.json')
+  writeFileSync(
+    file,
+    JSON.stringify({
+      version: 2,
+      firstRecordedAt: '2026-01-01T00:00:00.000Z',
+      lastUpdatedAt: '2026-01-02T00:00:00.000Z',
+      safetyGuard: {
+        screened: 39,
+        blocked: 7,
+        approvals: 0,
+        hardDenied: 1,
+        uncertainDenied: 0,
+        inspectionRetries: null,
+        inspectionFailures: 'not a number',
+      },
+    }),
+    'utf8'
+  )
+
+  try {
+    const loaded = new MetricsCollector(file).getSnapshot()
+    assert.equal(loaded.safetyGuard.screened, 39, 'valid stored values still survive')
+    assert.equal(loaded.safetyGuard.inspectionRetries, 0, 'a null counter is repaired to the default')
+    assert.equal(loaded.safetyGuard.inspectionFailures, 0, 'so is a wrong-typed one')
+  } finally {
+    rmSync(file, { force: true })
+  }
+})
+
 test('the stats tool declares exactly the fields it returns', () => {
   // A declared-schema key that the payload does not carry (or vice versa) breaks the
   // host's output validation, and nothing compared the two.
