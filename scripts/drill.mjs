@@ -229,11 +229,13 @@ const drills = [
     test: 'tests/docs-consistency.spec.ts',
   },
   {
-    // The delivery summary's per-module counts must track the specs they describe.
+    // The delivery summary's per-module counts must track the specs they describe. The
+    // pattern matches whatever the current number is, so editing the summary does not
+    // invalidate the drill - a literal anchor went stale once the counts changed.
     name: 'the delivery summary miscounts a module',
     file: 'docs/OPTIMIZATION_PLAN.md',
-    from: '单测 13 项 + `verify:live`',
-    to: '单测 10 项 + `verify:live`',
+    fromPattern: '单测 \\d+ 项 \\+ `verify:live`',
+    to: '单测 1 项 + `verify:live`',
     test: 'tests/docs-consistency.spec.ts',
   },
   {
