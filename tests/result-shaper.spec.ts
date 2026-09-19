@@ -338,3 +338,65 @@ test('shouldConsider honours thresholdChars with the other guards out of the way
   const small = service(async () => ({}), { thresholdChars: 100, maxPerTurn: 5, shapeTools: ['pwsh'] })
   assert.equal(small.shouldConsider({ name: 'pwsh', args: {} } as ToolExecution, repetitive), true, 'above the threshold it qualifies')
 })
+
+test('clusters past maxClusters keep their lines even when they look routine', async () => {
+  // The cap bounds how many clusters are classified, not what may be dropped: a cluster
+  // the model never saw must survive verbatim. The earlier cap case could not tell the
+  // difference because its untested cluster happened to be kept either way.
+  const content = [
+    ...Array.from({ length: 200 }, () => 'progress: chunk ok'),
+    'ERROR in b.ts:1',
+    'routine: beta marker',
+  ].join('\n')
+
+  const classify = (maxClusters: number) =>
+    service(
+      async (req: any) => {
+        const answers: Record<string, unknown> = {}
+        for (const [id, question] of Object.entries(req.questions ?? {})) {
+          const embedded = String((question as any).instructions ?? '')
+          answers[id] = {
+            type: 'choice',
+            choice: /ERROR|WARN|not ok/.test(embedded) ? 'failure' : 'routine_progress',
+            confidence: 0.99,
+            probabilities: {},
+          }
+        }
+        return answers
+      },
+      { maxClusters }
+    )
+
+  // Clusters 0 and 1 are classified (progress dropped, failure kept); the third cluster
+  // sits past the cap, so its line survives however routine it looks.
+  const capped = await classify(2).shape(content, 'pwsh')
+  assert.ok(capped, 'the failure cluster keeps the shaping worthwhile')
+  assert.match(capped!.text, /beta marker/, 'an unclassified cluster must not lose its lines')
+
+  // With the cap raised that same cluster is classified as routine and dropped.
+  const uncapped = await classify(5).shape(content, 'pwsh')
+  assert.ok(uncapped)
+  assert.doesNotMatch(uncapped!.text, /beta marker/, 'once classified as routine it is dropped')
+})
+
+test('sampleChars bounds the sample sent to the classifier', async () => {
+  // sampleChars truncates the question, not the rendered result, so the evidence is in
+  // what the model was asked - which is also what the call is charged for.
+  const longest = async (sampleChars: number) => {
+    let longestQuestion = 0
+    await service(
+      async (req: any) => {
+        for (const question of Object.values(req.questions ?? {})) {
+          longestQuestion = Math.max(longestQuestion, String((question as any).instructions ?? '').length)
+        }
+        return kindMock()(req)
+      },
+      { sampleChars }
+    ).shape(noisyOutput(200), 'pwsh')
+    return longestQuestion
+  }
+
+  const tiny = await longest(10)
+  const roomy = await longest(400)
+  assert.ok(tiny < roomy, 'a smaller sampleChars must shorten the question: ' + tiny + ' vs ' + roomy)
+})

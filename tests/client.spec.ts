@@ -1,4 +1,5 @@
 import test from 'node:test'
+import { readFileSync, rmSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import {
   TypeSafeClient,
@@ -175,4 +176,28 @@ test('the identical-payload cache stays bounded', async () => {
   } finally {
     globalThis.fetch = realFetch
   }
+})
+
+test('a call is charged for its input bytes and priced at the documented rate', async () => {
+  // The dashboard's cost and byte figures come from this accounting; nothing asserted
+  // it, so zeroing either number changed what the operator sees with every test green.
+  const metricsPath = process.env.DSH_JEV_METRICS_PATH!
+  try {
+    rmSync(metricsPath, { force: true })
+  } catch {}
+
+  const client = new TypeSafeClient({
+    mockHandler: async () => ({ flag: { type: 'noul', noul: 0.9 } }),
+  })
+  await client.systemOne({ state: 'x'.repeat(400), questions: { flag: noul('does it hold?') } })
+
+  // The documented pricing: ~4 bytes per token, 0.042 USD per million input tokens.
+  const snapshot = JSON.parse(readFileSync(metricsPath, 'utf8'))
+  const calls = snapshot.systemOne
+  assert.ok(calls.inputBytes > 0, 'a call must be charged for its payload')
+  const expected = (calls.inputBytes / 4 / 1_000_000) * 0.042
+  assert.ok(
+    Math.abs(calls.estimatedCostUsd - expected) < 1e-12,
+    'cost must follow the documented rate: ' + calls.estimatedCostUsd + ' vs ' + expected
+  )
 })

@@ -202,5 +202,83 @@
     "file": "src/loop-guard.ts",
     "from": "if (deferExactRepeats && isExactRepeat) {",
     "to": "if (false) {"
+  },
+  {
+    "name": "the suite ignores loopGuard: false",
+    "file": "src/index.ts",
+    "from": "if (config.loopGuard !== false) {",
+    "to": "if (true) {"
+  },
+  {
+    "name": "the suite ignores safetyGuard: false",
+    "file": "src/index.ts",
+    "from": "if (config.safetyGuard !== false) {",
+    "to": "if (true) {"
+  },
+  {
+    "name": "the suite ignores askTools: false",
+    "file": "src/index.ts",
+    "from": "if (config.askTools !== false) {",
+    "to": "if (true) {"
+  },
+  {
+    "name": "the suite ignores skillRouter: false",
+    "file": "src/index.ts",
+    "from": "if (config.skillRouter !== false) {",
+    "to": "if (true) {"
+  },
+  {
+    "name": "the shaper ignores maxClusters",
+    "file": "src/result-shaper.ts",
+    "from": "clusters.slice(0, this.config.maxClusters ?? DEFAULT_MAX_CLUSTERS)",
+    "to": "clusters.slice(0)"
+  },
+  {
+    "name": "the shaper ignores sampleChars",
+    "file": "src/result-shaper.ts",
+    "from": "cluster.sample.slice(0, this.config.sampleChars ?? DEFAULT_SAMPLE_CHARS)",
+    "to": "cluster.sample.slice(0)"
+  },
+  {
+    "name": "the shaper ignores keepKinds",
+    "file": "src/result-shaper.ts",
+    "from": "const keepKinds = new Set(this.config.keepKinds ?? DEFAULT_KEEP_KINDS)",
+    "to": "const keepKinds = new Set(['routine_progress'])"
+  },
+  {
+    "name": "loop-check outcomes stop being counted",
+    "file": "src/metrics.ts",
+    "from": "recordLoopCheck(outcome: 'normal' | 'warn' | 'interrupt' | 'uncertain'): void {",
+    "to": "recordLoopCheck(outcome: 'normal' | 'warn' | 'interrupt' | 'uncertain'): void { if (true) return"
+  },
+  {
+    "name": "safety-check outcomes stop being counted",
+    "file": "src/metrics.ts",
+    "from": "recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny'): void {",
+    "to": "recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny'): void { if (true) return"
+  },
+  {
+    "name": "the shaping counter stops aggregating",
+    "file": "src/metrics.ts",
+    "from": "recordShape(charsRemoved: number): void {",
+    "to": "recordShape(charsRemoved: number): void { if (true) return"
+  },
+  {
+    "name": "the client ignores its configured timeout",
+    "file": "src/typesafe-client.ts",
+    "from": "this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS",
+    "to": "this.timeoutMs = 1"
+  },
+  {
+    "name": "call cost is no longer estimated",
+    "file": "src/typesafe-client.ts",
+    "from": "const estimatedCostUsd = (inputBytes / BYTES_PER_TOKEN / 1_000_000) * INPUT_COST_PER_MILLION_TOKENS",
+    "to": "const estimatedCostUsd = 0"
+  },
+  {
+    "name": "callers stop being charged for input bytes",
+    "file": "src/typesafe-client.ts",
+    "from": "const inputBytes = Buffer.byteLength(payloadBody, 'utf8')",
+    "to": "const inputBytes = 0"
   }
 ]

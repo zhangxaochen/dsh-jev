@@ -1,4 +1,6 @@
 import test from 'node:test'
+import { homedir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -359,4 +361,42 @@ test('a host whose tools service refuses registration still gets the other mount
   assert.ok(registered.includes('jev_ask'), 'the other primitives still register')
   assert.ok(registered.includes('jev_check'))
   assert.ok(Array.isArray(disposers))
+})
+
+test('a false sub-config turns that module off', async () => {
+  // Each module is optional, and docs/README advertise disabling them by config. The
+  // pruner, router and shaper provide a service; the ask tools register tools; the two
+  // guards only listen, so they are checked by driving the event they hook.
+  const { Context } = await import(
+    pathToFileURL(join(process.env.USERPROFILE ?? homedir(), '.dsh', 'profiles', 'desktop', 'node_modules', '@deepseek-ai', 'cordis', 'lib', 'index.js')).href
+  )
+
+  const ctx = new (Context as any)()
+  const events: string[] = []
+  const originalOn = ctx.on.bind(ctx)
+  ctx.on = (event: string, ...rest: any[]) => {
+    events.push(event)
+    return originalOn(event, ...rest)
+  }
+  const disabled = applySuite(ctx, {
+    client: { mockHandler: () => ({}) },
+    loopGuard: false,
+    safetyGuard: false,
+    toolPruner: false,
+    skillRouter: false,
+    resultShaper: false,
+    askTools: false,
+  })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+
+  assert.equal(ctx.get('toolPruner'), undefined, 'the pruner must not provide its service')
+  assert.equal(ctx.get('skillRouter'), undefined, 'the router must not provide its service')
+  assert.equal(ctx.get('resultShaper'), undefined, 'the shaper must not provide its service')
+  assert.equal(ctx.get('tools')?.get?.('jev_ask'), undefined, 'the ask tools must not be registered')
+  assert.ok(!events.includes('tools/pre-execute'), 'the safety guard must not listen')
+  assert.ok(!events.includes('system-prompt/assemble'), 'assemble listeners must not be mounted')
+  // The loop guard hooks post-execute, which the shaper also hooks: with both off it is
+  // the only remaining registrant, so its absence is observable here.
+  assert.ok(!events.includes('tools/post-execute'), 'no post-execute listener should remain')
+  disabled()
 })
