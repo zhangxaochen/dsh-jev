@@ -925,3 +925,18 @@ skills.list() ms over 4 calls: 173, 0, 0, 0
 **方法论**：这一批的目标不是找缺陷，而是**给已正确的实现加锁**——「某处修过一次」不等于「不会再退化」。第 2 行（路由器超时）就是活例：那次修复本身没有留下回归测试，直到本轮变异扫描才把它补上。
 
 一处自查：meter 测试首版桩写成 `{ estimate: … }`，而契约是 `estimateMessage({role, content})` → 失败缘由是**我的桩错**，不是实现错（已核对源码后修正）。
+
+### 21.8 变异扫描的自身安全（Round 104）
+
+第 103 轮的一次崩溃暴露了工具本身的危险：Windows 文件错误（`UNKNOWN: unknown error, open src/client.ts`）让扫描在变异中途退出，**把改坏的源码留在工作树里**——距离被 `git add -A` 提交只差一步。为此给 `verify:mutants` 加四道自保，并逐一实测：
+
+| 措施 | 实测 |
+|---|---|
+| **脏树拒绝启动**（与 `drill` 同法） | 造一个未跟踪文件 → `refusing to run: commit or stash the working tree first`，exit 2 |
+| **退出/中断/异常时恢复现场**：记录每个被改文件的原文，在 `exit`、`SIGINT`、`uncaughtException` 上恢复 | 已注册（进程终止路径全覆盖） |
+| **结尾无条件重建** | 见下 |
+| **结束核验**：`git status --porcelain -- src lib` 必须为空，否则 exit 2 | 实测触发过：当时 lib 仍带变异 → 报 `the sweep left changes behind` 并 exit 2（正是它暴露了重建 bug） |
+
+**修掉的一个真 bug**：恢复逻辑原本「只有在确实恢复过文件时才重建」，但**最后一个条目**的源码已在 `finally` 里恢复、而它的构建产物仍是变异版 → tsc 对未变源码不重新发射 → **lib/ 留下变异模块** ✗。改为结尾**无条件重建一次**。
+
+**另一处改进**：单个条目失败（文件锁定、构建被杀）不再中断整轮——该条记为 `could not read …` / `the entry failed: …`，其余继续。实测：坏条目 + 正常条目的语料 → 坏条目如实报告、正常条目标为拦下、退出后工作树干净。
