@@ -27,7 +27,8 @@
 - **部署自检** `pnpm run doctor`：逐 profile 比对构建哈希与版本，并读取运行中宿主写入的指标 schema 版本。
 - **多 profile 同步** `pnpm run sync`：自动发现所有已安装该插件的 profile（旧脚本只同步 desktop）。
 - 新增 `tests/probe.ts`、`tests/live-verify.ts`、`tests/live-tools.ts` 三个可复现的验证脚本。
-- **状态栏总开关**：输入框下方状态栏（`conversation.input.right` 插槽）新增 `jev` 绿色开关（switcher：开=绿轨道圆钮在右，关=灰轨道圆钮在左，读不到状态=虚线禁用），点一下即切换插件是否生效，**无需卸载、无需重启**——各模块在每次决策前读取开关，状态立即生效。持久化在 `~/.dsh/jev-enabled.json`；也可用 `POST /api/dsh-jev/stats {"enabled":false}`，或查询参数 `?enabled=0` / `?enabled=1`（该 webServer 路由不解析 body，故提供 query 形式，方便 curl）。**停用是彻底的**：连确定性硬拒层（无需模型调用的那一层，例如递归删除根目录）也一并停止拦截——总开关里留隐藏例外会造成「开关显示为关却仍被拦」的困惑，故不设例外，README 在按钮说明旁明确标注。开关文件缺失、损坏或不可读时**一律视为启用**：文件系统故障不该悄悄关掉护栏。
+- **状态栏总开关**：输入框下方状态栏（`conversation.input.right` 插槽）新增 `jev` 开关（switcher：开=**绿轨道**+白色滑块在右，关=中性轨道+滑块在左，读不到状态=虚线禁用），点一下即切换插件是否生效，**无需卸载、无需重启**——各模块在每次决策前读取开关，状态立即生效。配色用宿主语义 token（开=`--dsw-alias-state-success-primary`、关=`--dsw-alias-fill-l2`，滑块固定白+阴影），并支持 `focus-visible` 焦点环与 `prefers-reduced-motion`。持久化在 `~/.dsh/jev-enabled.json`；也可用 `POST /api/dsh-jev/stats {"enabled":false}`，或查询参数 `?enabled=0` / `?enabled=1`（该 webServer 路由不解析 body，故提供 query 形式，方便 curl）。**停用是彻底的**：连确定性硬拒层（无需模型调用的那一层，例如递归删除根目录）也一并停止拦截——总开关里留隐藏例外会造成「开关显示为关却仍被拦」的困惑，故不设例外，README 在开关说明旁明确标注。开关文件缺失、损坏或不可读时**一律视为启用**：文件系统故障不该悄悄关掉护栏。
+- **开关的滑块颜色用错 token（0.2.0 内修复）**：滑块原本取 `--dsw-alias-label-*`（**文字**色），在浅色语境下渲染成近黑 ✗，与「滑块应为 on-color/固定亮色」（iOS、Material 的做法）相反；开启态轨道也用了手挑的 `#16a34a`（green-600）而偏暗 ✗。现改为：开启态轨道用宿主的 `--dsw-alias-state-success-primary`（= `--dsw-static-green-500`，随主题走）、滑块固定 `#ffffff` 加 `0 1px 2px` 阴影、关闭态轨道用中性表面 token ✓
 
 ### Changed
 

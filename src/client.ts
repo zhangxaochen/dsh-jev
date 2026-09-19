@@ -38,43 +38,71 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
   color: var(--dsw-alias-label-secondary, #b9b9c6);
   user-select: none;
 }
+/* Compact switch for a dense composer strip: Material's 52x32dp size is for a settings
+   row, not a status bar. A 32x18 track with a 14px thumb stays legible here. */
 .jev-switch {
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 28px;
-  height: 16px;
+  width: 32px;
+  height: 18px;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: var(--dsw-alias-fill-l2, rgba(255, 255, 255, 0.18));
+  /* Off: a neutral surface token, the way Material uses surfaceContainerHighest. */
+  background: var(--dsw-alias-fill-l2, rgba(148, 163, 184, 0.4));
   cursor: pointer;
   transition: background 140ms ease;
 }
+/* On: the host's own success colour (state-success-primary resolves to
+   --dsw-static-green-500), not a hand-picked green - a semantic token follows the
+   product palette in both themes, which is what shadcn's theming guide recommends. */
+.jev-switch[data-state='checked'] {
+  background: var(--dsw-alias-state-success-primary, var(--dsw-static-green-500, #22c55e));
+}
+.jev-switch[data-state='checked']:hover:not(:disabled) {
+  background: var(--dsw-alias-state-success-secondary, var(--dsw-static-green-400, #4ade80));
+}
+.jev-switch:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.jev-switch:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+  outline-offset: 2px;
+}
 .jev-switch:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: progress;
 }
+/* The thumb is white in both themes, as in iOS and Material's on-colour. Using a label
+   token here is what rendered it near-black in a light context. */
 .jev-switch-knob {
   position: absolute;
   left: 2px;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--dsw-alias-label-primary, #ffffff);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   transition: transform 140ms ease;
 }
-/* On: green, which reads as "enabled" without a legend. */
-.jev-switch-on {
-  background: #16a34a;
+.jev-switch[data-state='checked'] .jev-switch-knob {
+  transform: translateX(14px);
 }
-.jev-switch-on .jev-switch-knob {
-  transform: translateX(12px);
-}
-/* State unknown (route not reachable yet): dashed and disabled rather than guessing. */
-.jev-switch-unknown {
+/* State not read yet: dashed and inert rather than guessing. */
+.jev-switch[data-state='unknown'] {
   background: transparent;
   border: 1px dashed var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.24));
+}
+.jev-switch[data-state='unknown'] .jev-switch-knob {
+  background: var(--dsw-alias-label-secondary, #b9b9c6);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jev-switch,
+  .jev-switch-knob {
+    transition: none;
+  }
 }
 .jev-container {
   display: flex;
@@ -284,7 +312,9 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
 
         const known = enabled !== null
         const on = known && enabled === true
-        const trackClass = !known ? 'jev-switch jev-switch-unknown' : on ? 'jev-switch jev-switch-on' : 'jev-switch'
+        // Radix exposes the state as `data-state`, so the styles above key off the state
+        // rather than off bespoke class names.
+        const state = !known ? 'unknown' : on ? 'checked' : 'unchecked'
         const title = !known
           ? 'TypeSafe Jev：未能读到开关状态（宿主路由未就绪）'
           : on
@@ -294,15 +324,17 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
         return h(
           'span',
           { className: 'jev-switch-wrap', title },
+          // The label sits outside the graphic, as Material asks: never "on/off" inside it.
           h('span', null, 'jev'),
           h(
             'button',
             {
               type: 'button',
               role: 'switch',
+              'data-state': state,
               'aria-checked': known ? on : 'mixed',
               'aria-label': 'TypeSafe Jev 开关',
-              className: trackClass,
+              className: 'jev-switch',
               title,
               onClick: toggle,
               disabled: pending || !known,
