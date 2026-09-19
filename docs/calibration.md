@@ -1171,3 +1171,11 @@ exports.inject = ['slots']
 **顺带修的可观测性缺口** ✓：决策日志原先只记概率 ✗，导致上面两次拒绝**无法判断是否合理** ✓。
 现增加脱敏命令摘要 ✓（`commandPreview()`：优先取 `command`/`cmd`/`script`/`query`/`content`/`path` 字段 ✓，
 抹掉 `sk-…`、`Bearer …`、`token=`、`password=` 一类 ✓，截断 160 字符 ✓）。
+**流程教训（本次踩到，值得记住）** ✗：
+
+1. **重写文件会改行尾** ✗ —— 用 PowerShell 的 `Set-Content` 或 Python 的 `write_text` 整文件重写，
+   在 Windows 上会写出 **CRLF** ✓；而 `bench/mutations.json` 与 drill 的回归网用**精确文本锚点**匹配源码 ✓✗，
+   于是出现「anchor not found (the code moved)」✗ —— 明明代码没动 ✗。此类脚本改完必须把行尾规范化回 LF ✓，
+   或用 `edit` 工具做局部替换 ✓。
+2. **变异锚点会随签名漂移** ✗ —— 给 `recordSafetyCheck` 的签名加一个 `| 'warn'` ✓，就让一条以签名为锚的变异失效 ✗。
+   锚点应落在**被变异的那一行本身** ✓（例如 `this.state().safetyGuard.screened += 1` ✓），而不是它的签名或上下文 ✓。
