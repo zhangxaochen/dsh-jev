@@ -345,14 +345,16 @@ test('the client half declares the platform and slot this deployment loads', () 
   assert.ok(Array.isArray(pkg.files) && pkg.files.includes('lib'), 'lib must be shipped for the panel to load')
 })
 
-test('the panel refreshes on a short timer instead of once', () => {
-  // The dashboard is only useful if it polls: a 4000ms interval is the whole mechanism,
-  // and nothing pinned it, so a thousand-fold change still passed every test.
+test('every panel timer refreshes on a short interval instead of once', () => {
+  // The dashboard is only useful if it polls, and the switch is only useful if it notices
+  // a change made elsewhere. Asserting the *first* interval stopped covering the panel's
+  // once a second timer was added above it, so every one is checked.
   const source = readFileSync(join(ROOT, 'src', 'client.ts'), 'utf8')
-  const poll = source.match(/setInterval\([^,]+,\s*([0-9_]+)\s*\)/)
-  assert.ok(poll, 'the panel must poll rather than load once')
-  const delay = Number(poll![1].replace(/_/g, ''))
-  assert.ok(delay > 0 && delay <= 10_000, 'the poll interval must be a few seconds, got ' + delay + 'ms')
+  const delays = [...source.matchAll(/setInterval\([^,]+,\s*([0-9_]+)\s*\)/g)].map((match) => Number(match[1].replace(/_/g, '')))
+  assert.ok(delays.length >= 2, 'the panel and the switch both poll, saw ' + delays.length)
+  for (const delay of delays) {
+    assert.ok(delay > 0 && delay <= 10_000, 'every poll interval must be a few seconds, got ' + delay + 'ms')
+  }
 })
 
 test('the panel asks the route to reset with the body the route understands', () => {

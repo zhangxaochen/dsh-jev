@@ -69,10 +69,11 @@ test('the switch path honours the environment override', () => {
 /** A context that records what each module asked for. The mock answers "destructive", so
  * a module that ignored the switch would deny rather than pass. */
 function offContext() {
-  const calls = { systemOne: 0, injected: [] as string[] }
-  let preExecute: any
-  let postExecute: any
-  let assemble: any
+  const calls = { systemOne: 0 }
+  // Every listener per event: the pruner and the router both hook
+  // `system-prompt/assemble`, and the loop guard and the shaper both hook
+  // `tools/post-execute`. Keeping only the last one made the pruner's case vacuous.
+  const handlers: Record<string, Array<(...args: any[]) => any>> = {}
   const destructive = {
     is_destructive: { type: 'noul', noul: 0.98 },
     is_exfiltration: { type: 'noul', noul: 0.02 },
@@ -90,10 +91,11 @@ function offContext() {
   })
   const ctx: CordisContext = {
     on: (event: string, callback: any) => {
-      if (event === 'tools/pre-execute') preExecute = callback
-      if (event === 'tools/post-execute') postExecute = callback
-      if (event === 'system-prompt/assemble') assemble = callback
-      if (event === 'agent/pre-step') callback({ agent: { id: 'gate' } }, async () => ({ kind: 'enter' }))
+      handlers[event] = handlers[event] ?? []
+      handlers[event].push(callback)
+      if (event === 'agent/pre-step') {
+        for (const handler of handlers[event]) handler({ agent: { id: 'gate' } }, async () => ({ kind: 'enter' }))
+      }
       return () => {}
     },
     get: (name: string) =>
@@ -104,14 +106,28 @@ function offContext() {
           : undefined,
     typesafe: client,
   }
+
+  /** Drive an event's listeners in registration order, the way a waterfall does. */
+  const run = async (event: string, args: any[], terminal: () => Promise<any>) => {
+    const chain = handlers[event] ?? []
+    let index = 0
+    const next = async (): Promise<any> => {
+      if (index >= chain.length) return terminal()
+      const handler = chain[index]
+      index += 1
+      return handler(...args, next)
+    }
+    return next()
+  }
+
   return {
     ctx,
     calls,
-    preExecute: (exec: ToolExecution) => preExecute(exec, async () => ({ kind: 'allow', action: 'allow' })),
+    preExecute: (exec: ToolExecution) => run('tools/pre-execute', [exec], async () => ({ kind: 'allow', action: 'allow' })),
     postExecute: (exec: ToolExecution, result: unknown) =>
-      postExecute(exec, result, async () => ({ kind: 'accept', action: 'accept' })),
-    assemble: (assembly: unknown) => assemble(assembly, {}, async () => assembly),
-    inject: (name: string) => calls.injected.push(name),
+      run('tools/post-execute', [exec, result], async () => ({ kind: 'accept', action: 'accept' })),
+    assemble: (assembly: unknown) => run('system-prompt/assemble', [assembly, {}], async () => assembly),
+    listenerCount: (event: string) => (handlers[event] ?? []).length,
   }
 }
 
