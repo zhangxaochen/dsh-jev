@@ -1,4 +1,5 @@
 import test from 'node:test'
+import { readFileSync, rmSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { apply } from '../lib/loop-guard.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
@@ -326,4 +327,26 @@ test('the advisory evaluation uses the short path timeout', async () => {
     async () => ({ kind: 'accept' })
   )
   assert.equal(seen?.timeoutMs, 111, 'the advisory call must use pathTimeoutMs, not the full budget')
+})
+
+test('a fired decision is recorded under the module threshold reviews group by', async () => {
+  // The decision log is grouped by module and action when thresholds are reviewed, and
+  // only the log's own fixtures ever set that field - the guard's record was untested, so
+  // an empty module would have quietly corrupted the review data.
+  const path = process.env.DSH_JEV_DECISIONS_PATH!
+  rmSync(path, { force: true })
+
+  const h = harness(async () => STUCK_FORESEEABLE, { triggerThreshold: 1 })
+  const exec: ToolExecution = { name: 'bash', args: { command: 'npm test' }, agent }
+  await h.step(exec, 'a')
+
+  const records = readFileSync(path, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+  const recorded = records.find((entry) => entry.action === 'warn' || entry.action === 'interrupt')
+  assert.ok(recorded, 'a fired decision is logged')
+  assert.equal(recorded.module, 'loop-guard', 'the record must name the module')
+  assert.ok(typeof recorded.probability === 'number', 'and carry the probability the review reads')
+  assert.ok(recorded.latencyMs >= 0, 'and the latency')
 })

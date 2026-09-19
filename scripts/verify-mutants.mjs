@@ -16,6 +16,7 @@
  * file to the pnpm script of the same name.
  */
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -113,6 +114,19 @@ function applyMutation(path, content) {
   writeFileSync(path, content, 'utf8')
 }
 
+/** Where a source file's compiled output lands. */
+function compiledPath(file) {
+  return file.startsWith('src/') ? file.replace(/^src\//, 'lib/').replace(/\.ts$/, '.js') : undefined
+}
+
+function fingerprint(path) {
+  try {
+    return String(readFileSync(path)).length + ':' + createHash('sha1').update(readFileSync(path)).digest('hex')
+  } catch {
+    return undefined
+  }
+}
+
 const mutations = JSON.parse(readFileSync(CORPUS, 'utf8'))
 const results = []
 
@@ -130,9 +144,19 @@ for (const mutation of mutations) {
     continue
   }
   try {
+    const compiled = compiledPath(mutation.file)
+    const compiledFull = compiled === undefined ? undefined : join(ROOT, compiled)
+    const before = compiledFull === undefined ? undefined : fingerprint(compiledFull)
     applyMutation(path, original.replace(mutation.from, mutation.to))
     // A build failure counts as caught: the mutation cannot reach the user at all.
     const built = build()
+    const after = compiledFull === undefined ? undefined : fingerprint(compiledFull)
+    if (built && before !== undefined && before === after) {
+      // The source changed but the emitted module did not, so the tests just ran against
+      // behaviour the mutation never touched - reporting CAUGHT here would be a lie.
+      results.push({ name: mutation.name, caught: false, why: 'the build did not pick up the change' })
+      continue
+    }
     const caught = !built || !testsPass()
     results.push({ name: mutation.name, caught, why: !built ? 'build failed' : caught ? 'a test failed' : 'NO TEST FAILED' })
   } catch (error) {

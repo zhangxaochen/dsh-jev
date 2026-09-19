@@ -292,7 +292,7 @@ test('the delivery summary counts each module as it stands', () => {
   // asserted in the resilience spec, so those tests belong to it.
   const MODULES: Array<[string, string[], number]> = [
     ['typesafe-client', ['client.spec.ts', 'resilience.spec.ts'], 14],
-    ['loop-guard', ['loop-guard.spec.ts'], 15],
+    ['loop-guard', ['loop-guard.spec.ts'], 16],
     ['safety-guard', ['safety-guard.spec.ts'], 11],
     ['tool-pruner', ['tool-pruner.spec.ts'], 10],
     ['ask-tools', ['ask-tools.spec.ts'], 8],
