@@ -273,3 +273,27 @@ test('the exact-repeat deferral holds only for a consecutive identical call', as
     'argument key order does not make a new call'
   )
 })
+
+test('LoopGuard passes its configured thresholds into the verdict', async () => {
+  // The pure rule is covered directly; this pins the wiring, so raising a threshold in
+  // config actually reaches the decision instead of being replaced by the default. The
+  // default triggerThreshold of 2 means the first step only fills the streak.
+  const answers = async () => STUCK_FORESEEABLE // pLoop 0.86, confidence 0.78
+  const first = { name: 'bash', args: { command: 'npm test' }, agent }
+  const second = { name: 'bash', args: { command: 'npm test -- -u' }, agent }
+
+  const byDefault = harness(answers)
+  await byDefault.step(first, 'a')
+  const fired = await byDefault.step(second, 'b')
+  assert.ok(fired.additionalContexts, 'the default thresholds fire on this answer')
+
+  const highLoop = harness(answers, { pLoopThreshold: 0.95 })
+  await highLoop.step(first, 'a')
+  const notFired = await highLoop.step(second, 'b')
+  assert.equal(notFired.additionalContexts, undefined, 'pLoopThreshold must gate the verdict')
+
+  const highConfidence = harness(answers, { minConfidence: 0.9 })
+  await highConfidence.step(first, 'a')
+  const unconfident = await highConfidence.step(second, 'b')
+  assert.equal(unconfident.additionalContexts, undefined, 'minConfidence must gate the verdict')
+})

@@ -105,3 +105,22 @@ test('Resilience: ToolPrunerService returns the full candidate list on API failu
   const result = await pruner.pruneTools('do something', candidates)
   assert.equal(result.length, candidates.length)
 })
+
+test('a placeholder the host could not evaluate is never used as the key', () => {
+  // The shipped patch says `apiKey: !!js process.env.TYPESAFE_API_KEY`. A host that
+  // cannot evaluate the tag can pass the expression through as a string, and using it
+  // verbatim would send the placeholder as the credential on every request.
+  const placeholder = new TypeSafeClient({ apiKey: '__jsExpr:process.env.TYPESAFE_API_KEY' })
+  const fromEnvironment = process.env.TYPESAFE_API_KEY
+  delete process.env.TYPESAFE_API_KEY
+  try {
+    const withoutKey = new TypeSafeClient({ apiKey: '__jsExpr:process.env.TYPESAFE_API_KEY' })
+    assert.notEqual(withoutKey.apiKey, '__jsExpr:process.env.TYPESAFE_API_KEY', 'the placeholder must never be the key')
+    assert.ok(
+      withoutKey.apiKey === undefined || !String(withoutKey.apiKey).startsWith('__jsExpr'),
+      'a resolved key must not be the unevaluated expression'
+    )
+  } finally {
+    if (fromEnvironment !== undefined) process.env.TYPESAFE_API_KEY = fromEnvironment
+  }
+})

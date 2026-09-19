@@ -142,5 +142,71 @@
     "file": "src/metrics.ts",
     "from": "  reset(): void {",
     "to": "  reset(): void { if (true) return"
+  },
+  {
+    "name": "the guard protects no tools at all",
+    "file": "src/safety-guard.ts",
+    "from": "const guardedTools = config.guardedTools ?? DEFAULT_GUARDED_TOOLS",
+    "to": "const guardedTools: string[] = []"
+  },
+  {
+    "name": "brace expansion stops expanding",
+    "file": "src/safety-guard.ts",
+    "from": ".flatMap((part) => expandBraces(prefix + part.trim() + suffix, depth + 1))",
+    "to": ".flatMap((part) => [prefix + part.trim() + suffix])"
+  },
+  {
+    "name": "nested commands stop being inspected",
+    "file": "src/safety-guard.ts",
+    "from": "    collectValuesByKey(args, COMMAND_KEYS, out)",
+    "to": "    void COMMAND_KEYS"
+  },
+  {
+    "name": "an unevaluated expression is accepted as the key",
+    "file": "src/typesafe-client.ts",
+    "from": "!explicit.startsWith('__jsExpr')",
+    "to": "true"
+  },
+  {
+    "name": "the shaper cannot read block-array content",
+    "file": "src/result-shaper.ts",
+    "from": "export function extractText(content: unknown): string | undefined {",
+    "to": "export function extractText(content: unknown): string | undefined { if (Array.isArray(content)) return undefined"
+  },
+  {
+    "name": "the shaper ignores its size threshold",
+    "file": "src/result-shaper.ts",
+    "from": "if (content.length < (this.config.thresholdChars ?? DEFAULT_THRESHOLD_CHARS)) return false",
+    "to": "if (false) return false"
+  },
+  {
+    "name": "the router ignores its candidate cap",
+    "file": "src/skill-router.ts",
+    "from": "const max = this.config.maxCandidates ?? DEFAULT_MAX_CANDIDATES",
+    "to": "const max = Number.MAX_SAFE_INTEGER"
+  },
+  {
+    "name": "jev_rank accepts an unbounded candidate list",
+    "file": "src/ask-tools.ts",
+    "from": "export const MAX_RANK_CANDIDATES = 50",
+    "to": "export const MAX_RANK_CANDIDATES = Number.MAX_SAFE_INTEGER"
+  },
+  {
+    "name": "the loop guard ignores pLoopThreshold",
+    "file": "src/loop-guard.ts",
+    "from": "{ noProgressThreshold, pLoopThreshold, minConfidence }",
+    "to": "{ noProgressThreshold, pLoopThreshold: 0, minConfidence }"
+  },
+  {
+    "name": "the loop guard ignores minConfidence",
+    "file": "src/loop-guard.ts",
+    "from": "{ noProgressThreshold, pLoopThreshold, minConfidence }",
+    "to": "{ noProgressThreshold, pLoopThreshold, minConfidence: 0 }"
+  },
+  {
+    "name": "exact repeats are no longer deferred",
+    "file": "src/loop-guard.ts",
+    "from": "if (deferExactRepeats && isExactRepeat) {",
+    "to": "if (false) {"
   }
 ]

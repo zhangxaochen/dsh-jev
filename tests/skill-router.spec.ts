@@ -212,3 +212,26 @@ test('the candidate cap is off by default and shortlists lexically when set', as
   await capped.route('do the alpha work', catalog)
   assert.equal(seen[seen.length - 1].length, 3, 'the uncapped router still sent everything')
 })
+
+test('route caps the candidate list it sends', async () => {
+  // Every candidate becomes a question in the request, so the cap decides how large the
+  // call is; nothing pinned it, so removing it changed the cost silently.
+  const catalog = skills(12)
+  const candidates = toCandidates(catalog)
+  assert.equal(candidates.length, 12, 'all twelve skills are candidates to begin with')
+
+  let asked = 0
+  const capped = service(
+    async (req: any) => {
+      asked = Object.keys(req.questions ?? {}).length
+      const answers: Record<string, unknown> = {}
+      for (const id of Object.keys(req.questions ?? {})) {
+        answers[id] = { type: 'score', score: 1, confidence: 0.9, probabilities: {} }
+      }
+      return answers
+    },
+    { maxCandidates: 4 }
+  )
+  await capped.route('summarise the quarterly metrics into a short report', catalog)
+  assert.equal(asked, 4, 'exactly maxCandidates questions are asked')
+})

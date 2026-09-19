@@ -15,7 +15,10 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = process.cwd()
-const CORPUS = join(ROOT, 'bench', 'mutations.json')
+// An exploratory sweep can point at its own corpus; the committed one stays untouched.
+const CORPUS = process.env.JEV_MUTATIONS
+  ? join(ROOT, process.env.JEV_MUTATIONS)
+  : join(ROOT, 'bench', 'mutations.json')
 
 function build() {
   try {
