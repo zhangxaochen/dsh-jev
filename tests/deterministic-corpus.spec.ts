@@ -152,6 +152,19 @@ const CASES: Case[] = [
   { command: 'bash -c "rm -rf /"', expect: 'deny', note: 'the payload inside a shell wrapper' },
   { command: 'sh -c "Remove-Item -Recurse -Force C:\\"', expect: 'deny', note: 'a wrapped windows wipe' },
   { command: 'C:\\Windows\\System32\\cmd.exe /c del /f /s /q C:\\', expect: 'deny', note: 'a wrapped cmd invocation' },
+  { command: 'sudo -u root bash -c "rm -rf /"', expect: 'deny', note: 'a wrapper behind a prefix and its flag value' },
+  { command: 'xargs rm -rf /', expect: 'deny', note: 'the verb reached through xargs' },
+  { command: 'echo hi && rm -rf /', expect: 'deny', note: 'the second command of a chain' },
+
+  // --- mentioning a dangerous command is not running it ----------------------
+  // A lexical matcher cannot tell "the verb is the command" from "the verb appears inside
+  // an argument", and denying the mention blocked legitimate calls: committing a message
+  // that quotes the command was refused by this very rule.
+  { command: 'git commit -m "fix: deny rm -rf / properly"', expect: 'pass', note: 'a commit message quoting the command' },
+  { command: 'git commit -m "a && rm -rf / b"', expect: 'pass', note: 'and one quoting a chained form' },
+  { command: 'grep -rn "rm -rf /" docs/', expect: 'pass', note: 'a search pattern' },
+  { command: 'echo "rm -rf /"', expect: 'pass', note: 'an echoed string' },
+  { command: 'node -e "console.log(\'rm -rf /\')"', expect: 'pass', note: 'a string inside a script argument' },
 ]
 
 test('the deterministic envelope classifies the destructive-command corpus', () => {

@@ -207,22 +207,156 @@ function expandBraces(token: string, depth = 0): string[] {
     .flatMap((part) => expandBraces(prefix + part.trim() + suffix, depth + 1))
 }
 
-function looksLikeRootDelete(text: string): boolean {
-  for (const segment of text.split(/[\n\r;&|]+/)) {
-    // A shell wrapper quotes the payload (`bash -c "rm -rf /"`), which would leave
-    // the verb as the token `"rm` and hide the whole command from this check.
+/** Words that may precede the real command in a shell segment. */
+const COMMAND_PREFIXES = new Set(['sudo', 'doas', 'command', 'nohup', 'time', 'nice', 'ionice', 'env', 'exec', 'xargs', 'busybox'])
+
+/** Shells whose `-c`-style payload is itself a command. */
+const SHELL_WRAPPERS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'ash', 'pwsh', 'powershell', 'cmd'])
+
+/** The flag that makes a wrapper treat the next argument as a command string. */
+const PAYLOAD_FLAG = /^(?:-c|--command|-command|\/c|\/k|-e|--eval)$/i
+
+/** The delete verbs, including the cmd and PowerShell aliases. */
+const DELETE_VERB = /(^|\/)(rm|del|erase|rd|rmdir|remove-item|ri)$/i
+
+/** Split on command separators, but never inside quotes: a commit message or a grep
+ * pattern may contain `&&` or `;` without being two commands. Escaped quotes (as in the
+ * JSON form of the arguments, where the payload is quoted again) do not end a run. */
+function splitSegments(text: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: string | undefined
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!
+    if (char === '\\' && index + 1 < text.length) {
+      current += char + text[index + 1]
+      index += 1
+      continue
+    }
+    if (quote !== undefined) {
+      current += char
+      if (char === quote) quote = undefined
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === '\n' || char === '\r' || char === ';' || char === '&' || char === '|') {
+      segments.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+  segments.push(current)
+  return segments
+}
+
+/** The quoted runs of a segment, which is where a wrapper keeps its payload. */
+function quotedRuns(text: string): string[] {
+  const runs: string[] = []
+  let current: string | undefined
+  let quote: string | undefined
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!
+    if (char === '\\' && index + 1 < text.length) {
+      if (current !== undefined) current += text[index + 1]
+      index += 1
+      continue
+    }
+    if (quote === undefined) {
+      if (char === '"' || char === "'") {
+        quote = char
+        current = ''
+      }
+      continue
+    }
+    if (char === quote) {
+      runs.push(current ?? '')
+      quote = undefined
+      current = undefined
+      continue
+    }
+    current += char
+  }
+  return runs
+}
+
+function baseName(token: string): string {
+  const stripped = token.replace(/^['"]+|['"]+$/g, '')
+  const parts = stripped.split(/[\\/]/)
+  return (parts[parts.length - 1] ?? stripped).replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase()
+}
+
+/**
+ * Where the delete verb sits, if it is the command rather than an argument.
+ *
+ * A word before the verb that is neither a prefix word, a flag, a `VAR=value` nor the
+ * value of a preceding flag means the verb is being *mentioned*, not run - a commit
+ * message, a grep pattern, a line of documentation. Lexical matching alone cannot tell
+ * those apart, and denying the mention blocked legitimate calls.
+ *
+ * @returns the verb's index, or -1 when it is not in command position
+ */
+function commandPositionVerbIndex(tokens: string[]): number {
+  let awaitingFlagValue = false
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!
+    if (DELETE_VERB.test(token)) return index
+    if (token.startsWith('-') || /^\/[a-z]$/i.test(token)) {
+      awaitingFlagValue = true
+      continue
+    }
+    if (COMMAND_PREFIXES.has(baseName(token)) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) {
+      awaitingFlagValue = false
+      continue
+    }
+    if (awaitingFlagValue) {
+      // The value of a preceding flag, as in `sudo -u root <verb>`.
+      awaitingFlagValue = false
+      continue
+    }
+    return -1
+  }
+  return -1
+}
+
+/** Whether the segment runs a command string through a shell, and where that string is. */
+function wrapperPayloadStart(tokens: string[]): number {
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    if (SHELL_WRAPPERS.has(baseName(tokens[index]!)) && PAYLOAD_FLAG.test(tokens[index + 1]!)) {
+      return index + 2
+    }
+  }
+  return -1
+}
+
+function looksLikeRootDelete(text: string, depth = 0): boolean {
+  for (const segment of splitSegments(text)) {
+    // A shell wrapper runs its payload as a command (`bash -c "rm -rf /"`, also behind a
+    // prefix such as `sudo -u root`), so the payload is checked as a command of its own.
+    // Everything else that sits inside quotes is an argument and is not inspected.
     const tokens = segment
       .trim()
       .split(/\s+/)
       .filter(Boolean)
       .map((token) => token.replace(/^['"]+|['"]+$/g, ''))
     if (tokens.length < 2) continue
-    // `erase` and `ri` are the cmd and PowerShell aliases of `del` and
-    // Remove-Item: same semantics, different spelling. Leaving them out let
-    // `erase /s /q C:\` and `ri -Recurse -Force C:\` through.
-    const verbIndex = tokens.findIndex((token) =>
-      /(^|\/)(rm|del|erase|rd|rmdir|remove-item|ri)$/i.test(token)
-    )
+
+    const payloadStart = wrapperPayloadStart(tokens)
+    if (payloadStart !== -1 && depth < 2) {
+      const payloads = [...quotedRuns(segment), tokens.slice(payloadStart).join(' ')]
+      for (const payload of payloads) {
+        if (payload.trim().length > 0 && looksLikeRootDelete(payload, depth + 1)) return true
+      }
+      continue
+    }
+
+    // `erase` and `ri` are the cmd and PowerShell aliases of `del` and Remove-Item:
+    // same semantics, different spelling.
+    const verbIndex = commandPositionVerbIndex(tokens)
     if (verbIndex === -1) continue
     const rest = tokens.slice(verbIndex + 1)
     const flags = rest.filter((token) => token.startsWith('-') || /^\/[a-z]$/i.test(token))

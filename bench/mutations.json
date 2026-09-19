@@ -454,5 +454,11 @@
     "file": "src/safety-guard.ts",
     "from": "export const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'] = 'allow'",
     "to": "export const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'] = 'deny-guarded'"
+  },
+  {
+    "name": "the envelope finds the delete verb anywhere",
+    "file": "src/safety-guard.ts",
+    "from": "    if (DELETE_VERB.test(token)) return index",
+    "to": "    if (DELETE_VERB.test(token)) return 0"
   }
 ]
