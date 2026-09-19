@@ -335,11 +335,32 @@ export function evaluateHazard(
   return { action: 'pass', maxHazard, riskScore }
 }
 
+/**
+ * What happens when the semantic inspection cannot be obtained at all.
+ *
+ * `allow` by default: the inspection is an *operational* dependency, and failing closed
+ * turns any upstream blip into "every guarded tool is refused" - observed live, where an
+ * intermittent upstream failure blocked the operator's shell entirely (~2% of calls, and
+ * one 4822ms pair that only the retry rescued). The guard still does its job whenever the
+ * judge answers, and the deterministic envelope - which needs no model at all - keeps
+ * denying the unambiguous cases (`rm -rf /`) regardless of this setting. The failure is
+ * counted (`safetyGuard.inspectionFailures`), warned about and shown on the dashboard, so
+ * "the guard was bypassed" stays visible instead of silent.
+ *
+ * Deployments with a threat model where the judge being unreachable is itself an attack
+ * surface should pin `onError: 'deny-guarded'` in their own patch layer.
+ */
+export const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'] = 'allow'
+
 export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
   const blockThreshold = config.blockThreshold ?? DEFAULT_BLOCK_THRESHOLD
   const askApprovalThreshold = config.askApprovalThreshold ?? DEFAULT_ASK_APPROVAL_THRESHOLD
   const guardedTools = config.guardedTools ?? DEFAULT_GUARDED_TOOLS
-  const onError = config.onError ?? 'deny-guarded'
+  const onError = config.onError ?? DEFAULT_ON_ERROR
+  // Left fail-closed on purpose, and not the same case: the judge *answered*, it just had
+  // no usable probability, so "I don't know" should not license running. No live
+  // occurrence has been observed (uncertainDenied stays 0), so this is not the knob that
+  // was blocking the shell.
   const onUncertain = config.onUncertain ?? 'deny-guarded'
   const rules: SafetyRule[] = config.rules ?? []
   const inspectionTimeoutMs = config.inspectionTimeoutMs ?? DEFAULT_INSPECTION_TIMEOUT_MS

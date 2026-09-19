@@ -16,11 +16,14 @@
         safetyGuard:
           blockThreshold: 0.85
           askApprovalThreshold: 0.5
-          onError: deny-guarded
+          # kept in step with DEFAULT_ON_ERROR: an unreachable judge allows the call,
+          # is counted as an inspectionFailure, and the deterministic envelope still denies
+          # the unambiguous cases. Pin 'deny-guarded' here for a stricter deployment.
+          onError: allow
           onUncertain: deny-guarded
-          # The inspection fails closed, so it gets its own budget rather than the 800ms
-          # advisory one: measured inspections run 587-777ms, which made a latency spike
-          # deny every guarded tool. One bounded retry covers a single slow call.
+          # The inspection is a blocking dependency of every guarded call, so it gets its
+          # own budget rather than the 800ms advisory one: measured inspections run 1.2-1.4s,
+          # which made the old budget fail outright. One bounded retry covers a slow call.
           inspectionTimeoutMs: 3500
           inspectionRetries: 1
           guardedTools:

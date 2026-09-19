@@ -18,6 +18,7 @@ import {
   DEFAULT_BLOCK_THRESHOLD,
   DEFAULT_GUARDED_TOOLS,
   DEFAULT_INSPECTION_RETRIES,
+  DEFAULT_ON_ERROR,
   DEFAULT_INSPECTION_TIMEOUT_MS,
 } from '../lib/safety-guard.js'
 import {
@@ -263,7 +264,7 @@ test('every value the shipped bundle pins still matches the code default', () =>
     deferExactRepeats: true,
     blockThreshold: DEFAULT_BLOCK_THRESHOLD,
     askApprovalThreshold: DEFAULT_ASK_APPROVAL_THRESHOLD,
-    onError: 'deny-guarded',
+    onError: DEFAULT_ON_ERROR,
     onUncertain: 'deny-guarded',
     inspectionTimeoutMs: DEFAULT_INSPECTION_TIMEOUT_MS,
     inspectionRetries: DEFAULT_INSPECTION_RETRIES,

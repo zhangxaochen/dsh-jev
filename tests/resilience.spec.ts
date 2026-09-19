@@ -34,8 +34,10 @@ function guardHarness(client: TypeSafeClient, config: Record<string, unknown> = 
   }
 }
 
-test('Resilience: a guarded tool fails closed when the API returns 429', async () => {
-  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429: Too Many Requests'))
+test('Resilience: a guarded tool fails closed when the API returns 429 and the policy says so', async () => {
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429: Too Many Requests'), {
+    onError: 'deny-guarded',
+  })
   const { result, nextCalled } = await invoke({ name: 'bash', args: { command: 'npm test' } })
 
   assert.equal(result.kind, 'deny')
@@ -43,27 +45,48 @@ test('Resilience: a guarded tool fails closed when the API returns 429', async (
   assert.match(result.reason ?? '', /onError=deny-guarded/)
 })
 
-test('Resilience: a guarded tool fails closed when the API returns 500', async () => {
-  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 500: Internal Server Error'))
+test('Resilience: a guarded tool fails closed when the API returns 500 and the policy says so', async () => {
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 500: Internal Server Error'), {
+    onError: 'deny-guarded',
+  })
   const { result } = await invoke({ name: 'bash', args: { command: 'npm test' } })
 
   assert.equal(result.kind, 'deny')
 })
 
 test('Resilience: an unguarded tool still passes through on API failure', async () => {
-  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429'), { guardedTools: ['bash'] })
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429'), {
+    guardedTools: ['bash'],
+    onError: 'deny-guarded',
+  })
   const { result, nextCalled } = await invoke({ name: 'fetch_web', args: { url: 'https://example.com' } })
 
   assert.equal(nextCalled, true)
   assert.equal(result.kind, 'allow')
 })
 
-test("Resilience: onError 'allow' preserves the legacy fail-open behaviour", async () => {
-  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429'), { onError: 'allow' })
+test('Resilience: the shipped default lets a guarded tool through when the judge is unreachable', async () => {
+  // The default is allow: the judgement service is an operational dependency, and failing
+  // closed turned any upstream blip into "every guarded tool is refused" - observed live,
+  // where an intermittent failure blocked the operator's shell. The protections that do
+  // not need the judge are unaffected, and the failure is counted.
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429: Too Many Requests'))
   const { result, nextCalled } = await invoke({ name: 'bash', args: { command: 'npm test' } })
 
-  assert.equal(nextCalled, true)
+  assert.equal(nextCalled, true, 'the call proceeds')
   assert.equal(result.kind, 'allow')
+})
+
+test('Resilience: the deterministic envelope denies regardless of the failure policy', async () => {
+  // This is what makes the default change safe to make: the unambiguous destruction is
+  // refused without any judgement call, on every policy value.
+  for (const onError of ['allow', 'deny-guarded', 'deny-all'] as const) {
+    const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429'), { onError })
+    const { result, nextCalled } = await invoke({ name: 'bash', args: { command: 'rm -rf /' } })
+
+    assert.equal(result.kind, 'deny', 'the envelope denies under onError=' + onError)
+    assert.equal(nextCalled, false)
+  }
 })
 
 test('Resilience: LoopGuard stays advisory and never blocks on timeout', async () => {

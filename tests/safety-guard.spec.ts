@@ -355,7 +355,7 @@ test('a transient inspection failure is retried once and then allowed', async ()
 
 test('a persistent transient failure applies the policy after a bounded number of attempts', async () => {
   const abort = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
-  const h = inspectionHarness({ fail: abort })
+  const h = inspectionHarness({ fail: abort, config: { onError: 'deny-guarded' } })
   const decision = await h.invoke(GUARDED_CALL)
 
   assert.equal(h.attempts.length, 2, 'two attempts, not an unbounded retry loop')
@@ -363,7 +363,7 @@ test('a persistent transient failure applies the policy after a bounded number o
 })
 
 test('a non-transient failure is not retried', async () => {
-  const h = inspectionHarness({ fail: Object.assign(new Error('bad request'), { status: 400 }) })
+  const h = inspectionHarness({ fail: Object.assign(new Error('bad request'), { status: 400 }), config: { onError: 'deny-guarded' } })
   const decision = await h.invoke(GUARDED_CALL)
 
   assert.equal(h.attempts.length, 1, 'a 400 will not improve on a second attempt')

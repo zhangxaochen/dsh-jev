@@ -85,7 +85,7 @@ TYPESAFE_API_KEY=your_typesafe_api_key_here
 
 > ℹ️ **说明**：未配置 Key 时，DSH 不会崩溃，插件会记录 Warn 警告日志，此时可作为 Mock 模式运行；但在真实执行中将无法向云端发起 System One 语义仲裁。
 
-> ⚠️ **失败策略**：受保护工具（`guardedTools`）上的语义判定一旦超时、报错或返回不可用结果，默认 **fail-closed（拒绝执行）**，headless 环境同样如此。需要旧的「出错即放行」行为时显式设置 `safetyGuard.onError: allow`。
+> ⚠️ **失败策略**：受保护工具（`guardedTools`）上的语义**判定拿不到**时（超时/报错/上游不可达）默认 **放行**（`onError: allow`）——判定服务是**运行期依赖**，默认 fail-closed 会让上游一抖就把宿主所有受保护工具（含 shell）锁死；实测约 2% 调用被拒、并出现「失败一次 + 退避 + 重试成功」共 4822ms 的一次。放行时**仍会**：命中确定性外壳即拒绝（`rm -rf /` 类不需要模型）、失败计入 `inspectionFailures` 并告警。判定**到达但不可用**（模型没给出可用概率）仍 fail-closed（`onUncertain`，默认 `deny-guarded`）。若你的威胁模型认为「判定服务不可达本身就是攻击面」，在你自己的补丁层钉 `onError: deny-guarded`。
 
 ---
 
@@ -141,7 +141,7 @@ dsh plugin --profile headless add github:zhangxaochen/dsh-jev
         safetyGuard:
           blockThreshold: 0.85
           askApprovalThreshold: 0.5
-          onError: deny-guarded
+          onError: allow
           onUncertain: deny-guarded
           guardedTools:
             - bash
@@ -210,7 +210,7 @@ ctx.plugin(LoopGuard, {
 // 单独挂载安全门禁
 ctx.plugin(SafetyGuard, {
   blockThreshold: 0.85,
-  onError: 'deny-guarded'
+  onError: 'allow'
 })
 
 // 单独挂载语义 skill 路由（advisory）
@@ -218,7 +218,7 @@ ctx.plugin(SkillRouter, { minScore: 1.5, minConfidence: 0.5 })
 
 // 单独挂载语义结果整形（改变模型所见，按需开启）
 ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
-```
+  onError: 'allow'
 
 决策原语不经 `ctx.plugin` 挂载，而是注册为 Agent 工具（`registerJevTools(ctx, () => client)`，或直接用整包默认开启的 `askTools`）。
 
@@ -231,7 +231,7 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 | 变更 | 0.1.0 | 0.2.0 | 需要做什么 |
 |---|---|---|---|
 | `loopGuard.stuckSeverityThreshold` | 有效区间 `[0, 2]`，但代码里被反向三元改成固定 1.4 | **已移除** | 从配置里删掉该项；改用 `pLoopThreshold`（默认 `0.6`）+ `minConfidence`（默认 `0.5`） |
-| `safetyGuard` 失败策略 | 出错/超时 → 放行；headless 下 `ask` → 放行 | 受保护工具 **fail-closed**，headless 下 `ask` → `deny` | 若确实需要旧行为，显式设置 `onError: allow` / `onUncertain: allow` |
+| `safetyGuard` 失败策略 | 出错/超时 → 放行；headless 下 `ask` → 放行 | 出错/超时 → **默认放行**（`onError: allow`，并记账告警）；**裁决不可用** → fail-closed；headless 下 `ask` → `deny` | 想要严格：`onError: deny-guarded`；想连「不可用」也放行：`onUncertain: allow` |
 | 指标文件 `~/.dsh/jev-stats.json` | `version: 1`，含两个凭空常量折算的「节省 token」 | `version: 2`，只记实测字段 | 旧文件**不迁移**，插件启动时按新结构重新计数；如需保留历史先自行备份 |
 
 同时新增（默认值见下）：`jev_ask`/`jev_rank`/`jev_check` 决策原语、`skillRouter`、以及默认关闭的 `resultShaper`。
@@ -261,7 +261,7 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 ### `SafetyGuardConfig`
 - `blockThreshold?: number`: 阻断执行（返回 `deny`）的危害概率阈值（默认 `0.85`）。
 - `askApprovalThreshold?: number`: 请求人工审批（返回 `ask`）的风险概率阈值（默认 `0.5`）。
-- `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: 判定无法获得（API 报错/超时）时的策略，默认 `deny-guarded`（受保护工具 fail-closed，其余工具放行）。需要旧的「出错即放行」行为时显式设为 `allow`。
+- `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: **判定拿不到**（API 报错/超时/上游不可达）时的策略，默认 **`allow`**。理由：判定服务是运行期依赖，fail-closed 会把上游抖动放大成「所有受保护工具被拒」；而确定性外壳不受此设置影响（`rm -rf /` 照旧拒绝），失败也会计数告警。要严格就设 `deny-guarded`。
 - `inspectionTimeoutMs?: number`: **语义审查**的超时预算（默认 `3500`）。刻意**不复用** `client.pathTimeoutMs`（800ms）：那个预算属于**建议路径**（loop-guard 提示，失败放行无代价），而这里失败即拒绝受保护工具；实测调用耗时 587–777ms，用 800ms 等于把预算压在实测天花板上，一次延迟抖动就会升级为「所有受保护工具被拒」。`skillRouter` 曾因同一个 800ms 遭遇 7/7 线上用例中止，并因此获得了自己的 4000ms 预算。
 - `inspectionRetries?: number`: **瞬时**失败（超时/中断/429/5xx）的额外尝试次数（默认 `1`）。只对瞬时错误重试，且次数有上界：端点彻底不可用时仍会走到 `onError` 策略，而「裁决不可用」（答案到了但不可用）不走重试，归 `onUncertain`。重试与最终失败次数都计入看板（`inspectionRetries` / `inspectionFailures`），用于**用数据校准**这个预算。
 - `onUncertain?: 'deny-guarded' | 'deny-all' | 'allow'`: 拿到了答案但没有可用概率时的策略，默认 `deny-guarded`。

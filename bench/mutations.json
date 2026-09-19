@@ -24,10 +24,10 @@
     "to": "const onUncertain = config.onUncertain ?? 'allow'"
   },
   {
-    "name": "onError falls open",
+    "name": "onError falls closed on an unreachable judge",
     "file": "src/safety-guard.ts",
-    "from": "const onError = config.onError ?? 'deny-guarded'",
-    "to": "const onError = config.onError ?? 'allow'"
+    "from": "const onError = config.onError ?? DEFAULT_ON_ERROR",
+    "to": "const onError = config.onError ?? 'deny-guarded'"
   },
   {
     "name": "user rule thresholds are ignored",
@@ -448,5 +448,11 @@
     "file": "src/metrics.ts",
     "from": "          return normalizeMetrics(parsed)",
     "to": "          return parsed as JevMetricsData"
+  },
+  {
+    "name": "the allow default is flipped in the exported constant",
+    "file": "src/safety-guard.ts",
+    "from": "export const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'] = 'allow'",
+    "to": "export const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'] = 'deny-guarded'"
   }
 ]

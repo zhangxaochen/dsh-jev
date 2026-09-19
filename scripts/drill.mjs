@@ -62,10 +62,12 @@ const drills = [
     test: 'tests/loop-guard.spec.ts',
   },
   {
-    name: 'safety guard falls open on an unusable verdict',
+    // The shipped default lets a guarded tool through when the judge cannot be reached;
+    // reverting it to fail-closed is the regression to catch.
+    name: 'safety guard falls closed when the judge is unreachable',
     file: 'src/safety-guard.ts',
-    from: "const onError = config.onError ?? 'deny-guarded'",
-    to: "const onError = config.onError ?? 'allow'",
+    from: 'const onError = config.onError ?? DEFAULT_ON_ERROR',
+    to: "const onError = config.onError ?? 'deny-guarded'",
     test: 'tests/resilience.spec.ts',
   },
   {

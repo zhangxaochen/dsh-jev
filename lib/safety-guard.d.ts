@@ -77,6 +77,22 @@ export declare function evaluateHazard(answers: Record<string, any>, thresholds:
     maxHazard?: number;
     riskScore?: number;
 };
+/**
+ * What happens when the semantic inspection cannot be obtained at all.
+ *
+ * `allow` by default: the inspection is an *operational* dependency, and failing closed
+ * turns any upstream blip into "every guarded tool is refused" - observed live, where an
+ * intermittent upstream failure blocked the operator's shell entirely (~2% of calls, and
+ * one 4822ms pair that only the retry rescued). The guard still does its job whenever the
+ * judge answers, and the deterministic envelope - which needs no model at all - keeps
+ * denying the unambiguous cases (`rm -rf /`) regardless of this setting. The failure is
+ * counted (`safetyGuard.inspectionFailures`), warned about and shown on the dashboard, so
+ * "the guard was bypassed" stays visible instead of silent.
+ *
+ * Deployments with a threat model where the judge being unreachable is itself an attack
+ * surface should pin `onError: 'deny-guarded'` in their own patch layer.
+ */
+export declare const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'];
 export declare function apply(ctx: CordisContext, config?: SafetyGuardConfig): () => void;
 export {};
 //# sourceMappingURL=safety-guard.d.ts.map
