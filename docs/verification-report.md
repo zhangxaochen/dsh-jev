@@ -16,7 +16,7 @@
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
 | 构建产物一致 | `pnpm run verify:build` → `ok`（`lib/` 入库，单测导入的是它） |
-| 宿主验收 | `pnpm run verify:host` → **exit 1**（宿主未重载，正是应有的结果；重启后期望 7/7） |
+| 宿主验收 | `pnpm run verify:host` → **exit 0、7/7 全部 `ok`**（2026-09-19 01:27 重启后实测：宿主已加载本次构建、实测文件 v2、v2 各段齐全、密钥可解析、数字晚于构建） |
 | A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
 | 干净 clone 复现 | **CI 的全部 8 个步骤**在同一工作区连续通过：`install --frozen-lockfile` → `build` → `verify:build` → `typecheck:scripts` → 单测 **149 通过 + 6 跳过**（无 DSH）→ `bench:offline` → `verify:pack` → `verify:dsh`（正确 SKIP）；全程后 `lib/` **零漂移** |
 | 布局状态 | `doctor` 报告 `ACTION: restart DSH`（文件已同步，宿主进程未重载） |

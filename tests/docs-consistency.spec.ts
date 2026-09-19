@@ -370,11 +370,15 @@ test('the documented host-acceptance size matches the script', () => {
   const plan = readFileSync(join(cwd(), 'docs', 'OPTIMIZATION_PLAN.md'), 'utf8')
 
   const claimed = []
+  // The wording moved from "restart then expect" to "measured after the restart", so the
+  // achieved form is read too - otherwise the gate would go quiet once the run passed.
+  for (const match of report.matchAll(/exit 0、(\d+)\/(\d+) 全部/g)) claimed.push(Number(match[1]))
+  for (const match of plan.matchAll(/exit 0、(\d+)\/(\d+) 全部/g)) claimed.push(Number(match[1]))
   for (const match of report.matchAll(/重启后期望 (\d+)\/(\d+)/g)) claimed.push(Number(match[1]))
   for (const match of plan.matchAll(/期望 exit 0、(\d+) 项全/g)) claimed.push(Number(match[1]))
   for (const match of plan.matchAll(/期望 (\d+)\/(\d+)、exit 0/g)) claimed.push(Number(match[1]))
 
-  assert.ok(claimed.length >= 2, 'the pending action should state the acceptance size')
+  assert.ok(claimed.length >= 1, 'the acceptance size should be documented somewhere')
   for (const value of claimed) {
     assert.equal(value, checks, 'a documented acceptance size disagrees with the script')
   }

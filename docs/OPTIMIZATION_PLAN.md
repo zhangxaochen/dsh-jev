@@ -693,7 +693,8 @@
 - [x] **纯判定表面的语料覆盖**（覆盖审计收束）：确定性拒止外壳 92 例、整形前置检查 16 例、精确重复让位 7 例
 - [x] **全新 clone 端到端复现**（当前提交）：`install --frozen-lockfile` → `build` → `verify:build` ok → `typecheck:scripts` → 单测 **145 通过 + 6 跳过**（clone 内无 DSH，`dsh-contract` 的 6 项按设计跳过，故 151−6=145，**同时印证了跳过路径**）→ `bench:offline` → `verify:dsh` 正确 SKIP → **重建后 `lib/` 零漂移**
 - [x] **宿主之外的各层判据**：151 单测 · 22 项集成校验 · 5 个线上脚本 · 36 条基准（误报 0）· 21 条注入回归全部拦下 · 构建产物一致
-- [ ] **待人工动作**：重启 DSH 桌面端，然后 `pnpm run verify:host`（期望 exit 0、7 项全 `ok`）与 `pnpm run doctor`（期望 `OK`）。这是本项目**唯一无法由本会话完成**的事项：重启会终止当前进程，且宿主进程保留启动时加载的构建
+- [x] **实机验收已通过（2026-09-19 01:27 重启后）**：`pnpm run verify:host` → **exit 0、7/7 全部 `ok`**（载体 13 模块 / 版本一致 / 宿主已加载本次构建 / 实测文件 v2 / v2 各段齐全 / 密钥可解析 / 数字晚于构建）；`pnpm run doctor` → `OK: the running host is using the current build`；`~/.dsh/jev-stats.json` 由 `version 1` 变为 **`version 2`**，段落为 `systemOne, toolPruner, loopGuard, safetyGuard, resultShaper`
+- [x] 该事项此前是本项目**唯一无法由本会话完成**的部分（重启会终止当前进程，且宿主只在启动时加载构建），已由操作者完成
 
 ## 收尾核验（证据索引同步，Round 71）
 
@@ -960,3 +961,17 @@
 - [x] 修两条「改类型字段→只编译失败」的弱变异，改为改**使用处**（`cacheHits` / `decisionErrors` 计数分支）
 - [x] 修正后 **7/7 全部拦下**；语料 65 → **71 条**；测试数 184 → 186
 - [x] 教训（§21.9）：**断言写在空状态上时，功能坏掉也看不出来**——与 §21.3 的「遮蔽」同源
+
+## 实机验收（宿主重启后，Round 106）
+
+操作者重启 DSH 桌面端后，唯一遗留的人工事项已完成，本项目至此**全部闭环**：
+
+| 判据 | 结果 |
+|---|---|
+| `pnpm run doctor` | `OK: the running host is using the current build`（exit 0） |
+| `pnpm run verify:host` | **exit 0、7/7 全部 `ok`** |
+| `~/.dsh/jev-stats.json` | `version` 由 **1 → 2**；段落 `systemOne, toolPruner, loopGuard, safetyGuard, resultShaper` |
+
+七项验收逐条：载体 desktop 13 模块 0 关闭 ✓ / 声明与安装版本一致 ✓ / **宿主已加载本次构建** ✓ / 实测文件 schema v2 ✓ / v2 各段齐全 ✓ / 宿主不导出环境变量时仍能解析密钥 ✓ / 实测数字晚于其所测量的构建 ✓。
+
+顺带修正一处守卫：文档措辞从「重启后期望 7/7」变为「重启后实测 7/7 全部 ok」后，验收计数守卫原本会**静默失效**（其匹配式只认旧措辞）——已扩展匹配式，避免「通过之后守卫反而消失」。
