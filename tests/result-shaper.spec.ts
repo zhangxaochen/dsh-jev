@@ -321,3 +321,20 @@ test('apply honours maxPerTurn and resets it for the next instruction', async ()
   const nextTurn = await h.step(exec, noisyOutput(200).replace(/ok/g, 'ok3'))
   assert.ok(nextTurn.content, 'a new instruction gets a fresh budget')
 })
+
+test('shouldConsider honours thresholdChars with the other guards out of the way', async () => {
+  // Raising maxPerTurn matters: its default rejects the first candidate outright, which
+  // masked the size check entirely - removing the size check changed nothing observable
+  // until this case isolated it.
+  const repetitive = noisyOutput(200)
+  const permissive = service(async () => ({}), { thresholdChars: 1_000_000, maxPerTurn: 5, shapeTools: ['pwsh'] })
+  assert.ok(looksRepetitive(repetitive), 'the fixture is repetitive, so only size can reject it')
+  assert.equal(
+    permissive.shouldConsider({ name: 'pwsh', args: {} } as ToolExecution, repetitive),
+    false,
+    'a result below thresholdChars must not be shaped however repetitive it is'
+  )
+
+  const small = service(async () => ({}), { thresholdChars: 100, maxPerTurn: 5, shapeTools: ['pwsh'] })
+  assert.equal(small.shouldConsider({ name: 'pwsh', args: {} } as ToolExecution, repetitive), true, 'above the threshold it qualifies')
+})

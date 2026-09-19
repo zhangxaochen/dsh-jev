@@ -297,7 +297,7 @@ test('the delivery summary counts each module as it stands', () => {
     ['tool-pruner', ['tool-pruner.spec.ts'], 9],
     ['ask-tools', ['ask-tools.spec.ts'], 7],
     ['skill-router', ['skill-router.spec.ts'], 10],
-    ['result-shaper', ['result-shaper.spec.ts'], 14],
+    ['result-shaper', ['result-shaper.spec.ts'], 15],
   ]
 
   const wrong = []

@@ -150,12 +150,6 @@
     "to": "const guardedTools: string[] = []"
   },
   {
-    "name": "brace expansion stops expanding",
-    "file": "src/safety-guard.ts",
-    "from": ".flatMap((part) => expandBraces(prefix + part.trim() + suffix, depth + 1))",
-    "to": ".flatMap((part) => [prefix + part.trim() + suffix])"
-  },
-  {
     "name": "nested commands stop being inspected",
     "file": "src/safety-guard.ts",
     "from": "    collectValuesByKey(args, COMMAND_KEYS, out)",
