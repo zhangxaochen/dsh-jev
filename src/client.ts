@@ -28,35 +28,53 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
       const useEffect = React.useEffect
 
       const CSS_STYLES = `
-.jev-toggle {
+.jev-switch-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.16));
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #b9b9c6);
+  gap: 6px;
   font: inherit;
   font-size: 11px;
-  line-height: 18px;
-  cursor: pointer;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary, #b9b9c6);
   user-select: none;
 }
-.jev-toggle:hover:not(:disabled) {
-  border-color: var(--dsw-alias-label-secondary, #b9b9c6);
-  color: var(--dsw-alias-label-primary, #ffffff);
+.jev-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--dsw-alias-fill-l2, rgba(255, 255, 255, 0.18));
+  cursor: pointer;
+  transition: background 140ms ease;
 }
-.jev-toggle:disabled {
+.jev-switch:disabled {
   opacity: 0.5;
   cursor: progress;
 }
-.jev-toggle-on {
-  color: var(--dsw-alias-label-primary, #ffffff);
+.jev-switch-knob {
+  position: absolute;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-primary, #ffffff);
+  transition: transform 140ms ease;
 }
-.jev-toggle-off {
-  color: var(--dsw-alias-label-secondary, #8a8a99);
-  border-style: dashed;
+/* On: green, which reads as "enabled" without a legend. */
+.jev-switch-on {
+  background: #16a34a;
+}
+.jev-switch-on .jev-switch-knob {
+  transform: translateX(12px);
+}
+/* State unknown (route not reachable yet): dashed and disabled rather than guessing. */
+.jev-switch-unknown {
+  background: transparent;
+  border: 1px dashed var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.24));
 }
 .jev-container {
   display: flex;
@@ -265,23 +283,32 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
         }
 
         const known = enabled !== null
-        const label = !known ? 'jev ··' : enabled ? 'jev ●' : 'jev ○'
+        const on = known && enabled === true
+        const trackClass = !known ? 'jev-switch jev-switch-unknown' : on ? 'jev-switch jev-switch-on' : 'jev-switch'
         const title = !known
           ? 'TypeSafe Jev：未能读到开关状态（宿主路由未就绪）'
-          : enabled
+          : on
             ? 'TypeSafe Jev 已启用：语义剪枝、技能路由、结果整形、死循环与安全拦截均生效。点击停用'
             : 'TypeSafe Jev 已停用：不剪枝、不路由、不整形、不拦截（含确定性硬拒层）。点击启用'
 
         return h(
-          'button',
-          {
-            type: 'button',
-            className: 'jev-toggle ' + (known && enabled ? 'jev-toggle-on' : 'jev-toggle-off'),
-            title,
-            onClick: toggle,
-            disabled: pending || !known,
-          },
-          label
+          'span',
+          { className: 'jev-switch-wrap', title },
+          h('span', null, 'jev'),
+          h(
+            'button',
+            {
+              type: 'button',
+              role: 'switch',
+              'aria-checked': known ? on : 'mixed',
+              'aria-label': 'TypeSafe Jev 开关',
+              className: trackClass,
+              title,
+              onClick: toggle,
+              disabled: pending || !known,
+            },
+            h('span', { className: 'jev-switch-knob' })
+          )
         )
       }
 
