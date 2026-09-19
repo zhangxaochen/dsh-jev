@@ -456,9 +456,9 @@
     "to": "export const DEFAULT_ON_ERROR: SafetyGuardConfig['onError'] = 'deny-guarded'"
   },
   {
-    "name": "the envelope finds the delete verb anywhere",
+    "name": "the envelope treats a mentioned verb as the command",
     "file": "src/safety-guard.ts",
-    "from": "    if (DELETE_VERB.test(token)) return index",
-    "to": "    if (DELETE_VERB.test(token)) return 0"
+    "from": "    if (awaitingFlagValue) {\n      // The value of a preceding flag, as in `sudo -u root <verb>`.\n      awaitingFlagValue = false\n      continue\n    }\n    return -1",
+    "to": "    if (awaitingFlagValue) {\n      awaitingFlagValue = false\n      continue\n    }\n    continue"
   }
 ]
