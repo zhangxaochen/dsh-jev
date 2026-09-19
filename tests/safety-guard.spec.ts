@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, deterministicVerdict, HARD_DENY_RULES } from '../lib/safety-guard.js'
+import {
+  apply,
+  DEFAULT_INSPECTION_TIMEOUT_MS,
+  deterministicVerdict,
+  HARD_DENY_RULES,
+  isTransientInspectionError,
+} from '../lib/safety-guard.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 import type { CordisContext, PreToolDecision, ToolExecution } from '../lib/types.js'
 
@@ -266,4 +272,121 @@ test('SafetyGuard reads its first argument as the execution, whatever else it ca
   // decision object and skipped.
   const severity = await invoke({ ...decorated, args: { command: 'rm -rf / --no-preserve-root' } })
   assert.equal(severity.action, 'deny', 'and it must still be inspected')
+})
+
+/** A context whose client records the call options and can be told how to fail. */
+function inspectionHarness(options: {
+  fail?: unknown
+  /** How many leading attempts throw; omit to always throw. */
+  failTimes?: number
+  answer?: Record<string, unknown>
+  config?: Record<string, unknown>
+  advisoryTimeoutMs?: number
+}) {
+  const attempts: any[] = []
+  const client = new TypeSafeClient({ mockHandler: async () => options.answer ?? BENIGN_ANSWER })
+  if (options.advisoryTimeoutMs !== undefined) {
+    Object.assign(client as any, { pathTimeoutMs: options.advisoryTimeoutMs })
+  }
+  Object.defineProperty(client, 'systemOne', {
+    value: async (_request: any, callOptions: any) => {
+      attempts.push(callOptions ?? {})
+      if (options.fail !== undefined && attempts.length <= (options.failTimes ?? Number.POSITIVE_INFINITY)) {
+        throw options.fail
+      }
+      return options.answer ?? BENIGN_ANSWER
+    },
+  })
+
+  let preExecuteHandler: any
+  let registeredGuard: ((exec: ToolExecution) => string | undefined) | undefined
+  const fakeContext: CordisContext = {
+    on: (event: string, callback: any) => {
+      if (event === 'tools/pre-execute') preExecuteHandler = callback
+      return () => {}
+    },
+    get: (name: string) =>
+      name === 'tools'
+        ? {
+            guard: (fn: (exec: ToolExecution) => string | undefined) => {
+              registeredGuard = fn
+              return () => {
+                registeredGuard = undefined
+              }
+            },
+          }
+        : undefined,
+    typesafe: client,
+  }
+  apply(fakeContext, options.config ?? {})
+
+  return {
+    attempts,
+    invoke: (exec: ToolExecution) =>
+      preExecuteHandler(exec, async () => ({ kind: 'allow', action: 'allow' })) as Promise<PreToolDecision>,
+    guard: () => registeredGuard,
+  }
+}
+
+const GUARDED_CALL: ToolExecution = { name: 'pwsh', args: { command: 'echo hi' } } as ToolExecution
+
+test('the inspection gets its own budget, not the advisory one', async () => {
+  // The advisory budget (800ms) fails open and is sized for loop-guard notices; the
+  // inspection fails closed, and measured calls run 587-777ms - so inheriting it turned
+  // a latency spike into a blanket denial of guarded tools.
+  const implicit = inspectionHarness({ advisoryTimeoutMs: 777 })
+  await implicit.invoke(GUARDED_CALL)
+  assert.equal(implicit.attempts[0]?.timeoutMs, DEFAULT_INSPECTION_TIMEOUT_MS, 'the default budget applies')
+  assert.notEqual(implicit.attempts[0]?.timeoutMs, 777, 'and it must not be the advisory budget')
+
+  const explicit = inspectionHarness({ config: { inspectionTimeoutMs: 1234 }, advisoryTimeoutMs: 777 })
+  await explicit.invoke(GUARDED_CALL)
+  assert.equal(explicit.attempts[0]?.timeoutMs, 1234, 'the configured budget wins')
+})
+
+test('a transient inspection failure is retried once and then allowed', async () => {
+  const abort = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
+  const h = inspectionHarness({ fail: abort, failTimes: 1 })
+  const decision = await h.invoke(GUARDED_CALL)
+
+  assert.equal(h.attempts.length, 2, 'the failed attempt plus one retry')
+  assert.equal(decision.action, 'allow', 'the retry succeeded, so the call proceeds')
+})
+
+test('a persistent transient failure applies the policy after a bounded number of attempts', async () => {
+  const abort = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
+  const h = inspectionHarness({ fail: abort })
+  const decision = await h.invoke(GUARDED_CALL)
+
+  assert.equal(h.attempts.length, 2, 'two attempts, not an unbounded retry loop')
+  assert.equal(decision.action, 'deny', 'a guarded tool still fails closed')
+})
+
+test('a non-transient failure is not retried', async () => {
+  const h = inspectionHarness({ fail: Object.assign(new Error('bad request'), { status: 400 }) })
+  const decision = await h.invoke(GUARDED_CALL)
+
+  assert.equal(h.attempts.length, 1, 'a 400 will not improve on a second attempt')
+  assert.equal(decision.action, 'deny')
+})
+
+test('an unusable verdict is the uncertain path, not a retry', async () => {
+  const h = inspectionHarness({ answer: {} })
+  const decision = await h.invoke(GUARDED_CALL)
+
+  assert.equal(h.attempts.length, 1, 'the answer arrived, so there is nothing to retry')
+  assert.equal(decision.action, 'deny', 'onUncertain still fails closed for a guarded tool')
+})
+
+test('transient inspection errors are recognised, permanent ones are not', () => {
+  const abort = Object.assign(new Error('aborted'), { name: 'AbortError' })
+  assert.equal(isTransientInspectionError(abort), true)
+  assert.equal(isTransientInspectionError({ status: 429 }), true)
+  assert.equal(isTransientInspectionError({ statusCode: 503 }), true)
+  assert.equal(isTransientInspectionError({ code: 'ETIMEDOUT' }), true)
+  assert.equal(isTransientInspectionError(new Error('socket hang up')), true)
+
+  assert.equal(isTransientInspectionError({ status: 400 }), false, 'a bad request is permanent')
+  assert.equal(isTransientInspectionError(new Error('malformed answer')), false, 'so is a shape problem')
+  assert.equal(isTransientInspectionError(undefined), false)
 })

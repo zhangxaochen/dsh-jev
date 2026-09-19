@@ -21,6 +21,28 @@ export declare const CREDENTIAL_CRITERIA: Record<string, string>;
 /** Documented defaults; `tests/docs-consistency.spec.ts` keeps README in step. */
 export declare const DEFAULT_BLOCK_THRESHOLD = 0.85;
 export declare const DEFAULT_ASK_APPROVAL_THRESHOLD = 0.5;
+/**
+ * Budget for the semantic inspection, in milliseconds.
+ *
+ * This is deliberately not `client.pathTimeoutMs` (800ms). That budget was sized for
+ * the advisory path - loop-guard notices, where failing open costs nothing - while this
+ * path fails closed: an inspection that times out denies a guarded tool. Measured cold
+ * calls take 700-750ms and the live checks recorded after the host restart ran 587-777ms,
+ * so an 800ms budget sat at the ceiling and turned a latency spike into a full tool
+ * lockdown. 3500ms leaves ~4.5x headroom over the slowest measured call; the skill
+ * router hit the identical wall with 800ms and was given its own 4000ms budget for it.
+ */
+export declare const DEFAULT_INSPECTION_TIMEOUT_MS = 3500;
+/**
+ * Extra attempts for a *transient* inspection failure (timeout, abort, 429, 5xx).
+ *
+ * One retry removes the common case - a single slow call - without hiding a broken
+ * endpoint: a permanent failure still reaches the `onError` policy after the retry.
+ * A verdict that came back but is unusable is not retried; that is `onUncertain`'s job.
+ */
+export declare const DEFAULT_INSPECTION_RETRIES = 1;
+/** Whether a failed inspection is worth another attempt. */
+export declare function isTransientInspectionError(error: unknown): boolean;
 interface HardDenyRule {
     id: string;
     reason: string;

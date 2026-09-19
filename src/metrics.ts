@@ -40,6 +40,10 @@ export interface JevMetricsData {
     hardDenied: number
     /** Denials produced because the verdict was unknown and the policy fails closed. */
     uncertainDenied: number
+    /** Inspections retried after a transient failure (timeout, 429, 5xx). */
+    inspectionRetries: number
+    /** Inspections that failed after their retries, so the failure policy applied. */
+    inspectionFailures: number
   }
   resultShaper: {
     shaped: number
@@ -106,6 +110,8 @@ function createEmptyMetrics(): JevMetricsData {
       approvals: 0,
       hardDenied: 0,
       uncertainDenied: 0,
+      inspectionRetries: 0,
+      inspectionFailures: 0,
     },
     resultShaper: {
       shaped: 0,
@@ -261,6 +267,23 @@ export class MetricsCollector {
   }
 
   /**
+   * Record a retry after a transient inspection failure.
+   *
+   * Counted so the budget can be sized from data: a rising retry count means the
+   * inspection timeout is too tight, which is how the 800ms budget went unnoticed.
+   */
+  recordSafetyRetry(): void {
+    this.state().safetyGuard.inspectionRetries += 1
+    this.persist()
+  }
+
+  /** Record an inspection that failed after its retries, so the failure policy applied. */
+  recordSafetyInspectionFailure(): void {
+    this.state().safetyGuard.inspectionFailures += 1
+    this.persist()
+  }
+
+  /**
    * Record a System One API call latency.
    */
   recordCall(latencyMs: number, success = true, accounting: CallAccounting = {}): void {
@@ -334,7 +357,7 @@ export class MetricsCollector {
       `| :--- | :--- | :--- |`,
       `| **🛠️ 工具动态剪枝** | 评估 **${this.state().toolPruner.evaluations}** 次，裁剪 **${this.state().toolPruner.toolsPruned}** 个次无关工具（精确移除 **${this.state().toolPruner.removedSchemaChars}** 字符） | 省约 **${(this.state().toolPruner.estimatedTokensSaved / 1000).toFixed(1)}K** Tokens（口径：${this.state().toolPruner.tokenSource === 'tokenMeter' ? 'DSH tokenMeter 估算器' : this.state().toolPruner.tokenSource === 'mixed' ? 'tokenMeter 与本地启发混合' : '本地启发式'}） |`,
       `| **🔄 死循环及早止损** | 检查 **${this.state().loopGuard.checks}** 次，阻断 **${this.state().loopGuard.interrupted}** 次、警示 **${this.state().loopGuard.warned}** 次，共注入 **${this.state().loopGuard.notices}** 条提示 | 不做 token 折算（避免成本不可测），仅报计数；判定不可用 **${this.state().loopGuard.uncertain}** 次 |`,
-      `| **🔒 执行安全护栏** | 审查 **${this.state().safetyGuard.screened}** 次，阻断 **${this.state().safetyGuard.blocked}** 次（确定性 **${this.state().safetyGuard.hardDenied}** / 判定不可用 fail-closed **${this.state().safetyGuard.uncertainDenied}**），审批 **${this.state().safetyGuard.approvals}** 次 | 确定性外壳 0 次模型调用即可拒止 |`,
+      `| **🔒 执行安全护栏** | 审查 **${this.state().safetyGuard.screened}** 次，阻断 **${this.state().safetyGuard.blocked}** 次（确定性 **${this.state().safetyGuard.hardDenied}** / 判定不可用 fail-closed **${this.state().safetyGuard.uncertainDenied}**），审批 **${this.state().safetyGuard.approvals}** 次 | 确定性外壳 0 次模型调用即可拒止；检查重试 **${this.state().safetyGuard.inspectionRetries}** 次、最终失败 **${this.state().safetyGuard.inspectionFailures}** 次（用于校准 inspectionTimeoutMs） |`,
       `| **🧩 语义结果整形** | 整形 **${this.state().resultShaper.shaped}** 次，精确移除 **${this.state().resultShaper.charsRemoved}** 字符 | 默认关闭；仅对输出密集型工具的重复内容生效，不可用时原样返回 |`,
       `| **⚡ System One 响应** | 累计决策 **${this.state().systemOne.totalCalls}** 次（缓存命中 **${this.state().systemOne.cacheHits}**），平均延迟 **${this.state().systemOne.avgLatencyMs}ms**，错误 **${this.state().systemOne.errors}** | 输入 **${(this.state().systemOne.inputBytes / 1024).toFixed(1)}KB**，按 $0.042/M 输入计约 **$${this.state().systemOne.estimatedCostUsd.toFixed(4)}**（输出免费） |`,
       ``,

@@ -17,6 +17,8 @@ import {
   DEFAULT_ASK_APPROVAL_THRESHOLD,
   DEFAULT_BLOCK_THRESHOLD,
   DEFAULT_GUARDED_TOOLS,
+  DEFAULT_INSPECTION_RETRIES,
+  DEFAULT_INSPECTION_TIMEOUT_MS,
 } from '../lib/safety-guard.js'
 import {
   DEFAULT_COOLDOWN_STEPS,
@@ -263,6 +265,8 @@ test('every value the shipped bundle pins still matches the code default', () =>
     askApprovalThreshold: DEFAULT_ASK_APPROVAL_THRESHOLD,
     onError: 'deny-guarded',
     onUncertain: 'deny-guarded',
+    inspectionTimeoutMs: DEFAULT_INSPECTION_TIMEOUT_MS,
+    inspectionRetries: DEFAULT_INSPECTION_RETRIES,
     maxTools: DEFAULT_MAX_TOOLS,
     minScoreThreshold: 2,
     minIntentChars: DEFAULT_MIN_INTENT_CHARS,

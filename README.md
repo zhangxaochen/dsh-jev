@@ -262,6 +262,8 @@ ctx.plugin(ResultShaper, { thresholdChars: 8000, maxPerTurn: 2 })
 - `blockThreshold?: number`: 阻断执行（返回 `deny`）的危害概率阈值（默认 `0.85`）。
 - `askApprovalThreshold?: number`: 请求人工审批（返回 `ask`）的风险概率阈值（默认 `0.5`）。
 - `onError?: 'deny-guarded' | 'deny-all' | 'allow'`: 判定无法获得（API 报错/超时）时的策略，默认 `deny-guarded`（受保护工具 fail-closed，其余工具放行）。需要旧的「出错即放行」行为时显式设为 `allow`。
+- `inspectionTimeoutMs?: number`: **语义审查**的超时预算（默认 `3500`）。刻意**不复用** `client.pathTimeoutMs`（800ms）：那个预算属于**建议路径**（loop-guard 提示，失败放行无代价），而这里失败即拒绝受保护工具；实测调用耗时 587–777ms，用 800ms 等于把预算压在实测天花板上，一次延迟抖动就会升级为「所有受保护工具被拒」。`skillRouter` 曾因同一个 800ms 遭遇 7/7 线上用例中止，并因此获得了自己的 4000ms 预算。
+- `inspectionRetries?: number`: **瞬时**失败（超时/中断/429/5xx）的额外尝试次数（默认 `1`）。只对瞬时错误重试，且次数有上界：端点彻底不可用时仍会走到 `onError` 策略，而「裁决不可用」（答案到了但不可用）不走重试，归 `onUncertain`。重试与最终失败次数都计入看板（`inspectionRetries` / `inspectionFailures`），用于**用数据校准**这个预算。
 - `onUncertain?: 'deny-guarded' | 'deny-all' | 'allow'`: 拿到了答案但没有可用概率时的策略，默认 `deny-guarded`。
 - `rules?: Array<{ id, question, threshold?, action? }>`: 用户自定义语义规则，与内置问题同一次请求评估；`action` 可取 `deny` / `ask` / `warn`。
 - `headless?: boolean`: 会话无法弹窗询问时设为 `true`（默认 `false`）。此时任何 `ask`（含用户规则触发的）都转为 `deny`——宁可拒绝也不假装已获批准。桌面端保持默认即可。

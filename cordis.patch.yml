@@ -18,6 +18,11 @@
           askApprovalThreshold: 0.5
           onError: deny-guarded
           onUncertain: deny-guarded
+          # The inspection fails closed, so it gets its own budget rather than the 800ms
+          # advisory one: measured inspections run 587-777ms, which made a latency spike
+          # deny every guarded tool. One bounded retry covers a single slow call.
+          inspectionTimeoutMs: 3500
+          inspectionRetries: 1
           guardedTools:
             - bash
             - pwsh

@@ -219,6 +219,17 @@ export interface SafetyGuardConfig {
    * reported as `deny` for guarded tools instead of silently allowing the call.
    */
   headless?: boolean
+  /**
+   * Budget for the semantic inspection, in milliseconds (default: 3500).
+   *
+   * Kept separate from `client.pathTimeoutMs` (800ms): that budget belongs to the
+   * advisory path, which fails open, while this one fails closed - an inspection that
+   * times out denies a guarded tool. Measured calls run 587-777ms, so 800ms sat at the
+   * ceiling and a latency spike became a full tool lockdown.
+   */
+  inspectionTimeoutMs?: number
+  /** Extra attempts for a transient inspection failure (timeout, 429, 5xx; default: 1) */
+  inspectionRetries?: number
   /** User-declared semantic rules evaluated in the same request as the built-in questions. */
   rules?: SafetyRule[]
 }

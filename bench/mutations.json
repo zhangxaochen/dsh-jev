@@ -424,5 +424,23 @@
     "file": "src/metrics.ts",
     "from": "if (accounting.cacheHit) this.state().systemOne.cacheHits += 1",
     "to": "if (false) this.state().systemOne.cacheHits += 1"
+  },
+  {
+    "name": "the safety inspection goes back to the advisory budget",
+    "file": "src/safety-guard.ts",
+    "from": "          () => client.systemOne({ state, questions: questions as any }, { timeoutMs: inspectionTimeoutMs }),",
+    "to": "          () => client.systemOne({ state, questions: questions as any }, { timeoutMs: client.pathTimeoutMs }),"
+  },
+  {
+    "name": "the safety inspection stops retrying",
+    "file": "src/safety-guard.ts",
+    "from": "  const inspectionRetries = config.inspectionRetries ?? DEFAULT_INSPECTION_RETRIES",
+    "to": "  const inspectionRetries = 0"
+  },
+  {
+    "name": "every inspection failure is retried, even permanent ones",
+    "file": "src/safety-guard.ts",
+    "from": "      if (attempt >= retries || !isTransientInspectionError(error)) throw error",
+    "to": "      if (attempt >= retries) throw error"
   }
 ]

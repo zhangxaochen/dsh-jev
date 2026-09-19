@@ -35,6 +35,10 @@ export interface JevMetricsData {
         hardDenied: number;
         /** Denials produced because the verdict was unknown and the policy fails closed. */
         uncertainDenied: number;
+        /** Inspections retried after a transient failure (timeout, 429, 5xx). */
+        inspectionRetries: number;
+        /** Inspections that failed after their retries, so the failure policy applied. */
+        inspectionFailures: number;
     };
     resultShaper: {
         shaped: number;
@@ -115,6 +119,15 @@ export declare class MetricsCollector {
      * Record a safety guard pre-execution screen.
      */
     recordSafetyCheck(outcome: 'pass' | 'ask' | 'deny'): void;
+    /**
+     * Record a retry after a transient inspection failure.
+     *
+     * Counted so the budget can be sized from data: a rising retry count means the
+     * inspection timeout is too tight, which is how the 800ms budget went unnoticed.
+     */
+    recordSafetyRetry(): void;
+    /** Record an inspection that failed after its retries, so the failure policy applied. */
+    recordSafetyInspectionFailure(): void;
     /**
      * Record a System One API call latency.
      */
