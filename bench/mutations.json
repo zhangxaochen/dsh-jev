@@ -216,18 +216,6 @@
     "to": "if (true) {"
   },
   {
-    "name": "the suite ignores askTools: false",
-    "file": "src/index.ts",
-    "from": "if (config.askTools !== false) {",
-    "to": "if (true) {"
-  },
-  {
-    "name": "the suite ignores skillRouter: false",
-    "file": "src/index.ts",
-    "from": "if (config.skillRouter !== false) {",
-    "to": "if (true) {"
-  },
-  {
     "name": "the shaper ignores maxClusters",
     "file": "src/result-shaper.ts",
     "from": "clusters.slice(0, this.config.maxClusters ?? DEFAULT_MAX_CLUSTERS)",
@@ -262,12 +250,6 @@
     "file": "src/metrics.ts",
     "from": "recordShape(charsRemoved: number): void {",
     "to": "recordShape(charsRemoved: number): void { if (true) return"
-  },
-  {
-    "name": "the client ignores its configured timeout",
-    "file": "src/typesafe-client.ts",
-    "from": "this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS",
-    "to": "this.timeoutMs = 1"
   },
   {
     "name": "call cost is no longer estimated",

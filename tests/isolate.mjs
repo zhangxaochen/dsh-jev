@@ -16,6 +16,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const dir = mkdtempSync(join(tmpdir(), 'jev-tests-'))
-process.env.DSH_JEV_METRICS_PATH ??= join(dir, 'jev-stats.json')
-process.env.DSH_JEV_DECISIONS_PATH ??= join(dir, 'jev-decisions.jsonl')
+// Assigned unconditionally, and the directory carries the pid: the test runner sets the
+// variable in its own process, children inherit it, and `??=` would then leave every
+// spec file writing to the same file - which made results order-dependent. A mutation
+// sweep exposed it: two entries were caught in one run and not in the next.
+const dir = mkdtempSync(join(tmpdir(), 'jev-tests-' + process.pid + '-'))
+process.env.DSH_JEV_METRICS_PATH = join(dir, 'jev-stats.json')
+process.env.DSH_JEV_DECISIONS_PATH = join(dir, 'jev-decisions.jsonl')
