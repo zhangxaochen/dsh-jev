@@ -460,5 +460,23 @@
     "file": "src/safety-guard.ts",
     "from": "    if (awaitingFlagValue) {\n      // The value of a preceding flag, as in `sudo -u root <verb>`.\n      awaitingFlagValue = false\n      continue\n    }\n    return -1",
     "to": "    if (awaitingFlagValue) {\n      awaitingFlagValue = false\n      continue\n    }\n    continue"
+  },
+  {
+    "name": "a missing switch file disables the plugin",
+    "file": "src/gate.ts",
+    "from": "    if (!existsSync(path)) return true",
+    "to": "    if (!existsSync(path)) return false"
+  },
+  {
+    "name": "the safety guard ignores the master switch",
+    "file": "src/safety-guard.ts",
+    "from": "      if (!isJevEnabled()) return next()",
+    "to": "      if (false) return next()"
+  },
+  {
+    "name": "the pruner ignores the master switch",
+    "file": "src/tool-pruner.ts",
+    "from": "        if (!isJevEnabled()) return typeof next === 'function' ? next() : assembly",
+    "to": "        if (false) return typeof next === 'function' ? next() : assembly"
   }
 ]

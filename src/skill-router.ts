@@ -9,6 +9,7 @@
  */
 
 import { resolveClientFrom, score, type TypeSafeClient } from './typesafe-client.js'
+import { isJevEnabled } from './gate.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type { CordisContext, SkillRouterConfig, SkillSummary } from './types.js'
@@ -221,6 +222,7 @@ export function apply(ctx: CordisContext, config: SkillRouterConfig = {}) {
 
   const unsubscribe = ctx.on('system-prompt/assemble', async (assembly: any, _context: any, next: any) => {
     const proceed = () => (typeof next === 'function' ? next() : assembly)
+    if (!isJevEnabled()) return proceed()
     try {
       if (!assembly || typeof assembly !== 'object') return proceed()
       const skills = (typeof ctx.get === 'function' ? ctx.get('skills') : (ctx as any).skills) as

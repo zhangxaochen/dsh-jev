@@ -24,6 +24,7 @@
  */
 
 import { choice, resolveClientFrom, type TypeSafeClient } from './typesafe-client.js'
+import { isJevEnabled } from './gate.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type { CordisContext, PostToolDecision, ResultShaperConfig, ToolExecution } from './types.js'
@@ -300,6 +301,7 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
   // Waterfall listener: the budget reset must not swallow the step decision.
   const unsubscribePreStep = ctx.on('agent/pre-step', (...hookArgs: any[]) => {
     const next = hookArgs[hookArgs.length - 1]
+    if (!isJevEnabled()) return typeof next === 'function' ? next() : undefined
     shaper.resetTurnBudget()
     return typeof next === 'function' ? next() : undefined
   })
@@ -307,6 +309,7 @@ export function apply(ctx: CordisContext, config: ResultShaperConfig = {}) {
   const unsubscribe = ctx.on(
     'tools/post-execute',
     async (exec: ToolExecution, result: any, next: () => Promise<PostToolDecision>): Promise<PostToolDecision> => {
+      if (!isJevEnabled()) return next()
       // The host dispatches this waterfall as `(exec, result, next)`; an earlier
       // version sniffed for other shapes, which is unverifiable speculation and
       // could misroute the arguments.

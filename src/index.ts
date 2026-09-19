@@ -13,6 +13,7 @@ import { registerJevTools } from './ask-tools.js'
 import { resolveClientFrom } from './typesafe-client.js'
 import { defaultMetrics } from './metrics.js'
 import { readBenchSummary, renderBenchLine } from './bench-summary.js'
+import { readJevGate, setJevEnabled } from './gate.js'
 import type { CordisContext, TypeSafeSuiteConfig } from './types.js'
 
 export * from './types.js'
@@ -188,14 +189,22 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
                 if (body && body.reset) {
                   defaultMetrics.reset()
                 }
+                // The status-bar button sends `{ enabled: boolean }`; the plugins read the
+                // gate on every decision, so this takes effect without a reload.
+                if (body && typeof body.enabled === 'boolean') {
+                  setJevEnabled(body.enabled, 'panel')
+                }
               } catch {}
             }
-            return Response.json({ ...defaultMetrics.getSnapshot(), bench: readBenchSummary() ?? null }, {
-              headers: {
-                'content-type': 'application/json; charset=utf-8',
-                'cache-control': 'no-store',
-              },
-            })
+            return Response.json(
+              { ...defaultMetrics.getSnapshot(), bench: readBenchSummary() ?? null, gate: readJevGate() },
+              {
+                headers: {
+                  'content-type': 'application/json; charset=utf-8',
+                  'cache-control': 'no-store',
+                },
+              }
+            )
           },
         })
         if (typeof apiDisposer === 'function') {
@@ -232,11 +241,19 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
             }
 
             const url = new URL(req.url || '/api/dsh-jev/stats', 'http://localhost')
+            // This handler has no body parsing, so the switch is also reachable as a query
+            // parameter: `curl '/api/dsh-jev/stats?enabled=0'`.
+            const enabledParam = url.searchParams.get('enabled')
+            if (enabledParam === '0' || enabledParam === '1') {
+              setJevEnabled(enabledParam === '1', 'http')
+            }
             if (req.method === 'POST' || url.searchParams.get('reset') === '1' || url.searchParams.get('reset') === 'true') {
               defaultMetrics.reset()
               if (req.method === 'POST') {
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-                res.end(JSON.stringify({ ok: true, data: defaultMetrics.getSnapshot() }, null, 2))
+                res.end(
+                  JSON.stringify({ ok: true, gate: readJevGate(), data: defaultMetrics.getSnapshot() }, null, 2)
+                )
                 return
               }
             }
@@ -249,7 +266,13 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
               )
             } else {
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-              res.end(JSON.stringify({ ...defaultMetrics.getSnapshot(), bench: readBenchSummary() ?? null }, null, 2))
+              res.end(
+                JSON.stringify(
+                  { ...defaultMetrics.getSnapshot(), bench: readBenchSummary() ?? null, gate: readJevGate() },
+                  null,
+                  2
+                )
+              )
             }
           },
         })

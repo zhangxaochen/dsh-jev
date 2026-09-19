@@ -5,6 +5,7 @@
  */
 
 import { resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
+import { isJevEnabled } from './gate.js'
 import { defaultMetrics, FALLBACK_CHARS_PER_TOKEN } from './metrics.js'
 import type {
   CordisContext,
@@ -240,6 +241,7 @@ export function apply(ctx: CordisContext, config: ToolPrunerConfig = {}) {
   // Listen to system-prompt/assemble waterfall to prune tool schemas before model call
   const unsubscribe = typeof ctx.on === 'function'
     ? ctx.on('system-prompt/assemble', async (assembly: any, context: any, next: any) => {
+        if (!isJevEnabled()) return typeof next === 'function' ? next() : assembly
         if (!assembly || !Array.isArray(assembly.tools)) {
           return typeof next === 'function' ? next() : assembly
         }

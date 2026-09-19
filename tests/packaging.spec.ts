@@ -120,11 +120,16 @@ test('the panel module registers itself and exposes the apply contract', () => {
   exports.apply(ctx)
 
   assert.equal(effects.length, 1, 'the panel installs its styles through an effect')
-  assert.equal(slots.length, 1)
+  assert.equal(slots.length, 2, 'the panel and the status-bar switch')
   assert.equal(slots[0].name, 'settings.section')
   assert.equal(slots[0].result.config.id, 'jev')
   assert.equal(slots[0].result.config.order, 25)
   assert.equal(typeof slots[0].result.component, 'function')
+  // The composer status-bar switch lives in `conversation.input.right`, the slot the host
+  // renders inside the composer card next to the input.
+  assert.equal(slots[1].name, 'conversation.input.right')
+  assert.equal(slots[1].result.config.id, 'jev-toggle')
+  assert.equal(typeof slots[1].result.component, 'function')
 })
 
 test('every key in the shipped bundle config is declared in the types', () => {

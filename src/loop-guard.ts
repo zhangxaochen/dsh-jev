@@ -20,6 +20,7 @@ import {
   topBucketProbability,
   TypeSafeClient,
 } from './typesafe-client.js'
+import { isJevEnabled } from './gate.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type {
@@ -169,6 +170,10 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
    * reset is bookkeeping, so it must always pass the chain on untouched.
    */
   const unsubscribePreStep = ctx.on('agent/pre-step', (...hookArgs: any[]) => {
+    if (!isJevEnabled()) {
+      const delegate = hookArgs[hookArgs.length - 1]
+      return typeof delegate === 'function' ? delegate() : undefined
+    }
     const payload = hookArgs[0]
     const next = hookArgs[hookArgs.length - 1]
     const agent = payload?.agent ?? payload
@@ -181,6 +186,7 @@ export function apply(ctx: CordisContext, config: LoopGuardConfig = {}) {
   const unsubscribe = ctx.on(
     'tools/post-execute',
     async (exec: ToolExecution, result: any, next: () => Promise<PostToolDecision>): Promise<PostToolDecision> => {
+      if (!isJevEnabled()) return next()
       // The host dispatches this waterfall as `(exec, result, next)`: dsh-tools
       // calls `waterfall(scope, 'tools/post-execute', exec, result, next)`. An
       // earlier version sniffed for other argument shapes, which could silently

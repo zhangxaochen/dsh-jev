@@ -15,6 +15,7 @@
  */
 
 import { choice, noul, noulProbability, resolveClientFrom, score, TypeSafeClient } from './typesafe-client.js'
+import { isJevEnabled } from './gate.js'
 import { defaultMetrics } from './metrics.js'
 import { defaultDecisionLog } from './decisions.js'
 import type {
@@ -560,6 +561,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
     if (!tools || typeof tools.guard !== 'function') return undefined
     try {
       return tools.guard((exec: ToolExecution): string | undefined => {
+        if (!isJevEnabled()) return undefined
         if (!isGuarded(exec?.name)) return undefined
         const verdict = deterministicVerdict(exec)
         if (!verdict) return undefined
@@ -585,6 +587,7 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
       // `waterfall(carrier, 'tools/pre-execute', exec, next)`. An earlier version
       // also accepted a three-argument shape, which no host uses.
 
+      if (!isJevEnabled()) return next()
       if (!isGuarded(exec?.name)) {
         return next()
       }

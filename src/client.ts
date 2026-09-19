@@ -28,6 +28,36 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
       const useEffect = React.useEffect
 
       const CSS_STYLES = `
+.jev-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.16));
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #b9b9c6);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+  user-select: none;
+}
+.jev-toggle:hover:not(:disabled) {
+  border-color: var(--dsw-alias-label-secondary, #b9b9c6);
+  color: var(--dsw-alias-label-primary, #ffffff);
+}
+.jev-toggle:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+.jev-toggle-on {
+  color: var(--dsw-alias-label-primary, #ffffff);
+}
+.jev-toggle-off {
+  color: var(--dsw-alias-label-secondary, #8a8a99);
+  border-style: dashed;
+}
 .jev-container {
   display: flex;
   flex-direction: column;
@@ -195,6 +225,64 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
         return () => {
           style.remove()
         }
+      }
+
+      /**
+       * The composer status-bar switch.
+       *
+       * Rendered into `conversation.input.right`, the slot the host puts in the composer
+       * card next to the input, so the plugin can be switched off without uninstalling it
+       * and without restarting the host: the plugins read the gate on every decision.
+       */
+      function JevToggleButton() {
+        const [enabled, setEnabled] = useState(null)
+        const [pending, setPending] = useState(false)
+
+        function load() {
+          fetch('/api/dsh-jev/stats', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+            .then((res) => (res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status))))
+            .then((json) => setEnabled(json?.gate?.enabled !== false))
+            .catch(() => setEnabled(null))
+        }
+
+        useEffect(() => {
+          load()
+          const timer = setInterval(load, 10000)
+          return () => clearInterval(timer)
+        }, [])
+
+        function toggle() {
+          if (enabled === null || pending) return
+          setPending(true)
+          fetch('/api/dsh-jev/stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: !enabled }),
+          })
+            .then(() => load())
+            .catch(() => {})
+            .finally(() => setPending(false))
+        }
+
+        const known = enabled !== null
+        const label = !known ? 'jev ··' : enabled ? 'jev ●' : 'jev ○'
+        const title = !known
+          ? 'TypeSafe Jev：未能读到开关状态（宿主路由未就绪）'
+          : enabled
+            ? 'TypeSafe Jev 已启用：语义剪枝、技能路由、结果整形、死循环与安全拦截均生效。点击停用'
+            : 'TypeSafe Jev 已停用：不剪枝、不路由、不整形、不拦截（含确定性硬拒层）。点击启用'
+
+        return h(
+          'button',
+          {
+            type: 'button',
+            className: 'jev-toggle ' + (known && enabled ? 'jev-toggle-on' : 'jev-toggle-off'),
+            title,
+            onClick: toggle,
+            disabled: pending || !known,
+          },
+          label
+        )
       }
 
       function JevSettingsPage() {
@@ -593,6 +681,19 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 label: () => 'TypeSafe Jev',
               },
               JevSettingsPage
+            )
+          )
+          // Status-bar switch in the composer card (`conversation.input.right`, the same
+          // slot the commandcode usage badge uses).
+          ctx.slots.inject('conversation.input.right', () =>
+            ctx.slots.register(
+              {
+                name: 'conversation.input.right',
+                id: 'jev-toggle',
+                order: 8,
+                label: () => 'TypeSafe Jev 开关',
+              },
+              JevToggleButton
             )
           )
         }

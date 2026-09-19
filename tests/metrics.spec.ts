@@ -13,6 +13,7 @@ import {
   resolveMetricsPath,
 } from '../lib/metrics.js'
 import { apply as applySuite } from '../lib/index.js'
+import { isJevEnabled, setJevEnabled } from '../lib/gate.js'
 import { registerJevTools } from '../lib/ask-tools.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
 
@@ -227,6 +228,79 @@ test('the test run is isolated from the operator state by the preloaded env', ()
   assert.ok(process.env[METRICS_PATH_ENV], 'metrics path must be redirected for tests')
   assert.ok(process.env.DSH_JEV_DECISIONS_PATH, 'decision log path must be redirected for tests')
   assert.doesNotMatch(resolveMetricsPath(), /\.dsh[\\/]jev-stats\.json$/)
+})
+
+test('the status-bar switch flips through the fetch route the panel calls', async () => {
+  // The button posts `{ enabled }` to this route; the plugins read the gate on every
+  // decision, so the switch has to take effect without a reload.
+  let registeredFetch: any
+  const fakeCtx: any = {
+    on: () => () => {},
+    provide: () => () => {},
+    tools: { register: () => () => {} },
+    connection: {
+      fetch: {
+        register: (route: any) => {
+          registeredFetch = route
+          return () => {}
+        },
+      },
+    },
+  }
+  applySuite(fakeCtx, { client: { mockHandler: () => ({}) } })
+  assert.ok(registeredFetch, 'the fetch route must be registered')
+
+  try {
+    assert.equal(isJevEnabled(), true, 'the default is on')
+
+    const off = await registeredFetch.fetch({ method: 'POST', json: async () => ({ enabled: false }) })
+    const offPayload = await off.json()
+    assert.equal(offPayload.gate.enabled, false, 'the response reports the new state')
+    assert.equal(isJevEnabled(), false, 'and the plugin now sees it')
+    assert.equal(offPayload.gate.changedBy, 'panel', 'the change records who asked for it')
+
+    const readBack = await (await registeredFetch.fetch({ method: 'GET' })).json()
+    assert.equal(readBack.gate.enabled, false, 'a plain read reports the switch too')
+
+    await registeredFetch.fetch({ method: 'POST', json: async () => ({ enabled: true }) })
+    assert.equal(isJevEnabled(), true, 'and it flips back')
+  } finally {
+    // Leave the switch on for whatever runs next in this file.
+    setJevEnabled(true, 'test')
+  }
+})
+
+test('the web route can flip the switch without a request body', async () => {
+  // That handler has no body parsing, so the switch is also reachable as a query
+  // parameter - useful from curl when the panel is not available.
+  let registeredRoute: any
+  const fakeCtx: any = {
+    on: () => () => {},
+    provide: () => () => {},
+    tools: { register: () => () => {} },
+    webServer: {
+      register: (route: any) => {
+        registeredRoute = route
+        return () => {}
+      },
+    },
+  }
+  applySuite(fakeCtx, { client: { mockHandler: () => ({}) } })
+  assert.ok(registeredRoute, 'the web route must be registered')
+
+  try {
+    let body = ''
+    registeredRoute.handler({ method: 'GET', url: '/api/dsh-jev/stats?enabled=0', headers: {} }, {
+      writeHead: () => {},
+      end: (str: string) => {
+        body = str
+      },
+    })
+    assert.equal(isJevEnabled(), false, '?enabled=0 switches it off')
+    assert.equal(JSON.parse(body).gate.enabled, false, 'and the payload says so')
+  } finally {
+    setJevEnabled(true, 'test')
+  }
 })
 
 test('applySuite registers the DSH fetch route and serves the same payload there', async () => {
