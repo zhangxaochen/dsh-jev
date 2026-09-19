@@ -440,3 +440,50 @@ test('the stats tool declares exactly the fields it returns', () => {
     )
   })
 })
+
+test('the stats tool and route actually clear the metrics they offer to reset', async () => {
+  // Both surfaces advertise a reset, and nothing checked that it clears anything: the
+  // route test asserted the payload's shape on an already-empty collector.
+  let registeredTool: any
+  let registeredRoute: any
+  const fakeCtx: any = {
+    on: () => () => {},
+    provide: () => () => {},
+    get: () => undefined,
+    tools: {
+      register: (tool: any) => {
+        registeredTool = tool
+        return () => {}
+      },
+    },
+    webServer: {
+      register: (route: any) => {
+        registeredRoute = route
+        return () => {}
+      },
+    },
+  }
+  applySuite(fakeCtx, { client: { mockHandler: () => ({}) } })
+
+  const seed = async () => {
+    const { defaultMetrics } = await import('../lib/metrics.js')
+    defaultMetrics.recordCall(10, true, { inputBytes: 100 })
+    return defaultMetrics.getSnapshot().systemOne.totalCalls
+  }
+
+  assert.ok((await seed()) > 0, 'the fixture records a call so a reset has something to clear')
+
+  await registeredTool.execute({ reset: true })
+  const { defaultMetrics } = await import('../lib/metrics.js')
+  assert.equal(defaultMetrics.getSnapshot().systemOne.totalCalls, 0, 'the tool reset must clear the counters')
+
+  assert.ok((await seed()) > 0, 'seed again for the route')
+  let body = ''
+  registeredRoute.handler({ method: 'POST', headers: {} }, { writeHead: () => {}, end: (str: string) => { body = str } })
+  assert.equal(defaultMetrics.getSnapshot().systemOne.totalCalls, 0, 'a POST to the route must clear the counters')
+  assert.ok(body.length > 0, 'and it still answers with the payload')
+
+  assert.ok((await seed()) > 0, 'seed once more for the query form')
+  registeredRoute.handler({ method: 'GET', url: '/api/dsh-jev/stats?reset=1', headers: {} }, { writeHead: () => {}, end: () => {} })
+  assert.equal(defaultMetrics.getSnapshot().systemOne.totalCalls, 0, '?reset=1 must clear the counters too')
+})

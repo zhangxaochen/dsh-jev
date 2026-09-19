@@ -344,3 +344,12 @@ test('the panel refreshes on a short timer instead of once', () => {
   const delay = Number(poll![1].replace(/_/g, ''))
   assert.ok(delay > 0 && delay <= 10_000, 'the poll interval must be a few seconds, got ' + delay + 'ms')
 })
+
+test('the panel asks the route to reset with the body the route understands', () => {
+  // The reset control is only useful if the request it sends is one the route acts on;
+  // the panel is a browser bundle, so the request is asserted at the source.
+  const source = readFileSync(join(ROOT, 'src', 'client.ts'), 'utf8')
+  assert.match(source, /JSON\.stringify\(\{\s*reset:\s*true\s*\}\)/, 'the panel must post { reset: true }')
+  const route = readFileSync(join(ROOT, 'src', 'index.ts'), 'utf8')
+  assert.match(route, /body\s*&&\s*body\.reset/, 'the route must act on that body')
+})
