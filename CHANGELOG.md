@@ -54,6 +54,8 @@
   用来判断「宿主是否已重载新构建」的信号，于是验证脚本会把部署结论改写成假象。所有验证脚本
   （`verify:dsh` / `verify:live` / `verify:tools` / `bench`）现已指向临时文件。
 
+- **`safetyGuard.onError` 默认改为 `allow`（语义裁决拿不到时放行）**：原默认 `deny-guarded` 把**运行期依赖**当成了安全性判据——判定服务一抖，宿主所有受保护工具（含 shell）全被拒。实机观测：约 **2%** 调用被拒、并出现「失败一次 + 退避 + 重试成功」合计 **4822ms** 的一次；诊断数据是成功检查耗时 1.2–1.4s 而旧预算 800ms。新默认下**唯一改变的是这一条路径**：确定性外壳在任何策略下都照旧拒绝（例如递归删除根目录**不需要模型调用**），裁决到达时危险判定照旧生效，失败会计入 `inspectionFailures` 并告警、上墙，而不是静默放行。`onUncertain`（判定到达但无可用概率）**保持 fail-closed**：那里模型答了，只是答得不可用，且实机从未发生（`uncertainDenied` 为 0）。若你的威胁模型认为「判定服务不可达本身就是攻击面」，在自有补丁层钉 `onError: deny-guarded` —— README 在默认值旁写明了这一点。
+
 ### Removed
 
 - `loopGuard.stuckSeverityThreshold`（语义已被 `pLoopThreshold` + `minConfidence` 取代）。
