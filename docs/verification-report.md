@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 README） |
-| 离线单测 | **183/183**（`pnpm test`；其中 8 项在无 DSH 时跳过） |
+| 离线单测 | **184/184**（`pnpm test`；其中 8 项在无 DSH 时跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -53,7 +53,7 @@
 | 宿主契约仍成立 | 单测（`tests/dsh-contract.spec.ts`，无 DSH 时跳过） | 内置包已安装、阈值仍为 `[3,5,8]`、`engines.dsh` 满足、钩子实参形态未变、补丁整行替换语义未变 |
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
-| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 60 处变异） | **60/60** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
+| 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 65 处变异） | **65/65** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
 | 测试不依赖执行顺序 | `pnpm run verify:solo`（23 个 spec 逐个单独运行） | **23/23 单独通过**，且各文件计数之和 **177 = 套件总数**（无用例在聚合运行中消失） |
 
 ## 抓到的真实缺陷（按严重度）
@@ -94,7 +94,7 @@
 pnpm install --frozen-lockfile
 pnpm run build && pnpm run verify:build   # 构建产物必须与已提交的一致（lib/ 入库）
 pnpm run verify:pack                      # 发布物冒烟：打包 → 安装 → 按名导入
-pnpm run verify:mutants                   # 变异扫描：60 处行为改坏后必须被单测发现
+pnpm run verify:mutants                   # 变异扫描：65 处行为改坏后必须被单测发现
 pnpm run verify:solo                      # 顺序无关：每个 spec 单独跑，计数之和须等于总数
 pnpm run typecheck:scripts                # bench/tests/scripts 的类型检查
 pnpm test                 # 离线用例，不联网、不需要 Key（含三个语料库）

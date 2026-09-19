@@ -295,7 +295,7 @@ test('the delivery summary counts each module as it stands', () => {
     ['loop-guard', ['loop-guard.spec.ts'], 15],
     ['safety-guard', ['safety-guard.spec.ts'], 11],
     ['tool-pruner', ['tool-pruner.spec.ts'], 10],
-    ['ask-tools', ['ask-tools.spec.ts'], 7],
+    ['ask-tools', ['ask-tools.spec.ts'], 8],
     ['skill-router', ['skill-router.spec.ts'], 11],
     ['result-shaper', ['result-shaper.spec.ts'], 17],
   ]

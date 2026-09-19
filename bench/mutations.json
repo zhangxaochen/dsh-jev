@@ -358,5 +358,35 @@
     "file": "src/tool-pruner.ts",
     "from": "this.config.meter",
     "to": "undefined"
+  },
+  {
+    "name": "the shaper ignores a declined turn",
+    "file": "src/result-shaper.ts",
+    "from": "if (this.declinedThisTurn) return false",
+    "to": "if (false) return false"
+  },
+  {
+    "name": "the shaper's declined flag never clears",
+    "file": "src/result-shaper.ts",
+    "from": "this.declinedThisTurn = false",
+    "to": "this.declinedThisTurn = true"
+  },
+  {
+    "name": "total tokens saved ignores every channel",
+    "file": "src/metrics.ts",
+    "from": "getTotalTokensSaved(): number {",
+    "to": "getTotalTokensSaved(): number { if (true) return 0"
+  },
+  {
+    "name": "resolveClientFrom ignores the context property",
+    "file": "src/typesafe-client.ts",
+    "from": "  if (ctx.typesafe instanceof TypeSafeClient) return ctx.typesafe",
+    "to": "  if (false && ctx.typesafe instanceof TypeSafeClient) return ctx.typesafe"
+  },
+  {
+    "name": "the safety guard protects no tool by default",
+    "file": "src/safety-guard.ts",
+    "from": "return guardedTools.includes(toolName)",
+    "to": "return false"
   }
 ]

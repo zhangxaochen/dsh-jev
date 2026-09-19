@@ -170,3 +170,29 @@ test('projectAnswer keeps the primitive shape the model consumes', () => {
   assert.equal(choice.choice, 'deny')
   assert.deepEqual(choice.probabilities, { allow: 0.12, deny: 0.88 })
 })
+
+test('jev_check honours the threshold the caller passes', async () => {
+  // The verdict is a comparison against a threshold that callers can set; only the
+  // default was ever exercised, so an ignored argument changed nothing in the suite.
+  const answers = async () => ({ holds: { type: 'noul', noul: 0.9 } })
+
+  const byDefault = harness(answers)
+  const held = await byDefault.registered.get('jev_check').execute({ state: 'the report lists 50 passes', claim: 'the suite passed' })
+  assert.equal(held.holds, true, 'the default threshold accepts 0.9')
+
+  const strict = harness(answers)
+  const refuted = await strict.registered.get('jev_check').execute({
+    state: 'the report lists 50 passes',
+    claim: 'the suite passed',
+    threshold: 0.95,
+  })
+  assert.equal(refuted.holds, false, 'a higher threshold must refute the same probability')
+
+  const lenient = harness(answers)
+  const accepted = await lenient.registered.get('jev_check').execute({
+    state: 'the report lists 50 passes',
+    claim: 'the suite passed',
+    threshold: 0.1,
+  })
+  assert.equal(accepted.holds, true, 'a lower threshold must accept it')
+})
