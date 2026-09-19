@@ -76,7 +76,8 @@
 
 - `loopGuard.cooldownSteps` 实际只静默 **N−1** 步：冷却计数在判断之前先减量，因此配置 3 只有 2 步静默。改为先读状态再减量（每步仍计时），故 `N` 现在名副其实——与 README 的「Steps to stay silent after an intervention」一致。
 
-### Notes
+- **`jev_stats` 工具的输出超出自身 schema（0.2.0 内修复）**：schema 声明 `additionalProperties: false` 且只列 `markdown`/`tokensSaved`，而 `execute` 又多返回一个 `bench` 字段——在会校验工具输出的宿主上**每次调用都会失败**。该字段无人使用（基准行已在 markdown 内，HTTP 路由负载另有 `bench` 供面板使用），故移除。
+- **服务解析不回退（0.2.0 内修复）**：`tools`/`connection`/`webServer` 三处此前按「`ctx.get` 是否存在」二选一——一旦宿主提供 `get` 而对未声明 `inject` 的服务返回 `undefined`，插件就**静默什么都不挂载**。改为先 `get`、失败再回退到同名属性。### Notes
 
 - 升级到 0.2.0 需检查的三处破坏性变更见 README「从 0.1.0 升级到 0.2.0」。
 - 同步文件后**必须重启 DSH**：本部署的 profile 组合未挂载 HMR，运行中的进程不会重新加载模块。

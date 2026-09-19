@@ -334,3 +334,13 @@ test('the client half declares the platform and slot this deployment loads', () 
   assert.ok(existsSync(join(ROOT, 'lib', 'client.js')), 'the built panel bundle is missing')
   assert.ok(Array.isArray(pkg.files) && pkg.files.includes('lib'), 'lib must be shipped for the panel to load')
 })
+
+test('the panel refreshes on a short timer instead of once', () => {
+  // The dashboard is only useful if it polls: a 4000ms interval is the whole mechanism,
+  // and nothing pinned it, so a thousand-fold change still passed every test.
+  const source = readFileSync(join(ROOT, 'src', 'client.ts'), 'utf8')
+  const poll = source.match(/setInterval\([^,]+,\s*([0-9_]+)\s*\)/)
+  assert.ok(poll, 'the panel must poll rather than load once')
+  const delay = Number(poll![1].replace(/_/g, ''))
+  assert.ok(delay > 0 && delay <= 10_000, 'the poll interval must be a few seconds, got ' + delay + 'ms')
+})

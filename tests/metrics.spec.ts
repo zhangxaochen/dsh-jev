@@ -406,3 +406,37 @@ test('a false sub-config turns that module off', () => {
   assert.ok(!prunerOff.provided.includes('toolPruner'), 'toolPruner: false must not provide the service')
   assert.ok(prunerOff.events.includes('system-prompt/assemble'), 'the router still mounts its listener')
 })
+
+test('the stats tool declares exactly the fields it returns', () => {
+  // A declared-schema key that the payload does not carry (or vice versa) breaks the
+  // host's output validation, and nothing compared the two.
+  let registeredTool: any
+  const fakeCtx: any = {
+    on: () => () => {},
+    provide: () => () => {},
+    get: () => undefined,
+    tools: {
+      register: (tool: any) => {
+        registeredTool = tool
+        return () => {}
+      },
+    },
+    webServer: { register: () => () => {} },
+  }
+  applySuite(fakeCtx, { client: { mockHandler: () => ({}) } })
+
+  const declared = Object.keys(registeredTool.output.schema.properties ?? {}).sort()
+  assert.ok(declared.length > 0, 'the tool declares an output schema')
+  return registeredTool.execute({}).then((payload: Record<string, unknown>) => {
+    assert.deepEqual(
+      declared,
+      Object.keys(payload).sort(),
+      'the declared fields and the returned fields must be the same set'
+    )
+    assert.deepEqual(
+      [...(registeredTool.output.schema.required ?? [])].sort(),
+      declared.filter((key) => payload[key] !== undefined).sort(),
+      'every field the schema requires must be present'
+    )
+  })
+})

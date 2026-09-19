@@ -262,5 +262,59 @@
     "file": "src/typesafe-client.ts",
     "from": "const inputBytes = Buffer.byteLength(payloadBody, 'utf8')",
     "to": "const inputBytes = 0"
+  },
+  {
+    "name": "the pruner ignores minScoreThreshold",
+    "file": "src/tool-pruner.ts",
+    "from": "const minScoreThreshold = this.config.minScoreThreshold ?? 2",
+    "to": "const minScoreThreshold = 0"
+  },
+  {
+    "name": "the router ignores minCandidates",
+    "file": "src/skill-router.ts",
+    "from": "const minCandidates = this.config.minCandidates ?? DEFAULT_MIN_CANDIDATES",
+    "to": "const minCandidates = 0"
+  },
+  {
+    "name": "jev_check ignores its threshold argument",
+    "file": "src/ask-tools.ts",
+    "from": "const threshold = typeof args?.threshold === 'number' ? args.threshold : 0.7",
+    "to": "const threshold = 0.7"
+  },
+  {
+    "name": "the panel polls a route that does not exist",
+    "file": "src/client.ts",
+    "from": "return '/api/dsh-jev/stats'",
+    "to": "return '/api/jev/stats'"
+  },
+  {
+    "name": "the panel never refreshes",
+    "file": "src/client.ts",
+    "from": "const timer = setInterval(loadStats, 4000)",
+    "to": "const timer = setInterval(loadStats, 4_000_000)"
+  },
+  {
+    "name": "the resolver stops falling back to the context property",
+    "file": "src/index.ts",
+    "from": "return (viaGet ?? (ctx as any)[name]) as T | undefined",
+    "to": "return viaGet as T | undefined"
+  },
+  {
+    "name": "the stats tool returns a field its schema forbids",
+    "file": "src/index.ts",
+    "from": "              tokensSaved: defaultMetrics.getTotalTokensSaved(),\n            }",
+    "to": "              tokensSaved: defaultMetrics.getTotalTokensSaved(),\n              bench: readBenchSummary() ?? null,\n            }"
+  },
+  {
+    "name": "decision summaries stop counting actions",
+    "file": "src/decisions.ts",
+    "from": "byModule[module][record.action] = (byModule[module][record.action] ?? 0) + 1",
+    "to": "byModule[module][record.action] = byModule[module][record.action] ?? 0"
+  },
+  {
+    "name": "file contents are inspected as if they were commands",
+    "file": "src/safety-guard.ts",
+    "from": "const DATA_KEYS: string[] = []",
+    "to": "const DATA_KEYS: string[] = ['content', 'text']"
   }
 ]

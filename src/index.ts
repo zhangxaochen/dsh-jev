@@ -30,6 +30,19 @@ export const name = 'dsh-jev'
 export const inject: string[] = []
 
 /**
+ * Resolve a service however the host exposes it.
+ *
+ * `ctx.get(name)` is the Cordis accessor, but it can return undefined for a service the
+ * plugin does not declare in `inject` - and this plugin declares none - while the same
+ * service is reachable as a property. Deciding by which accessor *exists* silently
+ * mounted nothing on such a host; falling back covers both.
+ */
+function resolveService<T>(ctx: CordisContext, name: string): T | undefined {
+  const viaGet = typeof (ctx as any).get === 'function' ? (ctx as any).get(name) : undefined
+  return (viaGet ?? (ctx as any)[name]) as T | undefined
+}
+
+/**
  * Mount the full TypeSafe plugin suite onto a Cordis context.
  */
 export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
@@ -88,7 +101,7 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
   let toolsRegistered = false
   const registerTools = (targetCtx: CordisContext) => {
     if (toolsRegistered) return
-    const toolsService = typeof targetCtx.get === 'function' ? targetCtx.get('tools') : (targetCtx as any).tools
+    const toolsService = resolveService<any>(targetCtx, 'tools')
     if (toolsService && typeof toolsService.register === 'function') {
       try {
         const toolDisposer = toolsService.register({
@@ -128,9 +141,11 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
             }
             const bench = readBenchSummary()
             return {
+              // The bench line is already part of the markdown, and the declared schema
+              // forbids additional properties: returning it as a field of its own made
+              // every call fail output validation on a host that enforces the schema.
               markdown: defaultMetrics.renderMarkdownDashboard() + '\n> ' + renderBenchLine(bench),
               tokensSaved: defaultMetrics.getTotalTokensSaved(),
-              bench: bench ?? null,
             }
           },
           presentCall: () => ({
@@ -154,7 +169,7 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
   let connectionRegistered = false
   const registerConnection = (targetCtx: CordisContext) => {
     if (connectionRegistered) return
-    const connection = typeof targetCtx.get === 'function' ? targetCtx.get('connection') : (targetCtx as any).connection
+    const connection = resolveService<any>(targetCtx, 'connection')
     if (connection?.fetch && typeof connection.fetch.register === 'function') {
       try {
         const apiDisposer = connection.fetch.register({
@@ -192,7 +207,7 @@ export function apply(ctx: CordisContext, config: TypeSafeSuiteConfig = {}) {
   let webServerRegistered = false
   const registerWebServer = (targetCtx: CordisContext) => {
     if (webServerRegistered) return
-    const webServer = typeof targetCtx.get === 'function' ? targetCtx.get('webServer') : (targetCtx as any).webServer
+    const webServer = resolveService<any>(targetCtx, 'webServer')
     if (webServer && typeof webServer.register === 'function') {
       try {
         const routeDisposer = webServer.register({
