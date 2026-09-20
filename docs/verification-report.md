@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 CHANGELOG） |
-| 离线单测 | **213/213**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 离线单测 | **214/214**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -50,13 +50,13 @@
 | 随包补丁与代码默认一致 | 单测（`tests/packaging.spec.ts`） | 补丁钉住的每个标量等于代码默认；未登记的钉住项即失败；实验性 shaper 不得出现在补丁里 |
 | 代码接受的配置项都有文档 | 单测（`tests/docs-consistency.spec.ts`） | 7 个 `*Config` 接口 53 个字段全部在 `docs/configuration.md` 有说明（曾漏 `headless` 等 5 项） |
 | 破坏性变更在变更日志里有公告 | 单测（`tests/docs-consistency.spec.ts`） | 三处破坏性变更均在 CHANGELOG（README 只链接，不再重复） |
-| 前端入口只讲装与用，参考手册不许漂移 | 单测（`tests/readme.spec.ts`） | 两份文档的代码围栏必须闭合（曾有一个未闭合的 ts 围栏吞掉其后约 200 行）；`dsh-jev/*` 导入必须都是清单导出；不得把浏览器面板当插件挂载；覆盖说明必须指向安装副本而非文档副本 |
+| 前端入口只讲装与用，参考手册不许漂移 | 单测（`tests/readme.spec.ts`） | 四份前端文档的代码围栏必须闭合（曾有一个未闭合的 ts 围栏吞掉其后约 200 行）；`dsh-jev/*` 导入必须都是清单导出；不得把浏览器面板当插件挂载；覆盖说明必须指向安装副本而非文档副本；中英两份 README 必须在开头互链且用绝对地址（相对链接在 npm 页面上会失效） |
 | 宿主契约仍成立 | 单测（`tests/dsh-contract.spec.ts`，无 DSH 时跳过） | 内置包已安装、阈值仍为 `[3,5,8]`、`engines.dsh` 满足、钩子实参形态未变、补丁整行替换语义未变 |
 | 发布只可能来自版本 tag | 单测（`tests/release.spec.ts`）+ `release.yml` | 分支推送无法触发；tag 必须等于 `package.json` 版本且 CHANGELOG 有该小节，先跑完整 CI 闸门再 `npm publish --provenance`；release notes 由 `scripts/release-notes.mjs` 从 CHANGELOG 同名小节切出（单测覆盖空小节与缺失版本两条失败路径） |
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **213 = 套件总数**（无用例在聚合运行中消失） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **214 = 套件总数**（无用例在聚合运行中消失） |
 
 ## 抓到的真实缺陷（按严重度）
 

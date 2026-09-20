@@ -7,9 +7,10 @@
  * gate on file writes - and the missing fence turned every later section into a single
  * TypeScript code block. Neither is visible in review, and both are cheap to check.
  *
- * The same checks run over docs/configuration.md, which now owns the reference
- * material the README used to inline: splitting the front door from the manual must
- * not move anything outside the guards.
+ * The same checks run over the other front-door documents: README.zh-CN.md (the Chinese
+ * translation) and docs/configuration.md, which owns the reference material the README
+ * used to inline. Splitting the front door from the manual must not move anything
+ * outside the guards.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -20,10 +21,12 @@ import { DEFAULT_GUARDED_TOOLS } from '../lib/safety-guard.js'
 const ROOT = process.cwd()
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 
-const DOCS = ['README.md', 'docs/configuration.md'].map((name) => ({
-  name,
-  text: readFileSync(join(ROOT, ...name.split('/')), 'utf8'),
-}))
+const DOCS = ['README.md', 'README.zh-CN.md', 'docs/configuration.md', 'docs/releasing.md'].map(
+  (name) => ({
+    name,
+    text: readFileSync(join(ROOT, ...name.split('/')), 'utf8'),
+  })
+)
 const COMBINED = DOCS.map((doc) => doc.text).join('\n')
 
 // One test over both documents: a `test()` inside a loop would count as two, and the
@@ -55,6 +58,31 @@ test('every code fence in the docs is closed', () => {
     assert.deepEqual(problems, [], doc.name + ' has a fence line that is both closing and annotated')
     assert.equal(open, false, doc.name + ' ends inside a code fence')
     assert.ok(opened >= 1, doc.name + ' lost its examples, saw ' + opened + ' block(s)')
+  }
+})
+
+test('the two readmes offer a language switch at the top', () => {
+  // A translation nobody can find is a dead document. npm renders README.md as the
+  // package page, so the switch has to sit above the fold and use an absolute URL:
+  // a relative link resolves against npmjs.com there.
+  const pairs = [
+    ['README.md', 'README.zh-CN.md'],
+    ['README.zh-CN.md', 'README.md'],
+  ] as const
+
+  for (const [name, counterpart] of pairs) {
+    const doc = DOCS.find((entry) => entry.name === name)
+    assert.ok(doc, name + ' is missing from the guarded documents')
+    const head = doc.text.split('\n').slice(0, 10).join('\n')
+    assert.ok(
+      head.includes(counterpart),
+      name + ' does not link to ' + counterpart + ' in its first lines'
+    )
+    assert.match(
+      head,
+      /https:\/\/github\.com\/zhangxaochen\/dsh-jev\/blob\/master\//,
+      name + ' switches languages through a relative link, which breaks on npm'
+    )
   }
 })
 
