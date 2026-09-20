@@ -132,6 +132,7 @@ Issues and PRs are welcome. A change has to satisfy:
 - `pnpm test` green, including `verify:solo`'s order-independence check and `verify:mutants`' mutation scan.
 - Behaviour changes also update [`CHANGELOG.md`](CHANGELOG.md); a new gate also updates the evidence table in [`docs/verification-report.md`](docs/verification-report.md) (that table must name every `verify:*` script, and a test enforces it).
 - Adding or removing a config field also updates [`docs/configuration.md`](docs/configuration.md) (field coverage is test-enforced too).
+- Does Jev actually help? The A/B pilot on 20 real tasks, with repro tooling and per-run evidence: [`docs/pier-ab-report.md`](docs/pier-ab-report.md) (English) · [中文](docs/pier-ab-report.zh-CN.md).
 - Releasing is one tag push; the process and the one-time npm setup are in [`docs/releasing.md`](docs/releasing.md).
 
 Maintainer: [@zhangxaochen](https://github.com/zhangxaochen)

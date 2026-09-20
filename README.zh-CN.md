@@ -131,6 +131,7 @@ Issue 与 PR 都欢迎。改动要满足：
 - `pnpm test` 全绿（含 `verify:solo` 的顺序无关检查与 `verify:mutants` 的变异扫描）。
 - 行为变更同步 [`CHANGELOG.md`](CHANGELOG.md)；新增闸门同步 [`docs/verification-report.md`](docs/verification-report.md) 的证据表（证据表必须列出每个 `verify:*` 脚本，有测试守着）。
 - 配置字段增删时 [`docs/configuration.md`](docs/configuration.md) 要同步（字段是否被文档覆盖同样有测试守着）。
+- Jev 到底有没有用？20 个真实任务的 A/B 对照、复现工具与逐次证据：[`docs/pier-ab-report.zh-CN.md`](docs/pier-ab-report.zh-CN.md)（中文）· [English](docs/pier-ab-report.md)。
 - 发版只推一个 tag，流程与一次性 npm 配置见 [`docs/releasing.md`](docs/releasing.md)。
 
 维护者：[@zhangxaochen](https://github.com/zhangxaochen)

