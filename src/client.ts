@@ -611,6 +611,18 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                 { className: 'jev-card-metric' },
                 h('span', { className: 'jev-metric-label' }, '判定不可用 fail-closed'),
                 h('span', { className: 'jev-metric-val' }, `${data?.safetyGuard?.uncertainDenied ?? 0} 次`)
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '判定失败（降级，最近一次）'),
+                h(
+                  'span',
+                  { className: 'jev-metric-val' },
+                  `${data?.safetyGuard?.inspectionFailures ?? 0} 次 · ${
+                    (data?.safetyGuard?.lastInspectionFailureAt ?? '').replace('T', ' ').slice(0, 19) || '从未'
+                  }`
+                )
               )
             ),
 

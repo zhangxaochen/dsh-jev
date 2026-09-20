@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 CHANGELOG） |
-| 离线单测 | **215/215**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 离线单测 | **216/216**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -56,7 +56,8 @@
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **215 = 套件总数**（无用例在聚合运行中消失） |
+| 判定失败的降级是可测且可见的 | 单测（`tests/resilience.spec.ts`、`tests/metrics.spec.ts`） | 失败写决策记录（带 `ts`、失败策略、工具名与脱敏 `commandPreview`）；指标带 `lastInspectionFailureAt` 且能跨重启存活（字符串默认，`null` 默认会被类型检查丢掉）；看板与面板显示失败率与最近一次失败时间 |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **216 = 套件总数**（无用例在聚合运行中消失） |
 | 看板与门面的成本口径来自实测 | 单测（`tests/metrics.spec.ts`、`tests/metrics-surface.spec.ts`） | 每次判定成本由 counters **现场派生**（派生值不落盘：持久化会随计数漂移，而 `normalizeMetrics` 的类型检查挡不住漂移）；看板有该行、面板读取三个派生字段、两份 README 门面写的是**带日期的实测数字** |
 
 ## 抓到的真实缺陷（按严重度）

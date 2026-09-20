@@ -41,6 +41,15 @@ export interface JevMetricsData {
         inspectionRetries: number;
         /** Inspections that failed after their retries, so the failure policy applied. */
         inspectionFailures: number;
+        /**
+         * When the last inspection failed (ISO), or `''` when none ever has.
+         *
+         * The counter alone cannot separate a single flake from an upstream outage; the
+         * timestamp is what makes "is the guard degraded right now" answerable. Defaulted
+         * to a string rather than null so `normalizeMetrics` keeps a stored value - its
+         * type check would drop a string sitting under a null default.
+         */
+        lastInspectionFailureAt: string;
     };
     resultShaper: {
         shaped: number;

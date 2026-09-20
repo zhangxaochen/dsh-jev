@@ -294,7 +294,7 @@ test('the delivery summary counts each module as it stands', () => {
   // Each module maps to the specs that cover it; the client's failure behaviour is
   // asserted in the resilience spec, so those tests belong to it.
   const MODULES: Array<[string, string[], number]> = [
-    ['typesafe-client', ['client.spec.ts', 'resilience.spec.ts'], 15],
+    ['typesafe-client', ['client.spec.ts', 'resilience.spec.ts'], 16],
     ['loop-guard', ['loop-guard.spec.ts'], 16],
     ['safety-guard', ['safety-guard.spec.ts'], 18],
     ['tool-pruner', ['tool-pruner.spec.ts'], 10],

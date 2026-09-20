@@ -780,6 +780,22 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
         return next()
       } catch (err) {
         defaultMetrics.recordSafetyInspectionFailure()
+        /**
+         * A failed inspection is a decision too, and the one an operator most needs to
+         * date: without the timestamp there is no way to tell a single flake from an
+         * upstream outage, so the failure policy can never be revisited from data. The
+         * preview goes through the same redaction as the `warn` path.
+         */
+        defaultDecisionLog.append({
+          module: 'safety-guard',
+          action: 'inspection-failure',
+          detail: {
+            policy: onError,
+            reason: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+            tool: exec.name,
+            commandPreview: commandPreview(exec.arguments ?? exec.args),
+          },
+        })
         console.warn('[TypeSafe SafetyGuard] Inspection failed, applying', onError, 'policy:', err)
         return failPolicy(
           onError,

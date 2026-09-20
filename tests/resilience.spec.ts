@@ -1,9 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { apply as applyLoopGuard } from '../lib/loop-guard.js'
 import { apply as applySafetyGuard } from '../lib/safety-guard.js'
 import { ToolPrunerService } from '../lib/tool-pruner.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
+import { defaultMetrics } from '../lib/metrics.js'
+import { DECISIONS_PATH_ENV } from '../lib/decisions.js'
 import type { CordisContext, ToolExecution, ToolDefinitionMinimal } from '../lib/types.js'
 
 function failingClient(message: string): TypeSafeClient {
@@ -87,6 +90,46 @@ test('Resilience: the deterministic envelope denies regardless of the failure po
     assert.equal(result.kind, 'deny', 'the envelope denies under onError=' + onError)
     assert.equal(nextCalled, false)
   }
+})
+
+test('Resilience: a failed inspection is dated and recorded as a decision', async () => {
+  // The counter alone cannot separate a single flake from an upstream outage, so the
+  // failure policy can never be revisited from data. The record dates the failure; the
+  // metrics carry the time the dashboard shows; the preview is redacted like the warn path.
+  const before = defaultMetrics.getSnapshot().safetyGuard.inspectionFailures
+  const invoke = guardHarness(failingClient('TypeSafe API request failed with status 429: Too Many Requests'), {
+    guardedTools: ['bash'],
+    onError: 'allow',
+  })
+  const { result, nextCalled } = await invoke({
+    name: 'bash',
+    args: { command: 'echo "API_KEY=sk-abcdefghijklmnop1234" >> notes.md' },
+  })
+
+  assert.equal(nextCalled, true, 'the default policy lets the call through')
+  assert.equal(result.kind, 'allow')
+
+  const safety = defaultMetrics.getSnapshot().safetyGuard
+  assert.equal(safety.inspectionFailures, before + 1)
+  assert.ok(safety.lastInspectionFailureAt, 'a failed inspection must carry a timestamp')
+  assert.ok(!Number.isNaN(Date.parse(safety.lastInspectionFailureAt)), 'and it must be a date')
+
+  const logPath = process.env[DECISIONS_PATH_ENV]
+  assert.ok(logPath, 'the tests must redirect the decision log')
+  const records = readFileSync(logPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+  const record = [...records].reverse().find((entry) => entry.action === 'inspection-failure')
+  assert.ok(record, 'a failed inspection must be recorded as a decision')
+  assert.ok(record.ts, 'the record must be timestamped')
+  assert.equal(record.detail.policy, 'allow')
+  assert.equal(record.detail.tool, 'bash')
+  assert.ok(typeof record.detail.commandPreview === 'string', 'the record must carry a command preview')
+  assert.ok(
+    !record.detail.commandPreview.includes('sk-abcdefghijklmnop1234'),
+    'the preview must not carry the credential: ' + record.detail.commandPreview
+  )
 })
 
 test('Resilience: LoopGuard stays advisory and never blocks on timeout', async () => {

@@ -46,6 +46,15 @@ export interface JevMetricsData {
     inspectionRetries: number
     /** Inspections that failed after their retries, so the failure policy applied. */
     inspectionFailures: number
+    /**
+     * When the last inspection failed (ISO), or `''` when none ever has.
+     *
+     * The counter alone cannot separate a single flake from an upstream outage; the
+     * timestamp is what makes "is the guard degraded right now" answerable. Defaulted
+     * to a string rather than null so `normalizeMetrics` keeps a stored value - its
+     * type check would drop a string sitting under a null default.
+     */
+    lastInspectionFailureAt: string
   }
   resultShaper: {
     shaped: number
@@ -133,6 +142,7 @@ function createEmptyMetrics(): JevMetricsData {
       uncertainDenied: 0,
       inspectionRetries: 0,
       inspectionFailures: 0,
+      lastInspectionFailureAt: '',
     },
     resultShaper: {
       shaped: 0,
@@ -350,6 +360,7 @@ export class MetricsCollector {
   /** Record an inspection that failed after its retries, so the failure policy applied. */
   recordSafetyInspectionFailure(): void {
     this.state().safetyGuard.inspectionFailures += 1
+    this.state().safetyGuard.lastInspectionFailureAt = new Date().toISOString()
     this.persist()
   }
 
@@ -425,6 +436,11 @@ export class MetricsCollector {
   renderMarkdownDashboard(): string {
     const totalTokens = this.getTotalTokensSaved()
     const derived = this.getSnapshot().systemOne
+    const safety = this.state().safetyGuard
+    const failureRate = safety.screened > 0 ? (safety.inspectionFailures / safety.screened) * 100 : 0
+    const lastFailure = safety.lastInspectionFailureAt
+      ? safety.lastInspectionFailureAt.replace('T', ' ').slice(0, 19)
+      : '从未'
     const formattedTokens = totalTokens >= 1_000_000
       ? `${(totalTokens / 1_000_000).toFixed(2)}M`
       : totalTokens >= 1_000
@@ -443,6 +459,7 @@ export class MetricsCollector {
       `| **⚡ System One 响应** | 累计决策 **${this.state().systemOne.totalCalls}** 次（缓存命中 **${this.state().systemOne.cacheHits}**），平均延迟 **${this.state().systemOne.avgLatencyMs}ms**，错误 **${this.state().systemOne.errors}** | 输入 **${(this.state().systemOne.inputBytes / 1024).toFixed(1)}KB**，按 $0.042/M 输入计约 **$${this.state().systemOne.estimatedCostUsd.toFixed(4)}**（输出免费） |`,
       ``,
       `| **💰 每次判定成本** | 累计 **$${derived.costPerDecisionUsd.toFixed(6)}** / 次；只看计费调用为 **$${derived.costPerBilledCallUsd.toFixed(6)}** / 次 | 相同载荷缓存命中率 **${(derived.cacheHitRate * 100).toFixed(0)}%**；按 $0.042/M 输入计，输出免费 |`,
+      `| **🩺 判定可达性（降级可见）** | 审查 **${safety.screened}** 次中，判定**失败** **${safety.inspectionFailures}** 次（**${failureRate.toFixed(0)}%**） | 最近一次失败：**${lastFailure}**；失败时按 \`onError\` 处理，确定性外壳不受影响 |`,
       `> 💡 **累计可测收益**：工具 Schema 精确移除 **${this.state().toolPruner.removedSchemaChars}** 字符，折算 **~${formattedTokens}** Tokens；死循环与安全拦截只报计数，不做不可测的 token 折算。`,
       `> ⏱️ 统计起始自：\`${this.state().firstRecordedAt.replace('T', ' ').slice(0, 19)}\`（最新更新：\`${this.state().lastUpdatedAt.replace('T', ' ').slice(0, 19)}\`）`,
     ].join('\n')

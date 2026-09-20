@@ -517,6 +517,11 @@ test('a field added in a later build is backfilled from a file written before it
     assert.equal(loaded.safetyGuard.blocked, 1)
     assert.equal(loaded.safetyGuard.inspectionRetries, 0, 'the new field is backfilled rather than undefined')
     assert.equal(loaded.safetyGuard.inspectionFailures, 0)
+    assert.equal(
+      loaded.safetyGuard.lastInspectionFailureAt,
+      '',
+      'a file that predates the failure timestamp backfills to "never"'
+    )
     assert.equal(loaded.systemOne.totalCalls, 0, 'a section the file omits comes from the defaults')
     assert.equal(loaded.version, 2, 'and the schema version is kept')
 
@@ -524,6 +529,12 @@ test('a field added in a later build is backfilled from a file written before it
     assert.equal(collector.getSnapshot().safetyGuard.inspectionRetries, 1, 'and increments instead of becoming NaN')
     collector.recordSafetyInspectionFailure()
     assert.equal(collector.getSnapshot().safetyGuard.inspectionFailures, 1)
+
+    // The timestamp is a measured fact, so it must survive the merge - which is why its
+    // default is a string rather than null: a null default drops a stored string.
+    const stamped = new MetricsCollector(file).getSnapshot().safetyGuard.lastInspectionFailureAt
+    assert.ok(stamped.length > 0, 'the failure timestamp must survive a reload')
+    assert.ok(!Number.isNaN(Date.parse(stamped)), 'and it must be a date: ' + stamped)
   } finally {
     rmSync(file, { force: true })
   }
