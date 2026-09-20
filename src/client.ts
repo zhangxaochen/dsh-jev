@@ -661,6 +661,16 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                   { className: 'jev-metric-val' },
                   `${(((data?.systemOne?.inputBytes ?? 0) / 1024)).toFixed(1)}KB / $${(data?.systemOne?.estimatedCostUsd ?? 0).toFixed(4)}`
                 )
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '每次判定成本（缓存命中后）'),
+                h(
+                  'span',
+                  { className: 'jev-metric-val' },
+                  `$${(data?.systemOne?.costPerDecisionUsd ?? 0).toFixed(6)} / $${(data?.systemOne?.costPerBilledCallUsd ?? 0).toFixed(6)} · ${((data?.systemOne?.cacheHitRate ?? 0) * 100).toFixed(0)}%`
+                )
               )
             )
           ),

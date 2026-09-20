@@ -7,7 +7,7 @@
 
 The Cordis plugin suite that pairs [Jev](https://typesafe.ai) (TypeSafe's System One decision models) with [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh).
 
-It adds the layer of semantic judgement dsh does not have: non-generative decision primitives (Noul, Choice, Score) at ~150 ms, used for **dynamic tool pruning** (fewer prompt tokens, lower time to first token), **semantic dead-loop blocking**, and a **guard for high-risk execution**. The verdicts come from System One rather than sampling, so they are fast, reproducible, and effectively free.
+It adds the layer of semantic judgement dsh does not have: non-generative decision primitives (Noul, Choice, Score) at ~150 ms, used for **dynamic tool pruning** (fewer prompt tokens, lower time to first token), **semantic dead-loop blocking**, and a **guard for high-risk execution**. The verdicts come from System One rather than sampling, so they are fast and reproducible, and one decision costs about **$0.00013** — measured on 2026-09-20 over 2,254 decisions (12.4 KiB of input each, billed at $0.042 per million input tokens; output is free).
 
 ## Contents
 

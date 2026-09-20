@@ -71,6 +71,11 @@ test('MetricsCollector records measured pruning, loop, safety and call facts', (
   assert.equal(snap.systemOne.inputBytes, 1200)
   assert.ok(Math.abs(snap.systemOne.estimatedCostUsd - 0.0000126) < 1e-9)
 
+  // Derived on read: what one decision costs, and what the cache buys.
+  assert.ok(Math.abs(snap.systemOne.costPerDecisionUsd - 0.0000126 / 4) < 1e-12)
+  assert.ok(Math.abs(snap.systemOne.costPerBilledCallUsd - 0.0000126 / 3) < 1e-12)
+  assert.equal(snap.systemOne.cacheHitRate, 0.25)
+
   collector.recordDecisionError()
   snap = collector.getSnapshot()
   assert.equal(snap.systemOne.decisionErrors, 1)
@@ -81,6 +86,13 @@ test('MetricsCollector records measured pruning, loop, safety and call facts', (
   assert.ok(existsSync(testFile))
   const reloaded = new MetricsCollector(testFile)
   assert.deepEqual(reloaded.getSnapshot(), snap)
+
+  // A derived value must not be parked in the file: it would go stale the moment a
+  // counter moved, and normalization keeps a stale number whose type still fits.
+  assert.ok(
+    !readFileSync(testFile, 'utf8').includes('costPerDecisionUsd'),
+    'derived cost facts must be computed on read, not persisted'
+  )
 
   const md = collector.renderMarkdownDashboard()
   assert.ok(md.includes('TypeSafe Jev 守护与收益看板'))

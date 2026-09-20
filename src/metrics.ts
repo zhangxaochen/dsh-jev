@@ -79,6 +79,24 @@ export interface CallAccounting {
 }
 
 /**
+ * A snapshot plus the facts derived from it: what one decision costs.
+ *
+ * Derived on read and deliberately never persisted - a stored copy would go stale
+ * the moment a counter moved, and `normalizeMetrics` would keep the stale number
+ * because its type still matches the default.
+ */
+export interface JevMetricsSnapshot extends JevMetricsData {
+  systemOne: JevMetricsData['systemOne'] & {
+    /** Cost per recorded decision, counting cache hits and failed calls. */
+    costPerDecisionUsd: number
+    /** Cost per call that actually billed input (a cache hit bills nothing). */
+    costPerBilledCallUsd: number
+    /** Share of decisions answered from the identical-payload cache. */
+    cacheHitRate: number
+  }
+}
+
+/**
  * Fallback characters-per-token used only when no token estimator is available.
  * The previous build multiplied a flat 150 tokens per pruned tool and claimed
  * 15000 tokens saved per interrupted loop; neither was measured, so both are gone.
@@ -376,10 +394,20 @@ export class MetricsCollector {
   }
 
   /**
-   * Return an immutable snapshot of current metrics.
+   * Return an immutable snapshot of current metrics, plus the derived cost facts.
+   *
+   * The derived numbers answer the two questions a reader actually asks - what does
+   * one decision cost, and what does a cache hit buy - and they are computed here so
+   * they can never disagree with the counters they are computed from.
    */
-  getSnapshot(): JevMetricsData {
-    return JSON.parse(JSON.stringify(this.state()))
+  getSnapshot(): JevMetricsSnapshot {
+    const snapshot = JSON.parse(JSON.stringify(this.state())) as JevMetricsSnapshot
+    const calls = Math.max(1, snapshot.systemOne.totalCalls)
+    const billed = Math.max(1, snapshot.systemOne.totalCalls - snapshot.systemOne.cacheHits)
+    snapshot.systemOne.costPerDecisionUsd = snapshot.systemOne.estimatedCostUsd / calls
+    snapshot.systemOne.costPerBilledCallUsd = snapshot.systemOne.estimatedCostUsd / billed
+    snapshot.systemOne.cacheHitRate = snapshot.systemOne.cacheHits / calls
+    return snapshot
   }
 
   /**
@@ -396,6 +424,7 @@ export class MetricsCollector {
    */
   renderMarkdownDashboard(): string {
     const totalTokens = this.getTotalTokensSaved()
+    const derived = this.getSnapshot().systemOne
     const formattedTokens = totalTokens >= 1_000_000
       ? `${(totalTokens / 1_000_000).toFixed(2)}M`
       : totalTokens >= 1_000
@@ -413,6 +442,7 @@ export class MetricsCollector {
       `| **🧩 语义结果整形** | 整形 **${this.state().resultShaper.shaped}** 次，精确移除 **${this.state().resultShaper.charsRemoved}** 字符 | 默认关闭；仅对输出密集型工具的重复内容生效，不可用时原样返回 |`,
       `| **⚡ System One 响应** | 累计决策 **${this.state().systemOne.totalCalls}** 次（缓存命中 **${this.state().systemOne.cacheHits}**），平均延迟 **${this.state().systemOne.avgLatencyMs}ms**，错误 **${this.state().systemOne.errors}** | 输入 **${(this.state().systemOne.inputBytes / 1024).toFixed(1)}KB**，按 $0.042/M 输入计约 **$${this.state().systemOne.estimatedCostUsd.toFixed(4)}**（输出免费） |`,
       ``,
+      `| **💰 每次判定成本** | 累计 **$${derived.costPerDecisionUsd.toFixed(6)}** / 次；只看计费调用为 **$${derived.costPerBilledCallUsd.toFixed(6)}** / 次 | 相同载荷缓存命中率 **${(derived.cacheHitRate * 100).toFixed(0)}%**；按 $0.042/M 输入计，输出免费 |`,
       `> 💡 **累计可测收益**：工具 Schema 精确移除 **${this.state().toolPruner.removedSchemaChars}** 字符，折算 **~${formattedTokens}** Tokens；死循环与安全拦截只报计数，不做不可测的 token 折算。`,
       `> ⏱️ 统计起始自：\`${this.state().firstRecordedAt.replace('T', ' ').slice(0, 19)}\`（最新更新：\`${this.state().lastUpdatedAt.replace('T', ' ').slice(0, 19)}\`）`,
     ].join('\n')

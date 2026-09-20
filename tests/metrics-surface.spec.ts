@@ -84,3 +84,26 @@ test('the markdown dashboard reports every measured section', () => {
   assert.match(markdown, /整形 \*\*1\*\* 次，精确移除 \*\*500\*\* 字符/)
   assert.match(markdown, /累计可测收益/)
 })
+
+test('the per-decision cost is derived, reported and read by the panel', () => {
+  // The number a reader actually asks for ("what does this cost me?") was the one
+  // fact with no surface: the totals were there, the unit price was not.
+  const collector = new MetricsCollector(freshMetricsPath())
+  collector.recordCall(120, true, { inputBytes: 400_000, estimatedCostUsd: 0.0042 })
+  collector.recordCall(0, true, { cacheHit: true })
+
+  const snapshot = collector.getSnapshot()
+  assert.ok(Math.abs(snapshot.systemOne.costPerDecisionUsd - 0.0021) < 1e-9)
+  assert.ok(Math.abs(snapshot.systemOne.costPerBilledCallUsd - 0.0042) < 1e-9)
+  assert.equal(snapshot.systemOne.cacheHitRate, 0.5)
+
+  const markdown = collector.renderMarkdownDashboard()
+  assert.ok(markdown.includes('每次判定成本'), 'the dashboard has no per-decision cost row')
+  assert.match(markdown, /\$0\.002100/, 'the row does not report the derived unit price')
+  assert.match(markdown, /缓存命中率 \*\*50%\*\*/, 'the row does not report the cache-hit share')
+
+  // And the panel must read them: a derived field nobody reads shows as 0.
+  for (const field of ['costPerDecisionUsd', 'costPerBilledCallUsd', 'cacheHitRate']) {
+    assert.ok(readPaths().has('systemOne.' + field), 'the panel does not read systemOne.' + field)
+  }
+})

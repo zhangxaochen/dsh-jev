@@ -11,14 +11,14 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 CHANGELOG） |
-| 离线单测 | **214/214**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 离线单测 | **215/215**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` 6 PASS + **1 条已记录跨语言漏报** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
 | 构建产物一致 | `pnpm run verify:build` → `ok`（`lib/` 入库，单测导入的是它） |
 | 宿主验收 | `pnpm run verify:host` → **exit 0、7/7 全部 `ok`**（2026-09-19 01:27 重启后实测：宿主已加载本次构建、实测文件 v2、v2 各段齐全、密钥可解析、数字晚于构建） |
 | A/B 基准 | 36 条样本（loop/safety/shaper/pruner/router）、准确率 **94.4%**、**误报 0**、2 条已记录漏报；离线回放带输入指纹校验（`pnpm run bench:offline` 零成本复现） |
-| 干净 clone 复现 | **CI 的全部 8 个步骤**在同一工作区连续通过：`install --frozen-lockfile` → `build` → `verify:build` → `typecheck:scripts` → 单测 **149 通过 + 6 跳过**（无 DSH）→ `bench:offline` → `verify:pack` → `verify:dsh`（正确 SKIP）；全程后 `lib/` **零漂移** |
+| 干净 clone 复现 | **CI 的全部 8 个步骤**在同一工作区连续通过：`install --frozen-lockfile` → `build` → `verify:build` → `typecheck:scripts` → 单测（无 DSH 时部分跳过）→ `bench:offline` → `verify:pack` → `verify:dsh`（正确 SKIP）；全程后 `lib/` **零漂移**（用例数不复述：见上面 `pnpm test` 的口径） |
 | 布局状态 | `doctor` 报告 `ACTION: restart DSH`（文件已同步，宿主进程未重载） |
 
 ## 已验证的承诺
@@ -56,7 +56,8 @@
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **214 = 套件总数**（无用例在聚合运行中消失） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **215 = 套件总数**（无用例在聚合运行中消失） |
+| 看板与门面的成本口径来自实测 | 单测（`tests/metrics.spec.ts`、`tests/metrics-surface.spec.ts`） | 每次判定成本由 counters **现场派生**（派生值不落盘：持久化会随计数漂移，而 `normalizeMetrics` 的类型检查挡不住漂移）；看板有该行、面板读取三个派生字段、两份 README 门面写的是**带日期的实测数字** |
 
 ## 抓到的真实缺陷（按严重度）
 

@@ -3,6 +3,13 @@
 本文件记录 dsh-jev 的行为变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- **社区扫描入库**：`docs/community-scan-2026-09-19.md`（带日期的快照），`docs/research.md` 补齐三行"确实借鉴"的对照，并把 5 项主动不做的实践连同**重开条件**写入未采纳表——"未采纳"与"没想到"在文档里不再长得一样。
+- **每次判定成本口径**：看板新增一行（累计 `$`/次、只看计费调用的 `$`/次、缓存命中率），`getSnapshot()` 派生 `costPerDecisionUsd` / `costPerBilledCallUsd` / `cacheHitRate`——**只在读取时计算、不落盘**（持久化的派生值会随计数漂移，而 `normalizeMetrics` 的类型检查挡不住漂移）；README 门面把 "effectively free" 换成实测数字（每次判定 ≈ $0.00013，2026-09-20 实测 2,254 次判定）。
+
 ## [0.2.0] - 2026-09-18
 
 第一个经过标定的版本。0.1.0 的阈值是猜测值，且部分失败模式与宣称相反。

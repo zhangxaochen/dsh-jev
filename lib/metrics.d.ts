@@ -72,6 +72,23 @@ export interface CallAccounting {
     decisionError?: boolean;
 }
 /**
+ * A snapshot plus the facts derived from it: what one decision costs.
+ *
+ * Derived on read and deliberately never persisted - a stored copy would go stale
+ * the moment a counter moved, and `normalizeMetrics` would keep the stale number
+ * because its type still matches the default.
+ */
+export interface JevMetricsSnapshot extends JevMetricsData {
+    systemOne: JevMetricsData['systemOne'] & {
+        /** Cost per recorded decision, counting cache hits and failed calls. */
+        costPerDecisionUsd: number;
+        /** Cost per call that actually billed input (a cache hit bills nothing). */
+        costPerBilledCallUsd: number;
+        /** Share of decisions answered from the identical-payload cache. */
+        cacheHitRate: number;
+    };
+}
+/**
  * Fallback characters-per-token used only when no token estimator is available.
  * The previous build multiplied a flat 150 tokens per pruned tool and claimed
  * 15000 tokens saved per interrupted loop; neither was measured, so both are gone.
@@ -153,9 +170,13 @@ export declare class MetricsCollector {
     /** Record a decision whose answer was unusable (missing or malformed). */
     recordDecisionError(): void;
     /**
-     * Return an immutable snapshot of current metrics.
+     * Return an immutable snapshot of current metrics, plus the derived cost facts.
+     *
+     * The derived numbers answer the two questions a reader actually asks - what does
+     * one decision cost, and what does a cache hit buy - and they are computed here so
+     * they can never disagree with the counters they are computed from.
      */
-    getSnapshot(): JevMetricsData;
+    getSnapshot(): JevMetricsSnapshot;
     /**
      * Tokens saved, measured only where measurement exists: the removed tool
      * schemas. Loop notices prevent work but their avoided cost is not measurable,

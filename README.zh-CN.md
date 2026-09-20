@@ -7,7 +7,7 @@
 
 Jev（TypeSafe System One 决策模型）与 [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) 的官方 Cordis 插件组合包。
 
-它补上 dsh 自己没有的那一层语义判断：引入 ~150ms 极低延迟的非生成式决策原语（Noul、Choice、Score），做**动态工具剪枝**（省 Prompt Token、降首字延迟）、**语义死循环阻断**与**高危执行安全门禁**。判定走 System One 而非生成式采样，所以快、可复现、几乎不花钱。
+它补上 dsh 自己没有的那一层语义判断：引入 ~150ms 极低延迟的非生成式决策原语（Noul、Choice、Score），做**动态工具剪枝**（省 Prompt Token、降首字延迟）、**语义死循环阻断**与**高危执行安全门禁**。判定走 System One 而非生成式采样，所以快、可复现，且成本可忽略：**每次判定 ≈ $0.00013**（2026-09-20 实测 2,254 次判决，每次输入 12.4KiB，按 $0.042/M 输入 token 计费、输出免费）。
 
 ## 目录
 
