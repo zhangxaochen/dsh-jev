@@ -44,10 +44,10 @@ semantic overhead this turn: 3704ms
 **要求**：Node `^22.19.0 || >=24.0.0`；DSH `>=0.1.5-rc.2`。插件挂载 `tools.guard()`、`tools/pre-execute`、`tools/post-execute`、`system-prompt/assemble`、`agent/pre-step`，并按需读取 `tokenMeter` / `skills` / `toolResultPruner` 服务——缺失时按降级路径工作。
 
 ```bash
-# 从 GitHub 直装（免发包，即装即用）
+# 从 GitHub 直装（免发包，即装即用，拿到的就是当前代码）
 dsh plugin --profile <profile_name> add github:zhangxaochen/dsh-jev
 
-# 或发布至 npm 后；也适用于 headless / web 等具体 profile
+# npm 上目前只发到 0.1.0（缺 0.2.0 的文件写入门禁），等 0.2.0 发布后再走这条
 dsh plugin --profile headless add dsh-jev
 ```
 
@@ -128,6 +128,18 @@ Issue 与 PR 都欢迎。改动要满足：
 - `pnpm test` 全绿（含 `verify:solo` 的顺序无关检查与 `verify:mutants` 的变异扫描）。
 - 行为变更同步 [`CHANGELOG.md`](CHANGELOG.md)；新增闸门同步 [`docs/verification-report.md`](docs/verification-report.md) 的证据表（证据表必须列出每个 `verify:*` 脚本，有测试守着）。
 - 配置字段增删时 [`docs/configuration.md`](docs/configuration.md) 要同步（字段是否被文档覆盖同样有测试守着）。
+
+### 发版
+
+发布是**推 tag 一个动作**：`.github/workflows/release.yml` 监听 `v*` 标签，先断言「tag == `package.json` 版本 == CHANGELOG 有该版本小节」（三者不一致直接失败），再把完整 CI 闸门重跑一遍，然后 `npm publish --provenance` 并用 CHANGELOG 该小节建 GitHub Release。分支推送永远不会触发发布。
+
+```bash
+# 1. 改 package.json 的 version，并在 CHANGELOG 写下 ## [x.y.z] 小节
+# 2. 提交后打 tag 推送
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+一次性配置（仓库侧做不到）：在 npmjs.com 的包设置里把 **Trusted Publisher** 设为 GitHub Actions，填 `zhangxaochen/dsh-jev` + 工作流文件名 `release.yml`（environment 留空）。之后 CI 用 OIDC 取短期凭证发布，不需要 `NPM_TOKEN`。
 
 维护者：[@zhangxaochen](https://github.com/zhangxaochen)
 

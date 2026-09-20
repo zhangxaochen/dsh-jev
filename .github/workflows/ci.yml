@@ -5,6 +5,10 @@ on:
     branches: [master, main]
   pull_request:
   workflow_dispatch:
+  # Release.yml calls this instead of restating the gates: a tag can point at a
+  # commit no branch push ever verified, and the published tarball is the one
+  # artifact that cannot be taken back.
+  workflow_call:
 
 jobs:
   verify:

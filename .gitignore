@@ -7,3 +7,8 @@ dist
 
 # Scratch scripts and one-off measurement harnesses
 tmp/
+
+# Harness artifacts: the agent runtime drops per-run job directories (build contexts,
+# egress proxy configs, result json) into the workspace root. They are not package
+# content and were swept into a commit once by a broad `git add -A`.
+jobs/

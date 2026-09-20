@@ -1,0 +1,79 @@
+name: Release
+
+# Publishing is a tag operation and nothing else: a branch push can never publish,
+# and a tag that disagrees with package.json fails before anything reaches npm.
+on:
+  push:
+    tags: ['v*']
+
+# Read-only here; the publish job widens it for the two things it actually needs.
+permissions:
+  contents: read
+
+jobs:
+  # The tag may point at a commit no branch push verified, so the whole gate runs
+  # again here rather than being assumed.
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # OIDC token for npm trusted publishing (no NPM_TOKEN secret)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1; the CLI bundled with Node is not
+      # guaranteed to be that new.
+      - name: Use an npm that can publish with OIDC
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
+      # Tag, package.json and CHANGELOG are three places holding the same number.
+      # When they disagree the release notes come out empty or the wrong version is
+      # published, and npm does not allow a version to be republished.
+      - name: The tag, the package version and the changelog must agree
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package.json version ${version}" >&2
+            exit 1
+          fi
+          if ! grep -qE "^## \[?${version}\]?" CHANGELOG.md; then
+            echo "CHANGELOG.md has no section for ${version}" >&2
+            exit 1
+          fi
+          echo "releasing ${version}"
+
+      # node_modules is not needed: lib/ is committed and `files` decides the
+      # tarball, which tests/packaging.spec.ts already pins.
+      - name: Pack the tarball that will be published
+        run: pnpm pack --pack-destination dist
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+
+      - name: Attach the changelog section as the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          node scripts/release-notes.mjs "$version" > RELEASE_NOTES.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_NOTES.md \
+            dist/*.tgz
