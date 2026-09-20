@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+- **修复 `drill` 的两条失效变异锚点**：自 `585e6cc`（README 拆分，配置参考搬进 `docs/configuration.md`）起，"文档默认值与代码不符"与"配置字段失去文档"两条变异仍指向 `README.md`，只能报 `anchor not found`——回归网实际是 29/31，而证据索引写着 31/31。锚点改指 `docs/configuration.md` 并对齐当前措辞，修复后 **31/31**。
+
 ### Added
 
 - **社区扫描入库**：`docs/community-scan-2026-09-19.md`（带日期的快照），`docs/research.md` 补齐三行"确实借鉴"的对照，并把 5 项主动不做的实践连同**重开条件**写入未采纳表——"未采纳"与"没想到"在文档里不再长得一样。

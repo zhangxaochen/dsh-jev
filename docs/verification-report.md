@@ -57,6 +57,7 @@
 | 已提交的构建产物就是源码的构建 | `pnpm run verify:build` + CI 步骤 | `lib/` 无漂移；改了 `src` 忘记重建会被 CI 拒 |
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
+| 回归网自身有效（`drill`） | `pnpm run drill`（31 条注入回归） | **31/31** 被拦下。⚠️ 其中 2 条锚点自 `585e6cc`（README 拆分）起仍指向已搬走的 `README.md` 配置段落，只能报 `anchor not found`——网子实际是 29/31 而本表一直写着 31/31；2026-09-20 的整批验收发现并修复（改指 `docs/configuration.md` 并对齐措辞） |
 | 判定失败的降级是可测且可见的 | 单测（`tests/resilience.spec.ts`、`tests/metrics.spec.ts`） | 失败写决策记录（带 `ts`、失败策略、工具名与脱敏 `commandPreview`）；指标带 `lastInspectionFailureAt` 且能跨重启存活（字符串默认，`null` 默认会被类型检查丢掉）；看板与面板显示失败率与最近一次失败时间 |
 | 候选裁剪的收益与代价已实测（默认不改的依据） | `pnpm run probe:router-cost`（`docs/calibration/probe-2026-09-20-router-cost.json`） | 未加守卫时上限 20 → **4/7**、40 → **5/7**（纯中文请求没有可排序的词，短名单退化成目录顺序）；加守卫后 0/20/40 都是 **7/7**，但 5/7 条请求与不裁剪逐字节相同；真正被裁剪的 3 条 20 问 0.41–0.99s vs 92 问 0.79–2.32s ⇒ 默认保持 `0` |
 | Jev 排序优于词法基线（对照而非断言） | `pnpm run probe:baseline`（`docs/calibration/probe-2026-09-20-baseline.json`） | 同一批标注用例两臂对照、两次运行一致：路由 **6/7 vs 3/7**（0ms 基线）、剪枝 **6/6 vs 5/6**（0ms 基线，仅领先 1 例 ⇒ 收益待证）；词法规则跑前固定、读作下界 |

@@ -240,4 +240,24 @@ pnpm run drill
 pnpm run verify:mutants
 ```
 
+**整批验收结果（2026-09-20，本分支 HEAD）** ✓：
+
+| 闸门 | 结果 |
+|---|---|
+| `build` + `verify:build` | 通过 ✓（提交的构建产物与源码一致 ✓） |
+| `test` | **220/220** ✓ |
+| `verify:solo` | **26/26** spec 单独通过 ✓，各文件计数之和 **220 = 套件总数** ✓ |
+| `bench:offline` | 36 条样本、准确率 **94.4%**、误报 0 ✓（产物已入库 ✓） |
+| `drill` | **31/31** ✓ |
+| `verify:mutants` | **82/82** ✓ |
+| `verify:pack` | tarball 装入干净目录后按包名解析 ✓ |
+| 线上闸门（本轮相关） | `verify:router` **7/7** ✓、`verify:pruner` **6/6** ✓ |
+
+⚠️ **验收本身查出一个真缺陷** ✓：`drill` 的 31 条变异里，有 2 条（"文档默认值与代码不符" ✓、
+"配置字段失去文档" ✓）的锚点仍指向 `README.md` ✓，
+而 `585e6cc`（README 前门与手册拆分）**早已把配置参考搬到 `docs/configuration.md`** ✓ ——
+于是这两条从那时起只会报 `anchor not found` ✓，**网子实际是 29/31** ✗，而 `docs/verification-report.md` 一直写着 31/31 ✗。
+已把两个锚点改指 `docs/configuration.md` 并按当前措辞对齐 ✓，修复后 **31/31** ✓（修复提交单独一条 ✓）。
+这正是"看起来在跑但永远不会失败"的闸门 ✓ —— 只有把验收真跑一遍才会露出来 ✓。
+
 外加两条文档结论：批次 2 的两个测量结论进 `docs/calibration.md`；不做的 5 项与理由进 `docs/research.md`。
