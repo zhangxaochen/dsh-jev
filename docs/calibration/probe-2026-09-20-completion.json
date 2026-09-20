@@ -1,0 +1,38 @@
+{
+  "ranAt": "2026-09-20T04:46:42.368Z",
+  "source": "C:\\Users\\zhangxaochen260423\\.dsh\\storages\\session_projcache\\sessions",
+  "definition": "an assistant turn matching the completion-claim pattern, followed by a user turn matching a correction pattern",
+  "claimPattern": "(全部|所有|已经|已)完成|已完成|修复完成|全部通过|全绿|目标(已)?达成|无遗留|0 遗留|\\bdone\\b|\\ball (tests )?pass",
+  "strictPattern": "还没|还没好|没有(做|改|修|完成)|不[对行]|不是(这样|这个)|错了|漏了|你确定|确定吗|仍有|还是(没|不|有)|重新(做|来|改)|不算(完成|交付|结束)|不能算|没结束|undo|revert|still (not|broken|failing)|not (done|fixed|working)|that'?s wrong",
+  "lenientPattern": "还没|还没好|没有(做|改|修|完成)|不[对行]|不是(这样|这个)|错了|漏了|你确定|确定吗|仍有|还是(没|不|有)|重新(做|来|改)|不算(完成|交付|结束)|不能算|没结束|undo|revert|still (not|broken|failing)|not (done|fixed|working)|that'?s wrong|继续|接着|再(试|来|看|做)|往下|没看到|看不到|再确认|double[- ]check|again|continue|carry on",
+  "sessions": 33,
+  "turns": 354,
+  "turnsWithPrompt": 229,
+  "truncatedResponses": 333,
+  "claims": 32,
+  "claimsWithFollowUp": 11,
+  "claimsFollowedByStrictCorrection": 1,
+  "claimsFollowedByLenientCorrection": 2,
+  "strictFlags": [
+    {
+      "session": "c6bc661d-79a",
+      "turn": 13,
+      "claim": "计划内**已全部完成**，当前只剩两项待办，其中一项只能由你的环境产出结论。 ## 已完成（计划交付物 + 验收全绿） - 提交：`5d9418f3a`（分支 `docs/typesafe-judgment-assessment`，wor…",
+      "correction": "不合入。我的目标是按照plan md继续做方案，当前不算交付结束"
+    }
+  ],
+  "lenientFlags": [
+    {
+      "session": "c0bd1f39-9ab",
+      "turn": 120,
+      "claim": "全绿。这次事故的完整闭环： ## 修复链（3 个提交，均已验证） | 提交 | 内容 | 验证 | |---|---|---| | `8351936` | 安全检查独立预算 3500ms + 瞬时失败有界重试 1 次 + 两个可观测计数…",
+      "correction": "已重启。你继续，要推送"
+    },
+    {
+      "session": "c6bc661d-79a",
+      "turn": 13,
+      "claim": "计划内**已全部完成**，当前只剩两项待办，其中一项只能由你的环境产出结论。 ## 已完成（计划交付物 + 验收全绿） - 提交：`5d9418f3a`（分支 `docs/typesafe-judgment-assessment`，wor…",
+      "correction": "不合入。我的目标是按照plan md继续做方案，当前不算交付结束"
+    }
+  ]
+}
