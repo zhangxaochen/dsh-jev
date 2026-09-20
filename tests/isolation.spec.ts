@@ -40,6 +40,7 @@ const METRICS_RECORDING_SCRIPTS = [
   'tests/live-pruner.ts',
   'tests/live-router.ts',
   'tests/live-turn.ts',
+  'tests/probe-jaggedness.ts',
   'bench/run.ts',
 ]
 
