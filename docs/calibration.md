@@ -1412,3 +1412,59 @@ exports.inject = ['slots']
 **重开条件** ✓（写进 `docs/research.md` 的未采纳表 ✓）：把 DSH 会话导出为**消息级**语料（`dsh-session-log-export` ✓）
 后重跑 `pnpm run probe:completion` ✓；若可观测样本达到数百条且其中严格纠正占比可观 ✓，再重新评估 4.2 ✓。
 本探针本身可以复用 ✓ —— 换数据源不需要改判定逻辑 ✓。
+
+## 31. compact 之后到底留下多少 token：配额 ≠ 账单（2026-09-20，本机 5 份会话日志 / 13 次压实）
+
+**为什么测** ✓：`dsh-compaction-basic` 的默认保留策略是"窗口的 `retainRatio: 0.16` 逐字保留"✓，
+在 368k 窗口上即 **58,880**（meter 口径）✓，但实测 compact 之后的 prompt 是 **10w** 量级 ✗。
+宿主把两个默认比例标记为 *undecided（无语料依据）* ✓，其 Dev Note 又明确写着 4 字符/token
+**低估 CJK 与 JSON Schema** ✓ —— 也就是说"配置要的配额"与"provider 结的账"之间有一个系数 ✗。
+要调 `retainTokens` 就必须先量这个系数，否则调的是一个自己都没在用的单位 ✓。
+
+**方法** ✓（`tests/probe-compaction-tokens.ts`，`pnpm run probe:compaction-tokens`）：
+- 离线读**已结束的会话日志**（`$DSH_HOME/sessions/**/session.v3.jsonl.zstd`；该容器是多帧 zstd，
+  须逐帧解码 ✓），无网络、无 key、不启动 DSH ✓；
+- 每次压实取四样东西：`compaction/summary.shadowedRange` 之后**真正被保留的 tail**（引擎实际选中的
+  那段，按宿主编译器 4 字符/token 计价 ✓）、紧随其后的 `assistant/message.usage`（provider 真实计数 ✓）、
+  该请求的 `request/header.tools` 与最后一条 `system/message` ✓、以及摘要文本 ✓；
+- 定义 `measuredTail = observedAfter − tools − system − summary` ✓，
+  系数 `= measuredTail / retainedTailMeterTokens` ✓。
+
+**实测** ✓（本机 5 份会话、13 次压实；固定项 = tool schemas + system + 摘要）：
+
+| 会话 | 压实次数 | tail(meter) | tail(provider) | 系数 | 固定项 | compact 后实测 |
+|---|---|---|---|---|---|---|
+| `c0bd1f39` | 6 | 58,854–172,161 | 86,702–221,945 | 1.19–1.50 | 6,902–12,775 | 99,477–234,266 |
+| `c6bc661d` | 4 | 48,981–68,318 | 69,105–92,340 | 1.31–1.54 | 11,121–11,642 | 80,747–103,881 |
+| `ef8bbbbd` | 1 | 105,993 | 80,453 | **0.759** | 11,991 | 92,444 |
+| `f7fd30ad` | 1 | 74,632 | 84,082 | 1.127 | 11,967 | 96,049 |
+| `e848e5f6` | 1 | 96,672 | 98,010 | 1.014 | 11,648 | 109,658 |
+
+**系数中位数 1.328**（区间 0.759–1.542）✓，**固定项中位数 ≈ 11.6k** ✓。
+原始数据：`docs/calibration/probe-2026-09-20-compaction-tokens.json` ✓。
+
+**结论** ✓：
+1. compact 后的真实 prompt ≈ `retainTokens × 系数 + 固定项` ✓。摘要只占 ~4k ✗——
+   **不是**大头 ✓，`retainRatio` 的逐字 tail 才是（宿主 0.16 × 窗口）✓；
+2. 宿主的 `retainTokens` 是 **meter 口径的配额**，不是账单 ✓：CJK 为主的会话里两者差 1.3–1.5× ✗；
+   本机最近 6 次（368k cap 生效、中文密集）落在 **1.44–1.50** ✓；
+3. 因此配置要按**目标真实 token**标定：本机钉 `retainTokens: 16000`
+   ⇒ 预测 `16000 × 1.328 + 11.6k ≈ 33k` ✓（原 ~10w ✓）；若要 ~2w，按表取 `retainTokens ≈ 6,300` ✓；
+4. 这条配置的落点是 **preset，不是 profile** ✓：web/desktop 组合里宿主平面的 `compaction-basic`
+   是 `disabled: true` ✓（`@deepseek-ai/dsh-web-app` 的补丁层，理由写在注释里：
+   "只有读 meter 的那个后端随 preset 走" ✓），真正在跑的是每个 preset 自己 realm 内挂的那一个 ✓
+   （`isolate: { compaction: true }` ✓），而 **preset 层没有补丁语义** ✗
+   （`dsh-agent-presets` README 的已知限制 ✓）。可复现：`dsh --profile web --dump-config` ✓。
+
+**局限** ✓（这些边界就是结论的边界）：
+1. 固定项用的是**同一套有偏计价** ✗，其误差被吸收进系数里 ✓ —— 所以这是**部署级标定**，不是物理常数 ✓；
+   低于 1 的样本（0.759）正是这条的可见形态 ✗；
+2. 系数随内容构成（CJK / JSON 占比）漂移 ✓，换语料构成或宿主换计量实现都必须重跑 ✓；
+3. 只统计有 `assistant/message.usage` 的压实 ✓（会话中途结束、或压实后再无请求的不计入 ✓，逐条列在产物里 ✓）；
+4. `16000 ⇒ ~33k` 是**预测** ✗：改动后需要在新会话上再跑一次本探针，才能把预测换成实测 ✓。
+
+**与三类 primitive 的关系** ✓：本次**不用** primitive —— 这是把**刻度**标对（确定性算术）✓，
+不是把"该留什么"判对 ✓。真正需要 `Noul`/`Score`/`Choice` 的是下一步——tail 装不下时把逐字内容
+换成**指针**（`path:line @ hash`）而非丢掉 ✓，那是语义判断 ✓，且要等"同预算下不增加重读/返工"
+的离线证据 ✓。
+

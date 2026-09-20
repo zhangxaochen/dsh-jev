@@ -9,6 +9,8 @@
 
 ### Added
 
+- **compact 保留预算的标定探针** `pnpm run probe:compaction-tokens`（`tests/probe-compaction-tokens.ts`）：宿主保留的是「窗口 × `retainRatio`（默认 `0.16`）」的逐字 tail，计价用 4 字符/token，而宿主 Dev Note 自认该密度低估 CJK。本机 5 份会话 13 次压实实测：provider 计价 / meter 计价中位数 **1.328**（区间 0.76–1.54），固定项（tool schemas + system + 摘要）中位数 ≈ **11.6k** ⇒ 默认 `0.16 × 368k = 58,880` 的配额实际落在 **~10w**，而摘要只占 ~4k——"compact 后留太多"的账在逐字 tail 与计量单位上，不在摘要上。据此本机把 `retainTokens` 钉到 **16000**（预测 ~33k），且落点是 **preset 而非 profile**：web/desktop 组合里宿主平面的 `compaction-basic` 是 `disabled: true`（`@deepseek-ai/dsh-web-app` 补丁层），真正在跑的是 preset realm 内挂的那一个，而 preset 层没有补丁语义（见 `docs/calibration.md` §31）。
+
 - **社区扫描入库**：`docs/community-scan-2026-09-19.md`（带日期的快照），`docs/research.md` 补齐三行"确实借鉴"的对照，并把 5 项主动不做的实践连同**重开条件**写入未采纳表——"未采纳"与"没想到"在文档里不再长得一样。
 - **每次判定成本口径**：看板新增一行（累计 `$`/次、只看计费调用的 `$`/次、缓存命中率），`getSnapshot()` 派生 `costPerDecisionUsd` / `costPerBilledCallUsd` / `cacheHitRate`——**只在读取时计算、不落盘**（持久化的派生值会随计数漂移，而 `normalizeMetrics` 的类型检查挡不住漂移）；README 门面把 "effectively free" 换成实测数字（每次判定 ≈ $0.00013，2026-09-20 实测 2,254 次判定）。
 

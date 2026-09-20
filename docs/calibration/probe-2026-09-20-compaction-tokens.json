@@ -1,0 +1,347 @@
+{
+  "ranAt": "2026-09-20T08:39:57.469Z",
+  "meter": {
+    "charsPerToken": 4,
+    "blockOverhead": 4,
+    "source": "re-implemented from @deepseek-ai/dsh-token-meter/lib/index.js (estimateMessage/estimateContent)",
+    "note": "the host Dev Note states this density underprices CJK text and JSON Schema documents"
+  },
+  "targetAfterTokens": [
+    20000,
+    30000,
+    45000
+  ],
+  "aggregate": {
+    "samples": 13,
+    "sessions": 5,
+    "factorMedian": 1.328,
+    "factorMin": 0.759,
+    "factorMax": 1.542,
+    "fixedFloorMeterTokens": 11648,
+    "recommendations": [
+      {
+        "targetAfterTokens": 20000,
+        "retainTokens": 6289,
+        "predictedAfterTokens": 20000
+      },
+      {
+        "targetAfterTokens": 30000,
+        "retainTokens": 13819,
+        "predictedAfterTokens": 30000
+      },
+      {
+        "targetAfterTokens": 45000,
+        "retainTokens": 25114,
+        "predictedAfterTokens": 44999
+      }
+    ]
+  },
+  "caveats": [
+    "the system prompt, tool schemas and checkpoint summary are priced with the same biased meter, so their error is absorbed into the measured factor rather than modelled",
+    "the factor is a property of this deployment's content mix (CJK and JSON share), not a constant: rerun after the mix or the host meter changes",
+    "sessions that end mid-compaction, and compactions with no following assistant/message usage, are skipped and listed per session",
+    "the estimator is re-implemented here; a host upgrade that changes it invalidates the comparison until this file is updated"
+  ],
+  "sessions": [
+    {
+      "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+      "events": 15221,
+      "bytes": 10640785,
+      "compactions": [
+        {
+          "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+          "compactionId": "875a1867-2133-493e-94dd-8e775cbe9e2f",
+          "summarySeq": 4980,
+          "shadowedRange": {
+            "start": 8,
+            "end": 3831
+          },
+          "shadowedMeterTokens": 492108,
+          "retainedTailNodes": 419,
+          "retainedTailMeterTokens": 172161,
+          "toolsMeterTokens": 1532,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 4139,
+          "fixedFloorMeterTokens": 7097,
+          "observedBeforeTokens": 800071,
+          "observedAfterTokens": 211653,
+          "measuredTailTokens": 204556,
+          "providerOverMeterFactor": 1.188
+        },
+        {
+          "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+          "compactionId": "fd67e1c7-a4c7-4f33-8c7c-006aaca2b74d",
+          "summarySeq": 8611,
+          "shadowedRange": {
+            "start": 4981,
+            "end": 7384
+          },
+          "shadowedMeterTokens": 473606,
+          "retainedTailNodes": 428,
+          "retainedTailMeterTokens": 167096,
+          "toolsMeterTokens": 1532,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 3944,
+          "fixedFloorMeterTokens": 6902,
+          "observedBeforeTokens": 799075,
+          "observedAfterTokens": 215918,
+          "measuredTailTokens": 209016,
+          "providerOverMeterFactor": 1.251
+        },
+        {
+          "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+          "compactionId": "5780d8ed-77d4-4cce-81f2-ea9c6fd7e8ea",
+          "summarySeq": 12318,
+          "shadowedRange": {
+            "start": 8612,
+            "end": 11020
+          },
+          "shadowedMeterTokens": 462578,
+          "retainedTailNodes": 474,
+          "retainedTailMeterTokens": 161620,
+          "toolsMeterTokens": 7261,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 3634,
+          "fixedFloorMeterTokens": 12321,
+          "observedBeforeTokens": 799559,
+          "observedAfterTokens": 234266,
+          "measuredTailTokens": 221945,
+          "providerOverMeterFactor": 1.373
+        },
+        {
+          "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+          "compactionId": "4bafa133-12c4-438c-b55d-5502f9d2264a",
+          "summarySeq": 13178,
+          "shadowedRange": {
+            "start": 12319,
+            "end": 12644
+          },
+          "shadowedMeterTokens": 222870,
+          "retainedTailNodes": 186,
+          "retainedTailMeterTokens": 59633,
+          "toolsMeterTokens": 7261,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 3065,
+          "fixedFloorMeterTokens": 11752,
+          "observedBeforeTokens": 382459,
+          "observedAfterTokens": 101360,
+          "measuredTailTokens": 89608,
+          "providerOverMeterFactor": 1.503
+        },
+        {
+          "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+          "compactionId": "f0a854f9-ba7c-4655-94e9-5bea82a8af5b",
+          "summarySeq": 14193,
+          "shadowedRange": {
+            "start": 13179,
+            "end": 13743
+          },
+          "shadowedMeterTokens": 157077,
+          "retainedTailNodes": 163,
+          "retainedTailMeterTokens": 58854,
+          "toolsMeterTokens": 7261,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 4088,
+          "fixedFloorMeterTokens": 12775,
+          "observedBeforeTokens": 294230,
+          "observedAfterTokens": 99477,
+          "measuredTailTokens": 86702,
+          "providerOverMeterFactor": 1.473
+        },
+        {
+          "session": "session-c0bd1f39-9ab6-4856-9e05-a14c098a3301",
+          "compactionId": "443f0f56-1660-4916-8972-87395e145eb5",
+          "summarySeq": 15204,
+          "shadowedRange": {
+            "start": 14194,
+            "end": 14758
+          },
+          "shadowedMeterTokens": 154086,
+          "retainedTailNodes": 137,
+          "retainedTailMeterTokens": 63355,
+          "toolsMeterTokens": 7261,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 3076,
+          "fixedFloorMeterTokens": 11763,
+          "observedBeforeTokens": 293423,
+          "observedAfterTokens": 103138,
+          "measuredTailTokens": 91375,
+          "providerOverMeterFactor": 1.442
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "session": "session-c6bc661d-79a3-4888-8444-49831ee360f3",
+      "events": 7797,
+      "bytes": 6532600,
+      "compactions": [
+        {
+          "session": "session-c6bc661d-79a3-4888-8444-49831ee360f3",
+          "compactionId": "47252972-2f8a-44eb-829d-21547e613274",
+          "summarySeq": 3890,
+          "shadowedRange": {
+            "start": 9,
+            "end": 3327
+          },
+          "shadowedMeterTokens": 493114,
+          "retainedTailNodes": 214,
+          "retainedTailMeterTokens": 68318,
+          "toolsMeterTokens": 7127,
+          "systemMeterTokens": 1427,
+          "summaryMeterTokens": 2567,
+          "fixedFloorMeterTokens": 11121,
+          "observedBeforeTokens": 740504,
+          "observedAfterTokens": 100525,
+          "measuredTailTokens": 89404,
+          "providerOverMeterFactor": 1.309
+        },
+        {
+          "session": "session-c6bc661d-79a3-4888-8444-49831ee360f3",
+          "compactionId": "52d5c1d2-7aad-4bb7-96aa-9104b097aed1",
+          "summarySeq": 5231,
+          "shadowedRange": {
+            "start": 3891,
+            "end": 4629
+          },
+          "shadowedMeterTokens": 154736,
+          "retainedTailNodes": 238,
+          "retainedTailMeterTokens": 61902,
+          "toolsMeterTokens": 7127,
+          "systemMeterTokens": 1427,
+          "summaryMeterTokens": 2987,
+          "fixedFloorMeterTokens": 11541,
+          "observedBeforeTokens": 294174,
+          "observedAfterTokens": 103881,
+          "measuredTailTokens": 92340,
+          "providerOverMeterFactor": 1.492
+        },
+        {
+          "session": "session-c6bc661d-79a3-4888-8444-49831ee360f3",
+          "compactionId": "bdafae3c-19c4-4c42-b227-ae06f3e868f0",
+          "summarySeq": 6046,
+          "shadowedRange": {
+            "start": 5232,
+            "end": 5691
+          },
+          "shadowedMeterTokens": 134090,
+          "retainedTailNodes": 103,
+          "retainedTailMeterTokens": 48981,
+          "toolsMeterTokens": 7180,
+          "systemMeterTokens": 1427,
+          "summaryMeterTokens": 2932,
+          "fixedFloorMeterTokens": 11539,
+          "observedBeforeTokens": 252960,
+          "observedAfterTokens": 87064,
+          "measuredTailTokens": 75525,
+          "providerOverMeterFactor": 1.542
+        },
+        {
+          "session": "session-c6bc661d-79a3-4888-8444-49831ee360f3",
+          "compactionId": "de1eb930-967d-452c-832e-33a30987dfed",
+          "summarySeq": 6813,
+          "shadowedRange": {
+            "start": 6047,
+            "end": 6494
+          },
+          "shadowedMeterTokens": 131178,
+          "retainedTailNodes": 113,
+          "retainedTailMeterTokens": 52022,
+          "toolsMeterTokens": 7180,
+          "systemMeterTokens": 1427,
+          "summaryMeterTokens": 3035,
+          "fixedFloorMeterTokens": 11642,
+          "observedBeforeTokens": 238241,
+          "observedAfterTokens": 80747,
+          "measuredTailTokens": 69105,
+          "providerOverMeterFactor": 1.328
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "session": "session-ef8bbbbd-b54c-42bf-b651-87e5bdfa7f74",
+      "events": 2135,
+      "bytes": 2018035,
+      "compactions": [
+        {
+          "session": "session-ef8bbbbd-b54c-42bf-b651-87e5bdfa7f74",
+          "compactionId": "44dc3967-c550-4294-ac35-2e8c204945a9",
+          "summarySeq": 1164,
+          "shadowedRange": {
+            "start": 16,
+            "end": 849
+          },
+          "shadowedMeterTokens": 170895,
+          "retainedTailNodes": 123,
+          "retainedTailMeterTokens": 105993,
+          "toolsMeterTokens": 7261,
+          "systemMeterTokens": 1427,
+          "summaryMeterTokens": 3303,
+          "fixedFloorMeterTokens": 11991,
+          "observedBeforeTokens": 292305,
+          "observedAfterTokens": 92444,
+          "measuredTailTokens": 80453,
+          "providerOverMeterFactor": 0.759
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "session": "session-f7fd30ad-d82f-4bc7-b564-f5a42da69ea0",
+      "events": 2079,
+      "bytes": 1916293,
+      "compactions": [
+        {
+          "session": "session-f7fd30ad-d82f-4bc7-b564-f5a42da69ea0",
+          "compactionId": "8c0f3b0c-e147-447d-9f09-3c1e26242aad",
+          "summarySeq": 1377,
+          "shadowedRange": {
+            "start": 8,
+            "end": 909
+          },
+          "shadowedMeterTokens": 152871,
+          "retainedTailNodes": 190,
+          "retainedTailMeterTokens": 74632,
+          "toolsMeterTokens": 7261,
+          "systemMeterTokens": 1426,
+          "summaryMeterTokens": 3280,
+          "fixedFloorMeterTokens": 11967,
+          "observedBeforeTokens": 294227,
+          "observedAfterTokens": 96049,
+          "measuredTailTokens": 84082,
+          "providerOverMeterFactor": 1.127
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "session": "session-e848e5f6-c39f-4e88-b486-c285a2156254",
+      "events": 1588,
+      "bytes": 1438934,
+      "compactions": [
+        {
+          "session": "session-e848e5f6-c39f-4e88-b486-c285a2156254",
+          "compactionId": "3583da55-0f48-41a9-9903-64f71c808aae",
+          "summarySeq": 1498,
+          "shadowedRange": {
+            "start": 8,
+            "end": 1036
+          },
+          "shadowedMeterTokens": 130278,
+          "retainedTailNodes": 171,
+          "retainedTailMeterTokens": 96672,
+          "toolsMeterTokens": 7127,
+          "systemMeterTokens": 1422,
+          "summaryMeterTokens": 3099,
+          "fixedFloorMeterTokens": 11648,
+          "observedBeforeTokens": 392540,
+          "observedAfterTokens": 109658,
+          "measuredTailTokens": 98010,
+          "providerOverMeterFactor": 1.014
+        }
+      ],
+      "skipped": []
+    }
+  ]
+}
