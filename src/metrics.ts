@@ -55,6 +55,15 @@ export interface JevMetricsData {
      * type check would drop a string sitting under a null default.
      */
     lastInspectionFailureAt: string
+    /**
+     * Ids of the configured `safetyGuard.rules`, in configuration order.
+     *
+     * Recorded so the dashboard can show a rule that has never fired: a count of 0 is
+     * the only way to tell "this rule does not work" from "this rule has nothing to do".
+     */
+    ruleIds: string[]
+    /** Hits per rule id: how often it matched, when it last did, and the action it took. */
+    ruleHits: Record<string, { count: number; lastAt: string; action: string }>
   }
   resultShaper: {
     shaped: number
@@ -143,6 +152,8 @@ function createEmptyMetrics(): JevMetricsData {
       inspectionRetries: 0,
       inspectionFailures: 0,
       lastInspectionFailureAt: '',
+      ruleIds: [],
+      ruleHits: {},
     },
     resultShaper: {
       shaped: 0,
@@ -365,6 +376,33 @@ export class MetricsCollector {
   }
 
   /**
+   * Register the configured safety rule ids.
+   *
+   * Without this the dashboard could only list rules that already fired, and "a rule I
+   * wrote never runs" - the failure an operator is actually looking for - stays invisible.
+   */
+  registerSafetyRules(ids: string[]): void {
+    this.state().safetyGuard.ruleIds = [...ids]
+    this.persist()
+  }
+
+  /**
+   * Record one hit of a user-defined safety rule.
+   * @param ruleId the rule's configured id
+   * @param action the rule's configured action (`deny` / `ask` / `warn`)
+   */
+  recordRuleHit(ruleId: string, action: string): void {
+    const hits = this.state().safetyGuard.ruleHits
+    const previous = hits[ruleId]
+    hits[ruleId] = {
+      count: (previous?.count ?? 0) + 1,
+      lastAt: new Date().toISOString(),
+      action,
+    }
+    this.persist()
+  }
+
+  /**
    * Record a System One API call latency.
    */
   recordCall(latencyMs: number, success = true, accounting: CallAccounting = {}): void {
@@ -441,6 +479,13 @@ export class MetricsCollector {
     const lastFailure = safety.lastInspectionFailureAt
       ? safety.lastInspectionFailureAt.replace('T', ' ').slice(0, 19)
       : '从未'
+    // A rule that never fired must be listed too: 0 is the whole point of the row.
+    const ruleSummary =
+      safety.ruleIds.length > 0
+        ? safety.ruleIds
+            .map((id) => `${id} ×${safety.ruleHits[id]?.count ?? 0}`)
+            .join('、')
+        : '未配置用户规则'
     const formattedTokens = totalTokens >= 1_000_000
       ? `${(totalTokens / 1_000_000).toFixed(2)}M`
       : totalTokens >= 1_000
@@ -459,6 +504,7 @@ export class MetricsCollector {
       `| **⚡ System One 响应** | 累计决策 **${this.state().systemOne.totalCalls}** 次（缓存命中 **${this.state().systemOne.cacheHits}**），平均延迟 **${this.state().systemOne.avgLatencyMs}ms**，错误 **${this.state().systemOne.errors}** | 输入 **${(this.state().systemOne.inputBytes / 1024).toFixed(1)}KB**，按 $0.042/M 输入计约 **$${this.state().systemOne.estimatedCostUsd.toFixed(4)}**（输出免费） |`,
       ``,
       `| **💰 每次判定成本** | 累计 **$${derived.costPerDecisionUsd.toFixed(6)}** / 次；只看计费调用为 **$${derived.costPerBilledCallUsd.toFixed(6)}** / 次 | 相同载荷缓存命中率 **${(derived.cacheHitRate * 100).toFixed(0)}%**；按 $0.042/M 输入计，输出免费 |`,
+      `| **📋 用户规则命中** | ${ruleSummary} | 命中 **0** 次的规则同样列出——那是「规则没生效」与「规则没触发」的唯一区分 |`,
       `| **🩺 判定可达性（降级可见）** | 审查 **${safety.screened}** 次中，判定**失败** **${safety.inspectionFailures}** 次（**${failureRate.toFixed(0)}%**） | 最近一次失败：**${lastFailure}**；失败时按 \`onError\` 处理，确定性外壳不受影响 |`,
       `> 💡 **累计可测收益**：工具 Schema 精确移除 **${this.state().toolPruner.removedSchemaChars}** 字符，折算 **~${formattedTokens}** Tokens；死循环与安全拦截只报计数，不做不可测的 token 折算。`,
       `> ⏱️ 统计起始自：\`${this.state().firstRecordedAt.replace('T', ' ').slice(0, 19)}\`（最新更新：\`${this.state().lastUpdatedAt.replace('T', ' ').slice(0, 19)}\`）`,

@@ -10,6 +10,7 @@ import {
   redactSecrets,
 } from '../lib/safety-guard.js'
 import { TypeSafeClient } from '../lib/typesafe-client.js'
+import { defaultMetrics } from '../lib/metrics.js'
 import type { CordisContext, PreToolDecision, ToolExecution } from '../lib/types.js'
 
 function harness(mock: () => Promise<Record<string, unknown>>) {
@@ -188,6 +189,14 @@ test('SafetyGuard applies user-declared rules', async () => {
   const decision = await invoke({ name: 'bash', args: { command: 'npm run deploy:prod' } })
   assert.equal(decision.action, 'deny')
   assert.match(decision.reason ?? '', /Rule "no_prod_deploy" matched/)
+
+  // The hit must be attributable to the rule, not merely to the guard as a whole, and the
+  // configured set must be registered so a rule that never fires can be shown as well.
+  const safety = defaultMetrics.getSnapshot().safetyGuard
+  assert.equal(safety.ruleHits.no_prod_deploy?.count, 1, 'the rule hit must be counted per rule')
+  assert.equal(safety.ruleHits.no_prod_deploy?.action, 'deny')
+  assert.ok(!Number.isNaN(Date.parse(safety.ruleHits.no_prod_deploy?.lastAt ?? '')), 'and dated')
+  assert.deepEqual(safety.ruleIds, ['no_prod_deploy'], 'the configured rule set must be registered')
 })
 
 test('SafetyGuard delegates benign guarded calls through next()', async () => {

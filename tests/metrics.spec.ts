@@ -522,6 +522,8 @@ test('a field added in a later build is backfilled from a file written before it
       '',
       'a file that predates the failure timestamp backfills to "never"'
     )
+    assert.deepEqual(loaded.safetyGuard.ruleIds, [], 'and so does the configured rule set')
+    assert.deepEqual(loaded.safetyGuard.ruleHits, {}, 'and the per-rule hit map')
     assert.equal(loaded.systemOne.totalCalls, 0, 'a section the file omits comes from the defaults')
     assert.equal(loaded.version, 2, 'and the schema version is kept')
 
@@ -535,6 +537,38 @@ test('a field added in a later build is backfilled from a file written before it
     const stamped = new MetricsCollector(file).getSnapshot().safetyGuard.lastInspectionFailureAt
     assert.ok(stamped.length > 0, 'the failure timestamp must survive a reload')
     assert.ok(!Number.isNaN(Date.parse(stamped)), 'and it must be a date: ' + stamped)
+  } finally {
+    rmSync(file, { force: true })
+  }
+})
+
+test('user rule hits are counted per rule, and a rule that never fires is still listed', () => {
+  // The dashboard used to report one total for the whole guard, so "a rule I wrote never
+  // runs" and "a rule misfires on everything" looked identical from the outside.
+  const file = join(tmpdir(), 'jev-rules-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.json')
+  try {
+    const collector = new MetricsCollector(file)
+    collector.registerSafetyRules(['deny-prod-write', 'ask-deploy'])
+    collector.recordRuleHit('deny-prod-write', 'deny')
+    collector.recordRuleHit('deny-prod-write', 'deny')
+    collector.recordRuleHit('ask-deploy', 'ask')
+
+    const hits = collector.getSnapshot().safetyGuard.ruleHits
+    assert.equal(hits['deny-prod-write'].count, 2)
+    assert.equal(hits['deny-prod-write'].action, 'deny')
+    assert.equal(hits['ask-deploy'].count, 1)
+    assert.ok(!Number.isNaN(Date.parse(hits['deny-prod-write'].lastAt)), 'every hit is dated')
+
+    const markdown = collector.renderMarkdownDashboard()
+    assert.ok(markdown.includes('deny-prod-write ×2'), 'the dashboard must report the per-rule count')
+    assert.ok(markdown.includes('ask-deploy ×1'))
+
+    // A rule configured after some hits must still show up, at 0.
+    const reloaded = new MetricsCollector(file)
+    reloaded.registerSafetyRules(['deny-prod-write', 'ask-deploy', 'added-later'])
+    const later = reloaded.renderMarkdownDashboard()
+    assert.ok(later.includes('added-later ×0'), 'a rule that never fired must still be listed')
+    assert.ok(later.includes('deny-prod-write ×2'), 'and the stored counts survive the merge')
   } finally {
     rmSync(file, { force: true })
   }

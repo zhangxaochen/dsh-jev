@@ -623,6 +623,20 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
                     (data?.safetyGuard?.lastInspectionFailureAt ?? '').replace('T', ' ').slice(0, 19) || '从未'
                   }`
                 )
+              ),
+              h(
+                'div',
+                { className: 'jev-card-metric' },
+                h('span', { className: 'jev-metric-label' }, '用户规则命中'),
+                h(
+                  'span',
+                  { className: 'jev-metric-val' },
+                  (data?.safetyGuard?.ruleIds ?? []).length > 0
+                    ? (data?.safetyGuard?.ruleIds ?? [])
+                        .map((id: string) => `${id}×${data?.safetyGuard?.ruleHits?.[id]?.count ?? 0}`)
+                        .join('·')
+                    : '未配置'
+                )
               )
             ),
 

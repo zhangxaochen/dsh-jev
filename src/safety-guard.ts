@@ -516,6 +516,9 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
   const onUncertain = config.onUncertain ?? 'deny-guarded'
   const headlessAsk = config.headlessAsk ?? DEFAULT_HEADLESS_ASK
   const rules: SafetyRule[] = config.rules ?? []
+  // Registered once so the dashboard can list a rule that never fires. A rule removed
+  // from the config keeps its historical hits in the file but leaves the displayed set.
+  defaultMetrics.registerSafetyRules(rules.map((rule) => rule.id))
   const inspectionTimeoutMs = config.inspectionTimeoutMs ?? DEFAULT_INSPECTION_TIMEOUT_MS
   const inspectionRetries = config.inspectionRetries ?? DEFAULT_INSPECTION_RETRIES
 
@@ -700,6 +703,9 @@ export function apply(ctx: CordisContext, config: SafetyGuardConfig = {}) {
           const prob = probabilityOf(`rule_${rule.id}`)
           if (prob === undefined || prob < (rule.threshold ?? 0.7)) continue
           const action = rule.action ?? 'ask'
+          // Counted per rule: a total that only ever grows cannot tell the operator which
+          // rule is misfiring and which one never runs at all.
+          defaultMetrics.recordRuleHit(rule.id, action)
           if (action === 'deny') {
             return deny(
               `[TypeSafe SafetyGuard] Rule "${rule.id}" matched (${(prob * 100).toFixed(0)}%): ${rule.question}`

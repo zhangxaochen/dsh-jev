@@ -50,6 +50,19 @@ export interface JevMetricsData {
          * type check would drop a string sitting under a null default.
          */
         lastInspectionFailureAt: string;
+        /**
+         * Ids of the configured `safetyGuard.rules`, in configuration order.
+         *
+         * Recorded so the dashboard can show a rule that has never fired: a count of 0 is
+         * the only way to tell "this rule does not work" from "this rule has nothing to do".
+         */
+        ruleIds: string[];
+        /** Hits per rule id: how often it matched, when it last did, and the action it took. */
+        ruleHits: Record<string, {
+            count: number;
+            lastAt: string;
+            action: string;
+        }>;
     };
     resultShaper: {
         shaped: number;
@@ -167,6 +180,19 @@ export declare class MetricsCollector {
     recordSafetyRetry(): void;
     /** Record an inspection that failed after its retries, so the failure policy applied. */
     recordSafetyInspectionFailure(): void;
+    /**
+     * Register the configured safety rule ids.
+     *
+     * Without this the dashboard could only list rules that already fired, and "a rule I
+     * wrote never runs" - the failure an operator is actually looking for - stays invisible.
+     */
+    registerSafetyRules(ids: string[]): void;
+    /**
+     * Record one hit of a user-defined safety rule.
+     * @param ruleId the rule's configured id
+     * @param action the rule's configured action (`deny` / `ask` / `warn`)
+     */
+    recordRuleHit(ruleId: string, action: string): void;
     /**
      * Record a System One API call latency.
      */

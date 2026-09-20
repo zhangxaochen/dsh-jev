@@ -107,3 +107,18 @@ test('the per-decision cost is derived, reported and read by the panel', () => {
     assert.ok(readPaths().has('systemOne.' + field), 'the panel does not read systemOne.' + field)
   }
 })
+
+test('the per-rule hit list reaches both surfaces, including a rule that never fired', () => {
+  const collector = new MetricsCollector(freshMetricsPath())
+  collector.registerSafetyRules(['deny-prod-write', 'never-fired'])
+  collector.recordRuleHit('deny-prod-write', 'deny')
+
+  const markdown = collector.renderMarkdownDashboard()
+  assert.ok(markdown.includes('用户规则命中'), 'the dashboard has no user-rule row')
+  assert.match(markdown, /deny-prod-write ×1/)
+  assert.match(markdown, /never-fired ×0/, 'a rule with no hits must be listed, at zero')
+
+  for (const field of ['ruleIds', 'ruleHits']) {
+    assert.ok(readPaths().has('safetyGuard.' + field), 'the panel does not read safetyGuard.' + field)
+  }
+})
