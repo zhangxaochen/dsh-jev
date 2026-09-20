@@ -57,6 +57,7 @@
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
 | 判定失败的降级是可测且可见的 | 单测（`tests/resilience.spec.ts`、`tests/metrics.spec.ts`） | 失败写决策记录（带 `ts`、失败策略、工具名与脱敏 `commandPreview`）；指标带 `lastInspectionFailureAt` 且能跨重启存活（字符串默认，`null` 默认会被类型检查丢掉）；看板与面板显示失败率与最近一次失败时间 |
+| Jev 排序优于词法基线（对照而非断言） | `pnpm run probe:baseline`（`docs/calibration/probe-2026-09-20-baseline.json`） | 同一批标注用例两臂对照、两次运行一致：路由 **6/7 vs 3/7**（0ms 基线）、剪枝 **6/6 vs 5/6**（0ms 基线，仅领先 1 例 ⇒ 收益待证）；词法规则跑前固定、读作下界 |
 | 载荷变长时安全判定不漂移（≤48K 字符） | `pnpm run probe:jaggedness`（真实模型；`docs/calibration/probe-2026-09-20-jaggedness.json`） | 8 个客观标注用例 × 4 档载荷、两次运行逐档一致：准确率 **1.00**（@0.5 与 @0.85 都是）、类间分离度 **0.93–0.94**、延迟 377–632ms、0 错误；48K 以上无数据（局限写在 §27） |
 | 用户规则的命中可归因到**每一条规则** | 单测（`tests/safety-guard.spec.ts`、`tests/metrics.spec.ts`、`tests/metrics-surface.spec.ts`） | 配置的规则集在 `apply` 时登记（命中 0 次的规则照样列出，那是"没生效"与"没触发"的唯一区分）；每次命中带计数、最近时间与动作；看板有该行、面板读取 `ruleIds`/`ruleHits` |
 | 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **218 = 套件总数**（无用例在聚合运行中消失） |

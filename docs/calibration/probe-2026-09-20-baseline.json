@@ -1,0 +1,295 @@
+{
+  "ranAt": "2026-09-20T04:30:21.721Z",
+  "lexicalScheme": {
+    "nameMention": 6,
+    "namePartMention": 3,
+    "nameTokenOverlap": 2,
+    "descriptionTokenOverlap": 1,
+    "tokenizer": "lowercase; split on non-alphanumeric; drop 1-char tokens and English stopwords; singularize a trailing s on words longer than 3 chars",
+    "caveats": [
+      "no IDF/BM25 weighting",
+      "no stemming beyond the trailing s",
+      "no synonym table or bilingual mapping",
+      "fixed before the run; not tuned afterwards"
+    ]
+  },
+  "pruner": {
+    "maxTools": 4,
+    "jev": {
+      "cases": 6,
+      "correct": 6,
+      "accuracy": 1,
+      "latencyMeanMs": 578,
+      "results": [
+        {
+          "caseId": "research-release-notes",
+          "ok": true,
+          "picked": [
+            "search_web",
+            "fetch_url",
+            "pdf_extract"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "ship-the-commit",
+          "ok": true,
+          "picked": [
+            "git_commit",
+            "git_push",
+            "run_tests"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "fix-failing-test",
+          "ok": true,
+          "picked": [
+            "run_tests",
+            "read_file",
+            "edit_file"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "analytics-question",
+          "ok": true,
+          "picked": [
+            "fetch_url",
+            "sql_query",
+            "send_slack_message"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "invoice-extraction",
+          "ok": true,
+          "picked": [
+            "fetch_url",
+            "read_file",
+            "pdf_extract"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "notify-the-team",
+          "ok": true,
+          "picked": [
+            "run_tests",
+            "send_slack_message",
+            "deploy_service"
+          ],
+          "problems": []
+        }
+      ]
+    },
+    "lexical": {
+      "cases": 6,
+      "correct": 5,
+      "accuracy": 0.8333333333333334,
+      "latencyMeanMs": 0,
+      "results": [
+        {
+          "caseId": "research-release-notes",
+          "ok": true,
+          "picked": [
+            "search_web",
+            "fetch_url",
+            "git_commit",
+            "git_push"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "ship-the-commit",
+          "ok": true,
+          "picked": [
+            "git_push",
+            "git_commit",
+            "search_web",
+            "fetch_url"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "fix-failing-test",
+          "ok": false,
+          "picked": [
+            "run_tests",
+            "read_file",
+            "sql_query",
+            "search_web"
+          ],
+          "problems": [
+            "required dropped: edit_file"
+          ]
+        },
+        {
+          "caseId": "analytics-question",
+          "ok": true,
+          "picked": [
+            "sql_query",
+            "search_web",
+            "fetch_url",
+            "git_commit"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "invoice-extraction",
+          "ok": true,
+          "picked": [
+            "pdf_extract",
+            "search_web",
+            "fetch_url",
+            "git_commit"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "notify-the-team",
+          "ok": true,
+          "picked": [
+            "send_slack_message",
+            "search_web",
+            "fetch_url",
+            "git_commit"
+          ],
+          "problems": []
+        }
+      ]
+    }
+  },
+  "router": {
+    "catalogSize": 112,
+    "skipped": [],
+    "jev": {
+      "cases": 7,
+      "correct": 6,
+      "accuracy": 0.8571428571428571,
+      "latencyMeanMs": 1026,
+      "results": [
+        {
+          "caseId": "write-a-prd",
+          "ok": true,
+          "picked": [
+            "prd-development"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "split-into-stories",
+          "ok": true,
+          "picked": [
+            "user-story"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "competitor-teardown",
+          "ok": true,
+          "picked": [
+            "company-intel"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "pricing-change",
+          "ok": true,
+          "picked": [
+            "finance-based-pricing-advisor"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "design-a-workflow",
+          "ok": true,
+          "picked": [
+            "agent-orchestration-advisor"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "swot",
+          "ok": true,
+          "picked": [
+            "swot-analysis"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "press-release",
+          "ok": false,
+          "picked": [
+            "writing-shape"
+          ],
+          "problems": []
+        }
+      ]
+    },
+    "lexical": {
+      "cases": 7,
+      "correct": 3,
+      "accuracy": 0.42857142857142855,
+      "latencyMeanMs": 0,
+      "results": [
+        {
+          "caseId": "write-a-prd",
+          "ok": true,
+          "picked": [
+            "prd-development"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "split-into-stories",
+          "ok": false,
+          "picked": [
+            "acquisition-channel-advisor"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "competitor-teardown",
+          "ok": false,
+          "picked": [
+            "acquisition-channel-advisor"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "pricing-change",
+          "ok": false,
+          "picked": [
+            "acquisition-channel-advisor"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "design-a-workflow",
+          "ok": true,
+          "picked": [
+            "agent-orchestration-advisor"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "swot",
+          "ok": true,
+          "picked": [
+            "swot-analysis"
+          ],
+          "problems": []
+        },
+        {
+          "caseId": "press-release",
+          "ok": false,
+          "picked": [
+            "acquisition-channel-advisor"
+          ],
+          "problems": []
+        }
+      ]
+    }
+  }
+}
