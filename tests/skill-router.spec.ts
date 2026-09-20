@@ -280,6 +280,36 @@ test('route caps the candidate list it sends', async () => {
   assert.equal(asked, 4, 'exactly maxCandidates questions are asked')
 })
 
+test('route does not shortlist a request with no lexical overlap to rank by', async () => {
+  // The shortlist is lexical, so a request written entirely in Chinese scores 0 against
+  // every candidate and "the top N" becomes the first N in catalogue order. Measured
+  // 2026-09-20: at maxCandidates 20 a Chinese press-release request picked
+  // `company-research` and a split-a-story request picked `customer-journey-map`
+  // (docs/calibration.md §29), while the uncapped run picked both correctly.
+  const catalog = skills(12)
+  catalog[11] = { name: 'press-release', description: 'Write an Amazon-style press release' }
+
+  let asked = 0
+  const capped = service(
+    async (req: any) => {
+      asked = Object.keys(req.questions ?? {}).length
+      const answers: Record<string, unknown> = {}
+      for (const id of Object.keys(req.questions ?? {})) {
+        answers[id] = { type: 'score', score: id === 'skill_press-release' ? 1.9 : 0.4, confidence: 0.9, probabilities: {} }
+      }
+      return answers
+    },
+    { maxCandidates: 2, minScore: 0 }
+  )
+  const best = await capped.route('为这次发布写一份新闻稿', catalog)
+  assert.equal(asked, 12, 'a request with no Latin words must not be shortlisted')
+  assert.equal(best?.name, 'press-release', 'the skill the cap would have dropped still wins')
+
+  asked = 0
+  await capped.route('write the press release', catalog)
+  assert.equal(asked, 2, 'a request with words to rank by is still capped')
+})
+
 test('advise bounds its own request time', async () => {
   // The router asks one question per skill, which is a large request; it carries its own
   // timeout so a slow answer cannot run past the turn. The client's shorter advisory

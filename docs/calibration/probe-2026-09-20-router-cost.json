@@ -1,0 +1,251 @@
+{
+  "ranAt": "2026-09-20T04:40:57.282Z",
+  "catalogSize": 112,
+  "limits": [
+    0,
+    20,
+    40
+  ],
+  "note": "maxCandidates=0 sends the whole eligible catalogue; the shortlist keeps catalogue order and is lexical.",
+  "summary": [
+    {
+      "limit": 0,
+      "hits": 7,
+      "cases": 7,
+      "latencyMeanMs": 1056,
+      "latencyMedianMs": 838,
+      "candidatesSent": 92,
+      "late": []
+    },
+    {
+      "limit": 20,
+      "hits": 7,
+      "cases": 7,
+      "latencyMeanMs": 756,
+      "latencyMedianMs": 813,
+      "candidatesSent": 20,
+      "late": []
+    },
+    {
+      "limit": 40,
+      "hits": 7,
+      "cases": 7,
+      "latencyMeanMs": 641,
+      "latencyMedianMs": 735,
+      "candidatesSent": 40,
+      "late": []
+    }
+  ],
+  "rows": [
+    {
+      "caseId": "write-a-prd",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "prd-development",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 2315
+    },
+    {
+      "caseId": "write-a-prd",
+      "limit": 20,
+      "candidatesSent": 20,
+      "picked": "prd-development",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 993
+    },
+    {
+      "caseId": "write-a-prd",
+      "limit": 40,
+      "candidatesSent": 40,
+      "picked": "prd-development",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 438
+    },
+    {
+      "caseId": "split-into-stories",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "user-story",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 1034
+    },
+    {
+      "caseId": "split-into-stories",
+      "limit": 20,
+      "candidatesSent": 92,
+      "picked": "user-story",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 876
+    },
+    {
+      "caseId": "split-into-stories",
+      "limit": 40,
+      "candidatesSent": 92,
+      "picked": "user-story",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 778
+    },
+    {
+      "caseId": "competitor-teardown",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "company-intel",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 838
+    },
+    {
+      "caseId": "competitor-teardown",
+      "limit": 20,
+      "candidatesSent": 92,
+      "picked": "company-intel",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 808
+    },
+    {
+      "caseId": "competitor-teardown",
+      "limit": 40,
+      "candidatesSent": 92,
+      "picked": "company-intel",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 814
+    },
+    {
+      "caseId": "pricing-change",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "finance-based-pricing-advisor",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 729
+    },
+    {
+      "caseId": "pricing-change",
+      "limit": 20,
+      "candidatesSent": 92,
+      "picked": "finance-based-pricing-advisor",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 958
+    },
+    {
+      "caseId": "pricing-change",
+      "limit": 40,
+      "candidatesSent": 92,
+      "picked": "finance-based-pricing-advisor",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 735
+    },
+    {
+      "caseId": "design-a-workflow",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "agent-orchestration-advisor",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 855
+    },
+    {
+      "caseId": "design-a-workflow",
+      "limit": 20,
+      "candidatesSent": 20,
+      "picked": "agent-orchestration-advisor",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 412
+    },
+    {
+      "caseId": "design-a-workflow",
+      "limit": 40,
+      "candidatesSent": 40,
+      "picked": "agent-orchestration-advisor",
+      "score": 2,
+      "confidence": 1,
+      "ok": true,
+      "latencyMs": 462
+    },
+    {
+      "caseId": "swot",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "swot-analysis",
+      "score": 2,
+      "confidence": 0.64,
+      "ok": true,
+      "latencyMs": 789
+    },
+    {
+      "caseId": "swot",
+      "limit": 20,
+      "candidatesSent": 20,
+      "picked": "swot-analysis",
+      "score": 2,
+      "confidence": 0.65,
+      "ok": true,
+      "latencyMs": 430
+    },
+    {
+      "caseId": "swot",
+      "limit": 40,
+      "candidatesSent": 40,
+      "picked": "swot-analysis",
+      "score": 2,
+      "confidence": 0.64,
+      "ok": true,
+      "latencyMs": 443
+    },
+    {
+      "caseId": "press-release",
+      "limit": 0,
+      "candidatesSent": 92,
+      "picked": "press-release",
+      "score": 1.78,
+      "confidence": 0.68,
+      "ok": true,
+      "latencyMs": 833
+    },
+    {
+      "caseId": "press-release",
+      "limit": 20,
+      "candidatesSent": 92,
+      "picked": "press-release",
+      "score": 1.78,
+      "confidence": 0.67,
+      "ok": true,
+      "latencyMs": 813
+    },
+    {
+      "caseId": "press-release",
+      "limit": 40,
+      "candidatesSent": 92,
+      "picked": "press-release",
+      "score": 1.76,
+      "confidence": 0.64,
+      "ok": true,
+      "latencyMs": 818
+    }
+  ]
+}

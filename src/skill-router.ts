@@ -116,6 +116,13 @@ export class SkillRouterService {
     if (max <= 0 || candidates.length <= max) return candidates
 
     const words = intent.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []
+    // A request with no Latin words scores 0 against every candidate, so "the top `max`"
+    // would just be the first `max` entries in catalogue order. Measured 2026-09-20: at 20
+    // candidates a Chinese request naming a press release picked `company-research`, and
+    // the split-a-story request picked `customer-journey-map` (docs/calibration.md §29).
+    // Falling back to the whole eligible catalogue is the honest behaviour: it is cheaper
+    // to skip a shortlist than to pretend the catalogue order is a ranking.
+    if (words.length === 0) return candidates
     const scored = candidates.map((candidate, index) => {
       const text = (candidate.name + ' ' + candidate.description + ' ' + (candidate.whenToUse ?? '')).toLowerCase()
       const overlap = words.reduce((count, word) => count + (text.includes(word) ? 1 : 0), 0)

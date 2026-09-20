@@ -299,7 +299,7 @@ test('the delivery summary counts each module as it stands', () => {
     ['safety-guard', ['safety-guard.spec.ts'], 18],
     ['tool-pruner', ['tool-pruner.spec.ts'], 10],
     ['ask-tools', ['ask-tools.spec.ts'], 8],
-    ['skill-router', ['skill-router.spec.ts'], 12],
+    ['skill-router', ['skill-router.spec.ts'], 13],
     ['result-shaper', ['result-shaper.spec.ts'], 17],
   ]
 

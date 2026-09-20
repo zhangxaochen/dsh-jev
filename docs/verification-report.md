@@ -11,7 +11,7 @@
 | 维度 | 结果 |
 |---|---|
 | 版本 | `0.2.0`（含破坏性配置变更，升级须知见 CHANGELOG） |
-| 离线单测 | **219/219**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
+| 离线单测 | **220/220**（`pnpm test`；宿主在场时 8 条 `dsh-contract` 不跳过） |
 | 真实 DSH 集成 | **22/22**（`pnpm run verify:dsh`；无 DSH 时跳过并退出 0） |
 | 线上模块验证 | `verify:live` 3/3 · `verify:tools` 3/3 · `verify:shaper` 4/4 · `verify:pruner` 6/6 · `verify:router` **7/7** · `verify:turn` 6/6（含调用预算 ≤2 次；单轮语义开销 3.1–3.4s） |
 | 守卫网自检 | `pnpm run drill` **31/31**（对 31 条承诺注入对应回退，全部被某道闸门拦下） |
@@ -58,10 +58,11 @@
 | 发布物装得上并按名解析 | `pnpm run verify:pack`（打包 → 装入干净目录 → 按包名导入） | tarball 57 项；8 个入口导出、5 个服务类、清单目标与补丁文件在安装后可解析 |
 | 测试能发现行为退化 | `pnpm run verify:mutants`（`bench/mutations.json` 82 处变异） | **82/82** 被离线套件拦下；锚点失效或无人发现时 exit 1（已实测两种情形） |
 | 判定失败的降级是可测且可见的 | 单测（`tests/resilience.spec.ts`、`tests/metrics.spec.ts`） | 失败写决策记录（带 `ts`、失败策略、工具名与脱敏 `commandPreview`）；指标带 `lastInspectionFailureAt` 且能跨重启存活（字符串默认，`null` 默认会被类型检查丢掉）；看板与面板显示失败率与最近一次失败时间 |
+| 候选裁剪的收益与代价已实测（默认不改的依据） | `pnpm run probe:router-cost`（`docs/calibration/probe-2026-09-20-router-cost.json`） | 未加守卫时上限 20 → **4/7**、40 → **5/7**（纯中文请求没有可排序的词，短名单退化成目录顺序）；加守卫后 0/20/40 都是 **7/7**，但 5/7 条请求与不裁剪逐字节相同；真正被裁剪的 3 条 20 问 0.41–0.99s vs 92 问 0.79–2.32s ⇒ 默认保持 `0` |
 | Jev 排序优于词法基线（对照而非断言） | `pnpm run probe:baseline`（`docs/calibration/probe-2026-09-20-baseline.json`） | 同一批标注用例两臂对照、两次运行一致：路由 **6/7 vs 3/7**（0ms 基线）、剪枝 **6/6 vs 5/6**（0ms 基线，仅领先 1 例 ⇒ 收益待证）；词法规则跑前固定、读作下界 |
 | 载荷变长时安全判定不漂移（≤48K 字符） | `pnpm run probe:jaggedness`（真实模型；`docs/calibration/probe-2026-09-20-jaggedness.json`） | 8 个客观标注用例 × 4 档载荷、两次运行逐档一致：准确率 **1.00**（@0.5 与 @0.85 都是）、类间分离度 **0.93–0.94**、延迟 377–632ms、0 错误；48K 以上无数据（局限写在 §27） |
 | 用户规则的命中可归因到**每一条规则** | 单测（`tests/safety-guard.spec.ts`、`tests/metrics.spec.ts`、`tests/metrics-surface.spec.ts`） | 配置的规则集在 `apply` 时登记（命中 0 次的规则照样列出，那是"没生效"与"没触发"的唯一区分）；每次命中带计数、最近时间与动作；看板有该行、面板读取 `ruleIds`/`ruleHits` |
-| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **219 = 套件总数**（无用例在聚合运行中消失） |
+| 测试不依赖执行顺序 | `pnpm run verify:solo`（26 个 spec 逐个单独运行） | **26/26 单独通过**，且各文件计数之和 **220 = 套件总数**（无用例在聚合运行中消失） |
 | 看板与门面的成本口径来自实测 | 单测（`tests/metrics.spec.ts`、`tests/metrics-surface.spec.ts`） | 每次判定成本由 counters **现场派生**（派生值不落盘：持久化会随计数漂移，而 `normalizeMetrics` 的类型检查挡不住漂移）；看板有该行、面板读取三个派生字段、两份 README 门面写的是**带日期的实测数字** |
 
 ## 抓到的真实缺陷（按严重度）
