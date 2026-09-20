@@ -34,10 +34,13 @@ const drills = [
     test: 'tests/packaging.spec.ts',
   },
   {
+    // The config reference lives in docs/configuration.md since 585e6cc split the front
+    // door from the manual; this anchor still pointed at the README, where it could never
+    // match again - so the mutation reported "anchor not found" and the net lost a tooth.
     name: 'documented default differs from the code',
-    file: 'README.md',
-    from: '`pLoopThreshold?: number`: 「确定死循环」桶的概率质量阈值，范围 0~1（默认 `0.6`）',
-    to: '`pLoopThreshold?: number`: 「确定死循环」桶的概率质量阈值，范围 0~1（默认 `0.9`）',
+    file: 'docs/configuration.md',
+    from: '「确定死循环」桶的概率质量阈值，范围 0~1（默认 `0.6`）',
+    to: '「确定死循环」桶的概率质量阈值，范围 0~1（默认 `0.9`）',
     test: 'tests/docs-consistency.spec.ts',
   },
   {
@@ -148,10 +151,12 @@ const drills = [
   },
   {
     // A config field the code accepts must be documented; removing one from the
-    // README must fail rather than leave an undocumented option.
+    // reference must fail rather than leave an undocumented option. Like the default
+    // mutation above, this anchor moved to docs/configuration.md in 585e6cc and stayed
+    // pointed at the README, where it silently stopped matching.
     name: 'a config field loses its documentation',
-    file: 'README.md',
-    from: '- `headless?: boolean`: 会话无法弹窗询问时设为 `true`（默认 `false`）。此时任何 `ask`（含用户规则触发的）都转为 `deny`——宁可拒绝也不假装已获批准。桌面端保持默认即可。\n',
+    file: 'docs/configuration.md',
+    from: '- `headless?: boolean`: 会话无法弹窗询问时设为 `true`（默认 `false`；也可由 `HEADLESS` / `CI` / `DEEPSEEK_HARNESS_HEADLESS` 环境变量推断）。它只声明「问不到人」，`ask` 的处置由 `headlessAsk` 决定。桌面端保持默认即可。\n',
     to: '',
     test: 'tests/docs-consistency.spec.ts',
   },
