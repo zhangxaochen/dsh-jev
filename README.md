@@ -47,7 +47,7 @@ semantic overhead this turn: 3704ms
 # 从 GitHub 直装（免发包，即装即用，拿到的就是当前代码）
 dsh plugin --profile <profile_name> add github:zhangxaochen/dsh-jev
 
-# npm 上目前只发到 0.1.0（缺 0.2.0 的文件写入门禁），等 0.2.0 发布后再走这条
+# 或从 npm 装（>= 0.2.0 才有文件写入门禁）；也适用于 headless / web 等具体 profile
 dsh plugin --profile headless add dsh-jev
 ```
 
@@ -135,11 +135,11 @@ Issue 与 PR 都欢迎。改动要满足：
 
 ```bash
 # 1. 改 package.json 的 version，并在 CHANGELOG 写下 ## [x.y.z] 小节
-# 2. 提交后打 tag 推送
+# 2. 提交后打 tag 推送（v0.2.0 已按此发布：npm latest + GitHub Release + provenance）
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-一次性配置（仓库侧做不到）：在 npmjs.com 的包设置里把 **Trusted Publisher** 设为 GitHub Actions，填 `zhangxaochen/dsh-jev` + 工作流文件名 `release.yml`（environment 留空）。之后 CI 用 OIDC 取短期凭证发布，不需要 `NPM_TOKEN`。
+一次性配置（已完成，仓库侧做不到）：npmjs.com 的包设置页是 `/package/dsh-jev/access`（不是 `/settings`，那个路由不存在），其中 **Trusted Publisher** 已配为 GitHub Actions + `zhangxaochen/dsh-jev` + `release.yml`，environment 留空，并**勾选了 `Allow npm publish`**——2026-09-03 之后新建的配置默认只允许 `npm stage publish`，漏勾会让工作流里的 `npm publish` 被拒。CI 用 OIDC 取短期凭证发布，不需要 `NPM_TOKEN`。
 
 维护者：[@zhangxaochen](https://github.com/zhangxaochen)
 
