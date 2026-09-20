@@ -42,7 +42,15 @@ export interface SkillCandidate {
     description: string;
     whenToUse?: string;
 }
-/** Map registry summaries onto router candidates. */
+/**
+ * Drop skills the model cannot load, then map registry summaries onto candidates.
+ *
+ * A `modelInvocable: false` skill is user-only, so ranking it can only produce advice the
+ * model is unable to follow. Measured on this machine: 20 of 112 entries are user-only,
+ * and one of them (`writing-shape`) was the pick for a Chinese request that names a press
+ * release, outranking the loadable `press-release` itself (docs/calibration.md §11.5).
+ * An absent `invocation` means "not stated", which keeps the entry rather than guessing.
+ */
 export declare function toCandidates(summaries: SkillSummary[]): SkillCandidate[];
 export declare class SkillRouterService {
     private readonly getClient;

@@ -98,10 +98,11 @@ export const ROUTER_CASES: RouterCase[] = [
   { id: 'pricing-change', intent: '评估这次定价调整该不该上线', expect: /pricing/i },
   { id: 'design-a-workflow', intent: '帮我设计一个多 agent 协作的工作流', expect: /agent-orchestration|orchestration/i },
   { id: 'swot', intent: '对这个新产品做一次 SWOT 分析', expect: /swot/i },
-  // Cross-language miss: the request names the artifact in Chinese while the skill is
-  // English, and the model prefers a plausible writing skill. Documented in
-  // docs/calibration.md §11 rather than expected to pass.
-  { id: 'press-release', intent: '为这次发布写一份新闻稿', expect: /press-release/i, knownMiss: true },
+  // The request names the artifact in Chinese while the skill is English. It used to be a
+  // documented miss (`writing-shape` won); the cause was not the language but that the
+  // winner was a user-only skill the model cannot load, so the candidate set now excludes
+  // non-model-invocable entries and the case is expected to pass (docs/calibration.md §11.5).
+  { id: 'press-release', intent: '为这次发布写一份新闻稿', expect: /press-release/i },
 ]
 
 function dshNodeModules(): string | undefined {

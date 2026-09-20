@@ -17,6 +17,8 @@
 - **排序基线对照** `pnpm run probe:baseline`（`tests/probe-baseline.ts`）：把"Jev 比什么都不做强"换成"Jev 比一个可复现的词法启发式强多少"——同一批标注用例两臂对照，规则跑前固定。实测 **路由 6/7 vs 3/7**、**剪枝 6/6 vs 5/6**（后者只领先 1 例，收益待证）。用例移到 `tests/ranking-cases.ts`，由两个线上闸门与本探针共用，避免副本。
 - **jaggedness 探针** `pnpm run probe:jaggedness`（`tests/probe-jaggedness.ts`）：把"载荷变长是否让安全判定漂移"变成可复跑的测量——审查路径的 `state` 就是被审参数，故用 8 个客观标注用例 × 载荷 0/4K/16K/48K 字符，走生产客户端，指标重定向到 `%TEMP%`。实测准确率始终 **1.00**、分离度 0.93–0.94（见 `docs/calibration.md` §27）。
 
+- **skill 路由只对模型可载入的技能排序**：`skills.list()` 的条目带 `invocation.modelInvocable`，此前未使用，于是路由器会建议模型载入**用户专属**技能（本机 112 项里 20 项如此，含 `writing-shape`）——建议模型执行它做不到的事。现过滤这些条目，`shouldRoute` 的目录规模门槛也改为数可载入条目。修复后 `verify:router` **7/7**（候选 112 → 92），那条被记为 `knownMiss` 的新闻稿用例恢复正常断言（见 `docs/calibration.md` §11.5）。
+
 ## [0.2.0] - 2026-09-18
 
 第一个经过标定的版本。0.1.0 的阈值是猜测值，且部分失败模式与宣称相反。

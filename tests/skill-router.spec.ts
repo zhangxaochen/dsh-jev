@@ -47,6 +47,50 @@ test('route picks the highest scoring skill', async () => {
   assert.equal(best?.score, 1.9)
 })
 
+test('a skill the model cannot load is never a candidate', async () => {
+  // 20 of the 112 entries on this machine are user-only. Ranking them produced advice the
+  // model cannot follow: for a Chinese request naming a press release, the winner was
+  // `writing-shape` (user-only) ahead of the loadable `press-release`
+  // (docs/calibration.md §11.5).
+  const mixed: SkillSummary[] = [
+    {
+      name: 'user-only',
+      description: 'only the user can start this',
+      invocation: { modelInvocable: false, userInvocable: true },
+    },
+    { name: 'loadable', description: 'the model may load this', invocation: { modelInvocable: true } },
+    { name: 'unstated', description: 'no invocation field at all' },
+  ]
+  assert.deepEqual(
+    toCandidates(mixed).map((candidate) => candidate.name),
+    ['loadable', 'unstated'],
+    'a user-only skill must not reach the ranking, and an unstated one must not be dropped'
+  )
+
+  const router = service(
+    async () => ({
+      skill_loadable: { type: 'score', score: 1.9, confidence: 0.9, probabilities: {} },
+      'skill_user-only': { type: 'score', score: 2, confidence: 1, probabilities: {} },
+    }),
+    { minCandidates: 2 }
+  )
+  const best = await router.route('a request long enough to route', mixed)
+  assert.equal(best?.name, 'loadable', 'the higher-scoring user-only skill must not win')
+
+  // The gate counts eligible entries, so a catalogue that is mostly user-only does not
+  // look big enough to be worth a call.
+  assert.equal(
+    router.shouldRoute('a request long enough to route', [mixed[1], mixed[2]]),
+    true,
+    'two eligible skills pass a threshold of two'
+  )
+  assert.equal(
+    router.shouldRoute('a request long enough to route', [mixed[1], mixed[0]]),
+    false,
+    'one eligible skill does not'
+  )
+})
+
 test('advise stays silent below threshold and does not repeat itself', async () => {
   const weak = service(async () => ({ 'skill_skill-0': { type: 'score', score: 1.0, confidence: 0.9, probabilities: {} } }))
   assert.equal(await weak.advise('some request text', skills(1)), undefined)

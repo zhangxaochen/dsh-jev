@@ -65,13 +65,23 @@ export interface SkillCandidate {
   whenToUse?: string
 }
 
-/** Map registry summaries onto router candidates. */
+/**
+ * Drop skills the model cannot load, then map registry summaries onto candidates.
+ *
+ * A `modelInvocable: false` skill is user-only, so ranking it can only produce advice the
+ * model is unable to follow. Measured on this machine: 20 of 112 entries are user-only,
+ * and one of them (`writing-shape`) was the pick for a Chinese request that names a press
+ * release, outranking the loadable `press-release` itself (docs/calibration.md §11.5).
+ * An absent `invocation` means "not stated", which keeps the entry rather than guessing.
+ */
 export function toCandidates(summaries: SkillSummary[]): SkillCandidate[] {
-  return summaries.map((summary) => ({
-    name: summary.name,
-    description: summary.description ?? '',
-    whenToUse: summary.whenToUse,
-  }))
+  return summaries
+    .filter((summary) => summary.invocation?.modelInvocable !== false)
+    .map((summary) => ({
+      name: summary.name,
+      description: summary.description ?? '',
+      whenToUse: summary.whenToUse,
+    }))
 }
 
 export class SkillRouterService {
@@ -86,7 +96,9 @@ export class SkillRouterService {
   /** True when the catalog and the request both justify one semantic call. */
   shouldRoute(intent: string, summaries: SkillSummary[]): boolean {
     const minCandidates = this.config.minCandidates ?? DEFAULT_MIN_CANDIDATES
-    if (summaries.length < minCandidates) return false
+    // Count the eligible catalogue: skills the model cannot load are not candidates, so
+    // they must not make a small-in-practice catalogue look big enough to route.
+    if (toCandidates(summaries).length < minCandidates) return false
     if (intent.trim().length < (this.config.minIntentChars ?? DEFAULT_MIN_INTENT_CHARS)) return false
     const key = intentKey(intent)
     if (key === this.lastKey) return false

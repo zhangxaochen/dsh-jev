@@ -250,6 +250,11 @@ export interface SkillSummary {
   name: string
   description?: string
   whenToUse?: string
+  /**
+   * Who may load the skill. A skill with `modelInvocable: false` can only be started by
+   * the user, so advising the model to load it is advice it cannot act on.
+   */
+  invocation?: { modelInvocable?: boolean; userInvocable?: boolean }
 }
 
 export interface SkillRouterConfig {
