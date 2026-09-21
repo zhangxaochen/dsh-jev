@@ -16,6 +16,7 @@ Jev（TypeSafe System One 决策模型）与 [DeepSeek Harness (dsh)](https://gi
 
 ## 目录
 
+- [到底有没有用？A/B 证据与复现工具](docs/pier-ab-report.zh-CN.md)
 - [特性](#特性)
 - [安装](#安装)
 - [使用](#使用)

@@ -16,6 +16,7 @@ It adds the layer of semantic judgement dsh does not have: non-generative decisi
 
 ## Contents
 
+- [Does it help? A/B evidence and reproduction kit](docs/pier-ab-report.md)
 - [Features](#features)
 - [Install](#install)
 - [Usage](#usage)
