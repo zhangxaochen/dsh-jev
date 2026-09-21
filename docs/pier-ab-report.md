@@ -30,7 +30,7 @@ must be built). Each task is one Pier trial, scored by the task's own hidden tes
 The binary reward cannot tell "missed one test" from "missed forty", so F2P **pass ratio** is
 reported alongside it. That distinction turned out to matter (§3).
 
-## 2. Results: 3 wins, 0 losses, 14 ties
+## 2. Results: 17 of 20 tasks, 3 wins · 0 losses · 14 ties
 
 Mean difference in partial (F2P/P2P pass ratio) score: **+0.309 pp**, all of it in the plugin arm's
 favour. Every difference sits on F2P pass ratio:
@@ -107,6 +107,9 @@ These are engineering effects rather than score effects, and each has a measured
 - **Sample**: 17 of 20 tasks, 1–3 runs per arm. Not measured: `numba-stencil-boundary-modes`
   (trials error repeatedly, see `skip.txt`), `updo-policy-alerting`,
   `prometheus-transactional-reload-status`.
+- The five traps this pilot hit (image `buildx --pull`, Docker address-pool exhaustion, same-second
+  job directories, background jobs dying with the session, score field names) are recorded in
+  [`bench/pier-pilot/README.md`](../bench/pier-pilot/README.md).
 
 The pilot was stopped on 2026-09-21 06:55 because CommandCode's weekly window was exhausted
 (33.47/35 used; resets 2026-09-25 16:51). Finishing the last three tasks needs roughly $3–4 of
