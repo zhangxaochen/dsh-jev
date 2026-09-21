@@ -1,6 +1,6 @@
 # Does Jev help an agent solve real tasks? A/B evidence
 
-**17 of 20 tasks, 3 wins · 0 losses · 14 ties · 0 detected harm.** Conclusion: *no harm detected, three small advantages, not yet a proven benefit.*
+**17 of 20 tasks. By per-arm means: 2 wins · 2 losses · 13 ties, mean difference −1.10pp.** Conclusion: *no advantage detected, and no stable harm either.*
 
 This directory is the reproducibility kit for that claim: the driver, the analysis scripts, the
 per-run results and the harness's own evidence files. Read the findings in
