@@ -5,6 +5,11 @@
 
 [English](https://github.com/zhangxaochen/dsh-jev/blob/master/README.md) · [简体中文](https://github.com/zhangxaochen/dsh-jev/blob/master/README.zh-CN.md)
 
+> **Status of 0.2.0 — what is measured, and what is not.**
+> All repo gates are green (`pnpm test`, `verify:mutants`, `drill`, `verify:build`, `verify:solo`), and each plugin surface has a live counter: pruning removes tool results, the loop guard runs without false interrupts, the safety guard screens thousands of actions without false denials, and since 0.2.0 `headlessAsk` defaults to `warn` so a headless session proceeds with an audit line instead of failing closed.
+> **What is not yet shown: that any of this improves outcomes.** An A/B pilot on 20 real DeepSWE tasks (this plugin on vs off, same model, same image) found **no advantage and no stable harm** — per-arm means: 2 wins · 2 losses · 13 ties, mean difference −1.10pp F2P. Cost: **no net token saving** (median prompt −3.2%, uncached input +16.6%, steps +2.6%) and a weak, sign-mixed wall-time gain (median −12.5%). Within-arm run-to-run spread reached 55pp, which is larger than any effect measured, and 8 of the 20 tasks were saturated (both arms 100%), so the task set had little power to detect one.
+> Treat the semantic layer as **fast, cheap, and functional — with unproven end-to-end payoff**. Full report and per-run evidence: [`docs/pier-ab-report.md`](docs/pier-ab-report.md) · [中文](docs/pier-ab-report.zh-CN.md) · reproduction kit in [`bench/pier-pilot/`](bench/pier-pilot/README.md).
+
 The Cordis plugin suite that pairs [Jev](https://typesafe.ai) (TypeSafe's System One decision models) with [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh).
 
 It adds the layer of semantic judgement dsh does not have: non-generative decision primitives (Noul, Choice, Score) at ~150 ms, used for **dynamic tool pruning** (fewer prompt tokens, lower time to first token), **semantic dead-loop blocking**, and a **guard for high-risk execution**. The verdicts come from System One rather than sampling, so they are fast and reproducible, and one decision costs about **$0.00013** — measured on 2026-09-20 over 2,254 decisions (12.4 KiB of input each, billed at $0.042 per million input tokens; output is free).
@@ -132,7 +137,6 @@ Issues and PRs are welcome. A change has to satisfy:
 - `pnpm test` green, including `verify:solo`'s order-independence check and `verify:mutants`' mutation scan.
 - Behaviour changes also update [`CHANGELOG.md`](CHANGELOG.md); a new gate also updates the evidence table in [`docs/verification-report.md`](docs/verification-report.md) (that table must name every `verify:*` script, and a test enforces it).
 - Adding or removing a config field also updates [`docs/configuration.md`](docs/configuration.md) (field coverage is test-enforced too).
-- Does Jev actually help? The A/B pilot on 20 real tasks, with repro tooling and per-run evidence: [`docs/pier-ab-report.md`](docs/pier-ab-report.md) (English) · [中文](docs/pier-ab-report.zh-CN.md).
 - Releasing is one tag push; the process and the one-time npm setup are in [`docs/releasing.md`](docs/releasing.md).
 
 Maintainer: [@zhangxaochen](https://github.com/zhangxaochen)

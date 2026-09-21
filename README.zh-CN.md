@@ -5,6 +5,11 @@
 
 [English](https://github.com/zhangxaochen/dsh-jev/blob/master/README.md) · **简体中文**
 
+> **0.2.0 现状：测到了什么、没测到什么。**
+> 仓库全部闸门为绿（`pnpm test`、`verify:mutants`、`drill`、`verify:build`、`verify:solo`），每个插件面都有实时计数：剪枝在移除工具结果、循环护栏不误打断、安全护栏筛查数千次动作且无误拒；0.2.0 起 `headlessAsk` 默认 `warn`，headless 会话改为留痕放行而不是 fail-closed 拒绝。
+> **尚未证明的是：这些能否改善结果。** 在 20 个真实 DeepSWE 任务上做的 A/B 对照（开/关本插件，同模型同镜像）**既未检出优势，也未检出稳定损害** —— 按每臂均值：2 胜 · 2 负 · 13 平，F2P 均值差 −1.10pp。成本上**没有净 token 节省**（prompt 中位 −3.2%、未缓存输入 +16.6%、步数 +2.6%），墙钟只有微弱且符号不一的改善（中位 −12.5%）。同一臂内的跑动离散度可达 55pp，大于任何被测效应；且 20 个任务里有 8 个是饱和任务（两臂都 100%），这组任务本身的检出功效就很有限。
+> 因此请把这一语义层理解为**快、便宜、功能可用 —— 端到端收益尚未证实**。完整报告与逐次证据：[`docs/pier-ab-report.zh-CN.md`](docs/pier-ab-report.zh-CN.md) · [English](docs/pier-ab-report.md) · 复现工具在 [`bench/pier-pilot/`](bench/pier-pilot/README.md)。
+
 Jev（TypeSafe System One 决策模型）与 [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) 的官方 Cordis 插件组合包。
 
 它补上 dsh 自己没有的那一层语义判断：引入 ~150ms 极低延迟的非生成式决策原语（Noul、Choice、Score），做**动态工具剪枝**（省 Prompt Token、降首字延迟）、**语义死循环阻断**与**高危执行安全门禁**。判定走 System One 而非生成式采样，所以快、可复现，且成本可忽略：**每次判定 ≈ $0.00013**（2026-09-20 实测 2,254 次判决，每次输入 12.4KiB，按 $0.042/M 输入 token 计费、输出免费）。
@@ -131,7 +136,6 @@ Issue 与 PR 都欢迎。改动要满足：
 - `pnpm test` 全绿（含 `verify:solo` 的顺序无关检查与 `verify:mutants` 的变异扫描）。
 - 行为变更同步 [`CHANGELOG.md`](CHANGELOG.md)；新增闸门同步 [`docs/verification-report.md`](docs/verification-report.md) 的证据表（证据表必须列出每个 `verify:*` 脚本，有测试守着）。
 - 配置字段增删时 [`docs/configuration.md`](docs/configuration.md) 要同步（字段是否被文档覆盖同样有测试守着）。
-- Jev 到底有没有用？20 个真实任务的 A/B 对照、复现工具与逐次证据：[`docs/pier-ab-report.zh-CN.md`](docs/pier-ab-report.zh-CN.md)（中文）· [English](docs/pier-ab-report.md)。
 - 发版只推一个 tag，流程与一次性 npm 配置见 [`docs/releasing.md`](docs/releasing.md)。
 
 维护者：[@zhangxaochen](https://github.com/zhangxaochen)
