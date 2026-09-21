@@ -12,3 +12,7 @@ tmp/
 # egress proxy configs, result json) into the workspace root. They are not package
 # content and were swept into a commit once by a broad `git add -A`.
 jobs/
+
+# Python bytecode from running the pilot's py_compile checks
+__pycache__/
+*.pyc
