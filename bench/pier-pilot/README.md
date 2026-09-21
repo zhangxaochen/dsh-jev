@@ -43,10 +43,29 @@ run, 10 MB total), salvaged patches (65 MB), `node_modules`, container images. T
 regenerable; `scripts/session-metrics.mjs` shows how to re-derive the cost numbers from a session
 archive if you re-run the pilot.
 
+## What this directory is — and is not
+
+It **is** the pilot's scripts, its results and the harness's own evidence. It is **not**
+self-contained: the runs executed against a separate DeepSWE checkout, and reproducing them needs
+that checkout plus the tools below.
+
+| you must provide | why | override |
+| --- | --- | --- |
+| a DeepSWE checkout | `tasks/<id>/` (task.toml + image), and the jobs root where Pier writes results | `DEEPSWE_ROOT` (ps1) · `DEEPSWE_TASKS` · `DEEPSWE_JOBS` |
+| Docker Desktop | every trial is a compose project with its own network and egress proxy | — |
+| `datacurve-pier` | the harness that runs a trial and scores it | `PIER_EXE` |
+| built plugin tarball | the treatment profile installs it inside the container | put `dsh-jev-<version>.tgz` in this directory (`pnpm pack` produces it) |
+| API keys | `DEEPSEEK_API_KEY` (model route) and `TYPESAFE_API_KEY` (Jev verdicts) | environment |
+| DSH profiles | `pilot_setup.py` writes `~/.dsh/profiles/{headless,headless-jev}` | `DSH_HOME` |
+
+Defaults assume this pilot's layout (`D:\code\deep-swe`, `D:\code\.uv-tools\...`); every path is
+overridable and everything else resolves relative to the script, so `scripts/` runs from any
+checkout. `top20_tasks.json` is committed so the task list, the ranking metric (reference patch
+size) and the image tags are readable without the DeepSWE checkout.
+
 ## Reproducing
 
-Prerequisites: Docker Desktop, Python 3, PowerShell 7, a `datacurve-pier` install, the DeepSWE task
-checkouts, and a CommandCode API key.
+Prerequisites: the table above, plus Python 3, PowerShell 7 and a CommandCode API key.
 
 ```powershell
 # 1. Two DSH profiles, identical except for the plugin.
@@ -56,7 +75,7 @@ python scripts/pilot_setup.py                      # writes ~/.dsh/profiles/{hea
 pwsh -File scripts/run-arm.ps1 -Jev off -TaskId vitest-duration-sharding   # control
 pwsh -File scripts/run-arm.ps1 -Jev on  -TaskId vitest-duration-sharding   # treatment
 
-# 3. The whole sweep, with resume and retry.
+# 3. The whole sweep, with resume and retry (pairs = concurrent task pairs).
 python scripts/run-top20.py --pairs 3
 ```
 
@@ -64,10 +83,15 @@ Scores come back under the Pier jobs root (`<jobs>/<timestamp>/<task>__<id>/veri
 Re-derive the tables with:
 
 ```bash
-node scripts/pair-scores.mjs      # verifier-based scoreboard (reward + F2P pass ratio)
+node scripts/pair-scores.mjs      # verifier scoreboard, per-arm means
 node scripts/pair-cost.mjs        # paired cost: tokens, steps, wall time
-node scripts/export-bench.mjs --jobs <jobs-dir> --out .   # rebuild this directory
+node scripts/pair-steps.mjs       # step counts per arm
+node scripts/rebuild-status.mjs   # rebuild the scoreboard from the job directories
+node export-bench.mjs --jobs <jobs-dir> --out .   # regenerate this directory
 ```
+
+Run the analysis scripts from this directory, or set `PIER_PILOT` to it, since they look for
+`top20-ids.txt` next to themselves.
 
 ## Traps this pilot hit (please don't repeat them)
 

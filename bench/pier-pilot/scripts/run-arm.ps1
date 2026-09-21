@@ -7,8 +7,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$pilot = 'D:\code\dsh-jev\tmp\pier-pilot'
-$taskPath = Join-Path 'D:\code\deep-swe\tasks' $TaskId
+$pilot = if ($env:PIER_PILOT) { $env:PIER_PILOT } else { $PSScriptRoot }
+$deepSwe = if ($env:DEEPSWE_ROOT) { $env:DEEPSWE_ROOT } else { 'D:\code\deep-swe' }
+$taskPath = Join-Path (Join-Path $deepSwe 'tasks') $TaskId
 
 # Credentials: the model key from the harness credential document, the plugin key from .env.
 $credFile = Join-Path $env:DSH_HOME '.credentials.yaml'
@@ -44,7 +45,7 @@ if ($Attempts -gt 1) {
   "attempts per trial: $Attempts"
   $pierArgs += @('-k', "$Attempts")
 }
-$pierExe = 'D:\code\.uv-tools\datacurve-pier\Scripts\pier.exe'
+$pierExe = if ($env:PIER_EXE) { $env:PIER_EXE } else { 'D:\code\.uv-tools\datacurve-pier\Scripts\pier.exe' }
 if (Test-Path $pierExe) {
   "launcher: $pierExe"
   & $pierExe @pierArgs

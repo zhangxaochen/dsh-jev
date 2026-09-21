@@ -16,15 +16,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-PILOT = Path(r"D:\code\dsh-jev\tmp\pier-pilot")
-JOBS = Path(r"D:\code\deep-swe\jobs")
-TASKS_DIR = Path(r"D:\code\deep-swe\tasks")
+PILOT = Path(os.environ.get("PIER_PILOT", Path(__file__).resolve().parent))
+JOBS = Path(os.environ.get("DEEPSWE_JOBS", r"D:\code\deep-swe\jobs"))
+TASKS_DIR = Path(os.environ.get("DEEPSWE_TASKS", r"D:\code\deep-swe\tasks"))
 IDS_FILE = PILOT / "top20-ids.txt"
 STATUS_FILE = PILOT / "top20-status.json"
 LOG_DIR = PILOT / "logs" / "top20"

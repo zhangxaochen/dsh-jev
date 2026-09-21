@@ -4,8 +4,8 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-const PILOT = 'D:/code/dsh-jev/tmp/pier-pilot'
-const JOBS = 'D:/code/deep-swe/jobs'
+const PILOT = process.env.PIER_PILOT ?? process.cwd()
+const JOBS = process.env.DEEPSWE_JOBS ?? 'D:/code/deep-swe/jobs'
 const ids = readFileSync(join(PILOT, 'top20-ids.txt'), 'utf8')
   .split('\n')
   .map((line) => line.trim())

@@ -9,8 +9,8 @@ import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
 
-const PILOT = 'D:/code/dsh-jev/tmp/pier-pilot'
-const JOBS = 'D:/code/deep-swe/jobs'
+const PILOT = process.env.PIER_PILOT ?? process.cwd()
+const JOBS = process.env.DEEPSWE_JOBS ?? 'D:/code/deep-swe/jobs'
 const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 const ids = readFileSync(join(PILOT, 'top20-ids.txt'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean)
 
